@@ -61,3 +61,7 @@ The later owner-aligned Phase 6A request implements original customer orders, pa
 ## Phase 6C: unified interface and operational dashboard
 
 The separately requested Phase 6C covers the shared premium AMBS visual system, grouped responsive shell, exact animated live counters and the presentation of all implemented modules. It does not implement finance, PDF documents, GPS tracking, new business workflows or deployment. Existing Phase 6A/6B actions and security rules remain authoritative. See [Phase 6C report](PHASE_6C_REPORT.md) for actual verification and acceptance status.
+
+## Phase 7 - Packing documents, approved BOM and material requirements
+
+Local feature branch `feature/phase-7-packing-bom` implements actual-dispatch documents, immutable PDF revisions, controlled BOM approval and material snapshots/shortages. Owner-specific engineering definitions remain unapproved and absent from live data. See PHASE_7_REPORT.md for verification and acceptance limits. This operation does not start Phase 8 or authorize deployment/publication.

@@ -114,3 +114,9 @@ The harness uses mocked routing HTTP responses in private temporary databases, n
 ## Private source and verified recovery
 
 The source repository is `mohannad-121/AMBS-ERP`, PRIVATE. Source control excludes real configuration, databases, uploads, backups and runtime artifacts. [Backup and recovery](docs/BACKUP_AND_RECOVERY.md) covers encrypted local configuration and the verified database restore rehearsal. The execution evidence and repository verification are recorded in [GitHub backup setup report](docs/GITHUB_BACKUP_SETUP_REPORT.md). GitHub is source storage, not a replacement for database/private-file backups.
+
+## Phase 7 packing and material planning
+
+`/packing` provides delivery-linked preparation copies and immutable issued Packing List / Delivery Order PDFs. `/boms` controls draft versions and management approval; `/material-plans` calculates requirements from approved BOMs and actual confirmed demand. Documents and plans create no physical stock changes. No company engineering specifications or sample business records are installed.
+
+See [Phase 7 report](docs/PHASE_7_REPORT.md), [packing architecture](docs/PACKING_DOCUMENT_ARCHITECTURE.md), [BOM approval](docs/BOM_VERSIONING_AND_APPROVAL.md), [calculation rules](docs/MATERIAL_REQUIREMENTS_RULES.md) and [owner approvals](docs/PHASE_7_OWNER_APPROVAL_REQUIREMENTS.md). Run the isolated complete browser chain with `powershell -File scripts/Verify-AuthIntegration.ps1 -Packing`; `-PackingOnly` runs Phase 7 alone and `-Production` tests a production build. Test identities are generated only in disposable databases.

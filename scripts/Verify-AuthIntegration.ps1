@@ -1,8 +1,10 @@
-param([switch]$Browser, [switch]$Production, [switch]$MasterData, [switch]$MasterOnly, [switch]$Inventory, [switch]$InventoryOnly, [switch]$Purchasing, [switch]$PurchasingOnly, [switch]$Sales, [switch]$SalesOnly, [switch]$Routing, [switch]$RoutingOnly, [switch]$Premium, [switch]$PremiumOnly)
+param([switch]$Browser, [switch]$Production, [switch]$MasterData, [switch]$MasterOnly, [switch]$Inventory, [switch]$InventoryOnly, [switch]$Purchasing, [switch]$PurchasingOnly, [switch]$Sales, [switch]$SalesOnly, [switch]$Routing, [switch]$RoutingOnly, [switch]$Premium, [switch]$PremiumOnly, [switch]$Packing, [switch]$PackingOnly)
 
 $ErrorActionPreference = 'Stop'
+if ($PackingOnly) { $Packing = $true; $Browser = $true }
+if ($Packing -and !$PackingOnly) { $Premium = $true }
 if ($PremiumOnly) { $Premium = $true; $Browser = $true }
-if ($Premium -and !$PremiumOnly) { $Routing = $true }
+if ($Premium -and !$PremiumOnly -and !$PackingOnly) { $Routing = $true }
 if ($RoutingOnly) { $Routing = $true; $Browser = $true }
 if ($Routing -and !$RoutingOnly) { $Sales = $true }
 if ($SalesOnly) { $Sales = $true; $Browser = $true }
@@ -77,12 +79,12 @@ try {
         Invoke-CheckedDocker -DockerArgs @('run','--rm','--volumes-from',"${webContainer}:ro",'-e','FRONTEND_SOURCE=/app','--mount',$scriptMount,'ambs-auth-browser-tools:local','/work/tests/verify-router-suspense.mjs','--esm')
         $browserArguments = @('run','--rm','-i','--network',"container:$webContainer",'--mount',$scriptMount,'ambs-auth-browser-tools:local','/work/tests/verify-login-browser.mjs')
         if ($Production) { $browserArguments += '--production' }
-        if (!$MasterOnly -and !$InventoryOnly -and !$PurchasingOnly -and !$SalesOnly -and !$RoutingOnly -and !$PremiumOnly) {
+        if (!$MasterOnly -and !$InventoryOnly -and !$PurchasingOnly -and !$SalesOnly -and !$RoutingOnly -and !$PremiumOnly -and !$PackingOnly) {
             $credentialJson | & docker @browserArguments
             if ($LASTEXITCODE -ne 0) { throw 'Browser authentication verification failed' }
         }
     }
-    if (!$MasterOnly -and !$InventoryOnly -and !$PurchasingOnly -and !$SalesOnly -and !$RoutingOnly -and !$PremiumOnly) {
+    if (!$MasterOnly -and !$InventoryOnly -and !$PurchasingOnly -and !$SalesOnly -and !$RoutingOnly -and !$PremiumOnly -and !$PackingOnly) {
         $credentialJson | & docker exec -i $webContainer node scripts/verify-auth.mjs
         if ($LASTEXITCODE -ne 0) { throw 'Live authentication integration verification failed' }
     }
@@ -166,6 +168,21 @@ try {
         if ($Routing) { $premiumArguments += '--after-routing' }
         $credentialJson | & docker @premiumArguments
         if ($LASTEXITCODE -ne 0) { throw 'Premium UI browser verification failed' }
+    }
+    if ($Packing) {
+        $mode = if ($Production) { 'production' } else { 'development' }
+        $artifactDirectory = Join-Path $projectRoot "artifacts\phase7\$mode"
+        $null = New-Item -ItemType Directory -Force -Path $artifactDirectory
+        $artifactMount = "type=bind,source=$artifactDirectory,target=/artifacts"
+        $packingArguments = @('run','--rm','-i','--network',"container:$webContainer",'--mount',$scriptMount,'--mount',$artifactMount,'ambs-auth-browser-tools:local','/work/tests/verify-packing-browser.mjs')
+        if ($Premium) { $packingArguments += '--after-premium' }
+        $credentialJson | & docker @packingArguments
+        if ($LASTEXITCODE -ne 0) { throw 'Phase 7 browser verification failed' }
+        $null = Invoke-CheckedDocker -DockerArgs @('restart',$apiContainer,$webContainer)
+        Wait-TestService -Container $apiContainer -Runtime 'python'
+        Wait-TestService -Container $webContainer -Runtime 'node'
+        $credentialJson | & docker @packingArguments --persistence
+        if ($LASTEXITCODE -ne 0) { throw 'Phase 7 restart persistence verification failed' }
     }
 } finally {
     $credentialJson = $null

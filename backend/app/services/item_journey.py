@@ -96,8 +96,21 @@ def journey(db, ctx, delivery, item_id, lot_id=None, page=1):
             query=query.where(ProductionEvent.lot_id==lot_id)
         for e,stage,production in db.execute(query):
             event('Supplier-owned production '+e.kind.lower()+' (not owned stock)',e.created_at,e.actor_id,e.quantity,stage.location_id,production.code,'production_events',e.lot_id,dict(production_order_id=str(production.id),supplier_id=str(stage.supplier_id),receipt_id=str(e.receipt_id) if e.receipt_id else None))
+    # References remain separate from physical ledger events and obey each domain's RBAC.
+    document_refs, plan_refs = [], []
+    from app.models.packing import PackingDocument, MaterialPlan, MaterialPlanLine
+    if 'packing.read' in ctx.permissions:
+        from app.services.packing import delivery_query
+        eligible = delivery_query(ctx).with_only_columns(SalesDelivery.id)
+        query = select(PackingDocument).where(PackingDocument.delivery_id.in_(eligible), PackingDocument.snapshot['lines'].contains([{'item_id':str(item_id)}]))
+        if not global_read: query=query.where(PackingDocument.delivery_id==delivery.id)
+        document_refs=[dict(id=str(r.id),code=r.code,revision=r.revision,delivery_id=str(r.delivery_id)) for r in db.scalars(query.order_by(PackingDocument.created_at.desc()).limit(100))]
+    if 'material_plans.read' in ctx.permissions:
+        query=select(MaterialPlan).where(MaterialPlan.id.in_(select(MaterialPlanLine.plan_id).where(MaterialPlanLine.item_id==item_id)) | MaterialPlan.source_snapshot['demands'].contains([{'item_id':str(item_id)}]))
+        if not global_read: query=query.where(MaterialPlan.sales_order_id==delivery.order_id)
+        plan_refs=[dict(id=str(r.id),code=r.code,status=r.status) for r in db.scalars(query.order_by(MaterialPlan.created_at.desc()).limit(100))]
     events.sort(key=lambda e:(e['timestamp'],e['source'],e['reference'],e['kind'],e['location_id'] or ''))
     start=(page-1)*100
     return dict(item_id=str(item.id),item_name=item.name,tracking=inv.tracking(db,item.id),
         identity_note='Individual serial journey' if inv.tracking(db,item.id)=='SERIAL' and lot_id else 'Quantity/lot history; individual-piece identity is not established',
-        scope='Company item history' if global_read else 'Selected delivery only',items=events[start:start+100],total=len(events),page=page,page_size=100)
+        document_references=document_refs,material_plan_references=plan_refs,scope='Company item history' if global_read else 'Selected delivery only',items=events[start:start+100],total=len(events),page=page,page_size=100)

@@ -5,6 +5,7 @@ import { useUser } from "./app-shell";
 import { Modal, Pagination, utcTime } from "./forms";
 import { api, errorMessage } from "@/lib/api";
 import { useResource } from "@/lib/use-resource";
+import { DocumentPanel, ManufacturingLinks } from "./packing-screen";
 import { RoutingPanel } from "./routing-panel";
 
 type Option = {
@@ -321,6 +322,7 @@ export function SalesScreen() {
             </tbody>
           </table>
         </div>
+        {user.permissions.includes("packing.read") && <details><summary>Packing & delivery PDFs</summary><DocumentPanel deliveryId={d.id} /></details>}
         <div className="row-actions">
           {user.permissions.includes("routes.read") && (
             <button onClick={() => setRoutingDelivery(d.id)}>
@@ -505,7 +507,7 @@ export function SalesScreen() {
                 </p>
                 <h2>Deliveries</h2>
                 {detail.data.deliveries.length ? (
-                  detail.data.deliveries.map(deliveryCard)
+                  <><ManufacturingLinks salesOrderId={detail.data.id} />{detail.data.deliveries.map(deliveryCard)}</>
                 ) : (
                   <p>No deliveries yet.</p>
                 )}

@@ -1,3 +1,4 @@
+import { ManufacturingLinks } from "@/components/packing-screen";
 import { notFound } from "next/navigation";
 import { requireUserPermission } from "@/lib/server-api";
 import {
@@ -16,10 +17,10 @@ export default async function Page({
     notFound();
   await requireUserPermission(readPermission(screen as PurchaseScreen));
   return (
-    <PurchasingScreen
+    <> <PurchasingScreen
       key={`${screen}:${id}`}
       screen={screen as PurchaseScreen}
       identity={id}
-    />
+    />{screen === "production" && <ManufacturingLinks productionOrderId={id} />}</>
   );
 }
