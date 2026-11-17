@@ -1,8 +1,8 @@
 # GitHub backup setup report
 
-## Current status
+## Final verdict
 
-The complete pre-GitHub local backup and isolated database restore rehearsal passed. The source/object secret audit passed. GitHub CLI authenticated account is `mohannad-121`. All 211 backend regressions and isolated production frontend checks passed. The requested private repository was created and its owner/PRIVATE visibility/empty branch state verified through the authenticated API before any source push. The exact staged-byte review and initial commit/push are the remaining publication steps.
+**PASS: backup completed; backup restore verified; Git security audit passed; private repository created; initial push verified.** Repository: [mohannad-121/AMBS-ERP](https://github.com/mohannad-121/AMBS-ERP), owner `mohannad-121`, visibility **PRIVATE**, branch `main`. All 211 backend regressions and the frontend build/typecheck/lint/compatibility checks passed. All main database row/count fingerprints, administrator credentials and storage remained unchanged after the source push. All three services remain healthy. This final verification report is recorded in a separate documentation commit after the initial reviewed source commit.
 
 ## Preflight
 
@@ -20,7 +20,7 @@ The folder is outside Git. ACL inheritance is disabled with only the current Win
 
 Source ZIP: 182 files; every CRC/member SHA256 checked. PostgreSQL: unique consistent custom dump, pg_restore listing and full decode checked. Restore rehearsal: created a new unused generated scratch database, restored with --exit-on-error, matched all 62 table counts/row fingerprints including Alembic, verified head/schema drift, and removed only that successful scratch database. The main database was never restored over or reset. Private item-image volume was identified from actual Docker mounts and archived; the current volume is empty (one root-directory tar member). node_modules/.next caches are excluded. Source ZIP is the point-in-time pre-audit snapshot; later backup/security documentation is part of the reviewed Git source.
 
-Backup manifest: `C:\AMBS-Backups\AMBS-ERP\AMBS-ERP-PreGitHub-20261117-144328-ad33e93d\manifest.json`. Its own SHA256 at backup completion is `04390bd7a1a2ca069718a975a7d543d80a8ad309d66bafbb11c27c1308bf605f`.
+Backup manifest: `C:\AMBS-Backups\AMBS-ERP\AMBS-ERP-PreGitHub-20261117-144328-ad33e93d\manifest.json`. Its own SHA256 after post-push verification is `a83949c1e57c47aca518635804e1b72cb311d85f29b6843547d2c136fdf96afb`.
 
 | Artifact | Bytes | SHA256 |
 | --- | --- | --- |
@@ -35,6 +35,7 @@ Backup manifest: `C:\AMBS-Backups\AMBS-ERP\AMBS-ERP-PreGitHub-20261117-144328-ad
 | restore-verification.json | 297 | `2443cd5d0af0b38107508f36f6e4e65363e1ecc595a8fe903e45ade98daf34c8` |
 | source-inventory.json | 29126 | `73dc91a8a0702009684ef9e1f4a2dbb942dc5419223accb1384cddcff0d98f5e` |
 | storage-inventory.json | 74 | `f9a2ff877ed2b55ba601bf8cb8914b1541ce0d1fda403723a4fed81a0a994e36` |
+| database-post-push.json | 6920 | `4a301087811d88bdd4c5b3b9b4e76a5fe57635b66d85081f63b9197b47570817` |
 
 The dump and image archive contain private business/security data and are protected by NTFS ACLs, not individual passphrase encryption. The .env backup is passphrase-encrypted. Never share these artifacts as source code; use approved encrypted off-host storage for disaster recovery. No decrypted configuration temporary file was created. Recovery instructions are in [BACKUP_AND_RECOVERY.md](BACKUP_AND_RECOVERY.md).
 
@@ -48,7 +49,7 @@ Reviewed source categories include Python/Alembic/tests, TS/TSX/CSS, MJS compati
 
 .gitignore now also excludes environment variants, local credentials/.netrc/.npmrc/.ssh, keys/certificates/keystores, encrypted archives/dumps/databases, business data/uploads/private documents, logs/traces/browser reports, virtualenvs/caches, generated builds and editor/OS files. Placeholder-only .env.example remains included. Required migrations, lockfiles, tests, scripts and Markdown documentation remain eligible.
 
-Final exact staged-byte audit, staged file manifest and maintained-scanner results will be recorded before the commit. The GitHub CLI was installed because the available connector can verify identity/repository metadata but does not create repositories. CLI browser/device login was interactive; no personal access token was requested in chat.
+The exact staged snapshot contained 186 approved files (1,784,894 normalized bytes). Complete file manifest review, configured-secret/path/binary/object checks and Gitleaks scan all passed with zero findings before the commit. Every committed blob matched the reviewed staged-byte SHA256; the remote tree matched all 186 expected source paths, with excluded/private files absent. The GitHub CLI was installed because the available connector can verify identity/repository metadata but does not create repositories. CLI browser/device login was interactive; no personal access token was requested in chat.
 
 ## Repository and commit
 
@@ -57,13 +58,14 @@ Final exact staged-byte audit, staged file manifest and maintained-scanner resul
 - Required visibility: PRIVATE, verified through API before any source push
 - Target lookup initially returned 404. This task created the repository PRIVATE from the outset; owner mohannad-121, visibility private and an empty branch list were verified through the API before staging.
 - Initial commit message: `chore: establish AMBS ERP private repository through Phase 6B`
-- Initial commit SHA: not created yet
-- Push: NOT RUN
+- Initial commit SHA: `18689076335bd193b42cff6f517da9ad6e76ef3c`
+- Initial push: PASS; remote main matched the initial local commit exactly, owner/private visibility/default branch and full source tree verified through Git/GitHub API. No force-push was used.
+- Report finalization: a separate documentation-only commit records the completed checks; it does not change the application snapshot or rewrite the initial commit.
 - No force options, public releases, Pages, production CI/CD or hosting are enabled
 
 ## Validation
 
-Backup restoration, encryption, source/object security checks, Alembic head/drift and health have passed. Backend: 211 tests passed in 516.75 seconds. Isolated npm ci, Next compatibility guards (3), optimized production build, TypeScript and ESLint all passed. Alembic remains at 0008_delivery_routes with no drift. Post-push preservation checks will be recorded after execution. The production build uses separate .next/node_modules volumes and preserves the active development server.
+Backup restoration, encryption, source/object security checks, Alembic head/drift and health have passed. Backend: 211 tests passed in 516.75 seconds. Isolated npm ci, Next compatibility guards (3), optimized production build, TypeScript and ESLint all passed. Alembic remains at 0008_delivery_routes with no drift. Post-source-push verification passed: all 62 table counts/row fingerprints match the pre-backup baseline, including administrator credential hash, original stock history and grants. Private storage remains empty/unchanged. PostgreSQL, backend and frontend are healthy; both health endpoints return ok, and Alembic is still 0008_delivery_routes with no drift. The production build uses separate .next/node_modules volumes and preserves the active development server.
 
 ## Recovery and future workflow
 
@@ -78,9 +80,19 @@ Keep main as the reviewed baseline. Create one feature/fix branch per task, run 
 | Complete local backup | PASS |
 | Backup integrity / scratch restore | PASS |
 | Encrypted configuration verified | PASS |
-| Git source/object security audit | PASS; final staged review pending |
+| Git source/object and exact staged security audit | PASS, zero findings |
 | Current application regression validation | PASS, backend 211 + frontend build/typecheck/lint |
 | Private repository created and verified | PASS, PRIVATE before source push |
-| Initial reviewed commit | NOT RUN |
-| Initial push and remote-integrity verification | NOT RUN |
-| Post-push data/admin/storage/health preservation | NOT RUN |
+| Initial reviewed commit | PASS, 1868907 |
+| Initial push and remote-integrity verification | PASS, matching commit/tree; PRIVATE |
+| Post-source-push data/admin/storage/health preservation | PASS |
+
+
+## Remaining warnings and limits
+
+- Keep the age passphrase separately. It is not recoverable from Git or the backup manifest.
+- The local backup is verified but is not an off-host disaster-recovery arrangement; retain controlled encrypted off-host copies under company policy.
+- Database/image archives are confidential and ACL-restricted; only private configuration is independently passphrase-encrypted in this backup.
+- Git emitted ordinary Windows LF-to-CRLF working-copy warnings while staging. Its existing line-ending configuration was preserved. The actual working files/migrations were not rewritten to silence warnings; the committed normalized bytes were audited and matched the remote tree.
+- ORS_API_KEY was not configured or changed. Live ORS verification remains NOT RUN and separate from this task.
+- No administrator credential reset, database reset, volume deletion, force-push, public release, Pages, deployment/production CI/CD or Phase 6C work occurred.
