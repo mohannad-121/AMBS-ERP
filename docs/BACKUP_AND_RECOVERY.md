@@ -2,7 +2,13 @@
 
 The pre-GitHub backup is stored outside the repository under `C:\AMBS-Backups\AMBS-ERP\AMBS-ERP-PreGitHub-20261117-144328-ad33e93d`. Its manifest lists artifact sizes, SHA256 hashes, source/storage inventories, encryption verification and the scratch restore result. Backups contain private company/security data and must not be committed or shared as source releases. NTFS access is limited to the current Windows user and SYSTEM.
 
-## Verified components
+## Latest approved backup: post-Phase 6C
+
+`C:\AMBS-Backups\AMBS-ERP\AMBS-ERP-PostPhase6C-20261117-180306` contains the complete approved Phase 6C source snapshot, a fresh custom PostgreSQL dump, private item-image storage, recovery metadata and age-encrypted current configuration including current ORS settings. Source/archive hashes, in-memory configuration decryption and an isolated restore matching all 62 tables/head/schema were verified. No main database overwrite or volume deletion occurred.
+
+Its `manifest.json` SHA256 is `199a9aef7d7f817738317ef11545f5899a9a3c51d59db5bf76269108d712df81`. Complete artifact checksums, source commit, private PR and release checks are in [PHASE_6C_GITHUB_RELEASE_REPORT.md](PHASE_6C_GITHUB_RELEASE_REPORT.md). The recovery procedure below applies; use this newer directory for Phase 6C recovery. Keep the age passphrase separately. Database/image archives are confidential and ACL-restricted; the configuration is independently encrypted. GitHub contains source and reports, never these private archives.
+
+## Earlier pre-GitHub backup: verified components
 
 - `application-source.zip`: reproducible source/configuration templates, manifests/lockfiles, migrations through 0008, tests, documentation and Next compatibility/install scripts. Build caches, private data and real .env are excluded. Every ZIP member was CRC-checked and compared by SHA256.
 - A unique `ambs-erp-full-*.dump`: consistent PostgreSQL custom-format dump of all application/security/business tables and Alembic state. Archive listing and complete decode passed. A new unused scratch database was restored, all 62 table counts/row fingerprints matched the source (including Alembic), and `0008_delivery_routes` / no schema drift were verified. Only that generated scratch database was then removed.
