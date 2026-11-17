@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from starlette.exceptions import HTTPException
 
-from app.api import audit, auth, system, users, master, images, inventory, purchasing, sales, routing
+from app.api import audit, auth, system, users, master, images, inventory, purchasing, sales, routing, dashboard
 from app.api.health import router
 from app.core.config import get_settings
 from app.core.body_limit import RequestBodyLimit
@@ -50,6 +50,7 @@ for api_router in (
     purchasing.router,
     sales.router,
     routing.router,
+    dashboard.router,
 ):
     app.include_router(api_router, prefix="/api")
 

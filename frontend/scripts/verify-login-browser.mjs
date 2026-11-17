@@ -24,8 +24,18 @@ async function verify() {
     const devtools = await context.newCDPSession(page);
     await devtools.send("Runtime.enable");
     devtools.on("Runtime.consoleAPICalled", (event) => {
-      if (event.args.some(arg => typeof arg.value === "string" && arg.value.includes("hasn't mounted yet")))
-        diagnostics.push({type:"console-stack",stage,text:sanitize(JSON.stringify(event.stackTrace?.callFrames ?? []))});
+      if (
+        event.args.some(
+          (arg) =>
+            typeof arg.value === "string" &&
+            arg.value.includes("hasn't mounted yet"),
+        )
+      )
+        diagnostics.push({
+          type: "console-stack",
+          stage,
+          text: sanitize(JSON.stringify(event.stackTrace?.callFrames ?? [])),
+        });
     });
     // Exercise Suspense retries with cold, delayed Flight responses as well as
     // the normal cached navigations below.
@@ -43,7 +53,11 @@ async function verify() {
       return text.replace(/\?[^\s)]+/g, "?[redacted]");
     }
     page.on("pageerror", (error) => {
-      diagnostics.push({ type: "pageerror", stage, text: sanitize(error.stack ?? error.message) });
+      diagnostics.push({
+        type: "pageerror",
+        stage,
+        text: sanitize(error.stack ?? error.message),
+      });
     });
     let leakedQuery = false;
     let hmrConnected = false;
@@ -58,7 +72,11 @@ async function verify() {
     page.on("console", (message) => {
       if (message.text().includes("[HMR] connected")) hmrConnected = true;
       if (["error", "warning"].includes(message.type())) {
-        diagnostics.push({ type: message.type(), stage, text: sanitize(message.text()) });
+        diagnostics.push({
+          type: message.type(),
+          stage,
+          text: sanitize(message.text()),
+        });
       }
     });
     page.on("response", (response) => {
@@ -105,10 +123,11 @@ async function verify() {
 
     stage = "username form login";
     await login(base, credentials.username, credentials.password, 200);
-    if (!production) check(hmrConnected, "127.0.0.1 HMR connects and the login form hydrates");
-    await page.getByText("All systems operational", { exact: true }).waitFor();
+    if (!production)
+      check(hmrConnected, "127.0.0.1 HMR connects and the login form hydrates");
+    await page.getByText("PostgreSQL overview", { exact: true }).waitFor();
     check(
-      (await page.locator("h1").textContent()) === "System status",
+      (await page.locator("h1").textContent()) === "Operational dashboard",
       "Authenticated dashboard renders after form login",
     );
     const cookies = await context.cookies(base);
@@ -126,10 +145,12 @@ async function verify() {
 
     stage = "authenticated refresh";
     await page.reload();
-    await page.waitForFunction(() => typeof window.next?.router?.push === "function");
-    await page.getByText("All systems operational", { exact: true }).waitFor();
+    await page.waitForFunction(
+      () => typeof window.next?.router?.push === "function",
+    );
+    await page.getByText("PostgreSQL overview", { exact: true }).waitFor();
     check(
-      (await page.locator("h1").textContent()) === "System status",
+      (await page.locator("h1").textContent()) === "Operational dashboard",
       "Authentication survives a real page refresh",
     );
     stage = "SUPER_ADMIN navigation";
@@ -159,20 +180,54 @@ async function verify() {
 
     stage = "repeated protected navigation";
     for (let cycle = 0; cycle < 3; cycle += 1) {
-      for (const title of ["System status", "Users & access", "Audit history"]) {
+      for (const title of [
+        "System status",
+        "Users & access",
+        "Audit history",
+      ]) {
         await page.getByRole("link", { name: title, exact: true }).click();
-        await page.getByRole("heading", { level: 1, name: title, exact: true }).waitFor();
+        await page
+          .getByRole("heading", { level: 1, name: title, exact: true })
+          .waitFor();
       }
       await page.reload();
-      await page.waitForFunction(() => typeof window.next?.router?.push === "function");
-      await page.getByRole("heading", { level: 1, name: "Audit history", exact: true }).waitFor();
+      await page.waitForFunction(
+        () => typeof window.next?.router?.push === "function",
+      );
+      await page
+        .getByRole("heading", { level: 1, name: "Audit history", exact: true })
+        .waitFor();
     }
-    check(true, "Repeated navigation and refresh complete in an authenticated browser");
+    check(
+      true,
+      "Repeated navigation and refresh complete in an authenticated browser",
+    );
 
     if (!production) {
       stage = "Fast Refresh during protected navigation";
       async function fastRefresh() {
-        await page.waitForFunction(() => typeof window.next?.router?.hmrRefresh === "function");
+        await page.waitForFunction(
+          () => typeof window.next?.router?.hmrRefresh === "function",
+        );
+        // Router methods are exposed before AppRouter commits after a full reload.
+        // An observed React interaction proves hydration before synthetic HMR.
+        await page
+          .getByRole("button", { name: "Collapse sidebar", exact: true })
+          .click();
+        await page.waitForFunction(() =>
+          document
+            .querySelector(".app-shell")
+            ?.classList.contains("sidebar-collapsed"),
+        );
+        await page
+          .getByRole("button", { name: "Expand sidebar", exact: true })
+          .click();
+        await page.waitForFunction(
+          () =>
+            !document
+              .querySelector(".app-shell")
+              ?.classList.contains("sidebar-collapsed"),
+        );
         await page.evaluate(() => {
           window.next.router.hmrRefresh();
         });
@@ -180,13 +235,32 @@ async function verify() {
       for (let cycle = 0; cycle < 3; cycle += 1) {
         // Invoke the same router entry point as Next's Fast Refresh client.
         await fastRefresh();
-        await page.getByRole("link", { name: "Users & access", exact: true }).click();
-        await page.getByRole("heading", { level: 1, name: "Users & access", exact: true }).waitFor();
+        await page
+          .getByRole("link", { name: "Users & access", exact: true })
+          .click();
+        await page
+          .getByRole("heading", {
+            level: 1,
+            name: "Users & access",
+            exact: true,
+          })
+          .waitFor();
         await fastRefresh();
-        await page.getByRole("link", { name: "Audit history", exact: true }).click();
-        await page.getByRole("heading", { level: 1, name: "Audit history", exact: true }).waitFor();
+        await page
+          .getByRole("link", { name: "Audit history", exact: true })
+          .click();
+        await page
+          .getByRole("heading", {
+            level: 1,
+            name: "Audit history",
+            exact: true,
+          })
+          .waitFor();
       }
-      check(true, "Fast Refresh and navigation settle without losing the authenticated page");
+      check(
+        true,
+        "Fast Refresh and navigation settle without losing the authenticated page",
+      );
     }
 
     stage = "logout";
@@ -213,7 +287,7 @@ async function verify() {
       credentials.password,
       200,
     );
-    await page.getByText("All systems operational", { exact: true }).waitFor();
+    await page.getByText("PostgreSQL overview", { exact: true }).waitFor();
     check(
       true,
       "Both supported local hostnames complete browser authentication",
@@ -227,9 +301,29 @@ async function verify() {
       "Browser login status sequence includes rejection and three successful logins",
     );
     await page.waitForTimeout(500);
-    check(!diagnostics.some((item) => /called use\(\)|hydration|hydrating|uncached promise|invalid hook|rendered.*hooks|Minified React error/i.test(item.text)), "No React runtime, Suspense or hydration diagnostics");
-    check(!diagnostics.some((item) => item.type === "pageerror"), "No uncaught browser runtime errors");
-    check(!diagnostics.some((item) => !(item.stage === "invalid-password form submission" && item.text === "Failed to load resource: the server responded with a status of 401 (Unauthorized)")), "Console contains only the expected invalid-password HTTP rejection");
+    check(
+      !diagnostics.some((item) =>
+        /called use\(\)|hydration|hydrating|uncached promise|invalid hook|rendered.*hooks|Minified React error/i.test(
+          item.text,
+        ),
+      ),
+      "No React runtime, Suspense or hydration diagnostics",
+    );
+    check(
+      !diagnostics.some((item) => item.type === "pageerror"),
+      "No uncaught browser runtime errors",
+    );
+    check(
+      !diagnostics.some(
+        (item) =>
+          !(
+            item.stage === "invalid-password form submission" &&
+            item.text ===
+              "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+          ),
+      ),
+      "Console contains only the expected invalid-password HTTP rejection",
+    );
     await context.close();
 
     stage = "JavaScript-disabled form safety";
@@ -260,7 +354,8 @@ async function verify() {
     await noScript.close();
     console.log(`${passed} Chromium browser checks passed.`);
   } finally {
-    for (const diagnostic of diagnostics) console.log(JSON.stringify({ browser_diagnostic: diagnostic }));
+    for (const diagnostic of diagnostics)
+      console.log(JSON.stringify({ browser_diagnostic: diagnostic }));
     await browser.close();
   }
 }

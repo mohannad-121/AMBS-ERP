@@ -1,6 +1,8 @@
 "use client";
 import { useId, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
+import { StatusBadge } from "./status-badge";
+import { CountUp } from "./count-up";
 import { api, errorMessage } from "@/lib/api";
 import { useResource } from "@/lib/use-resource";
 import { useUser } from "./app-shell";
@@ -1593,10 +1595,14 @@ export function PurchasingScreen({
                 <thead>
                   <tr>
                     <th>Item / service snapshot</th>
-                    <th>Ordered / requested</th>
-                    <th>Received</th>
-                    <th>Outstanding / closed remainder</th>
-                    {has("suppliers.prices.read") && <th>Unit price</th>}
+                    <th className="numeric-heading">Ordered / requested</th>
+                    <th className="numeric-heading">Received</th>
+                    <th className="numeric-heading">
+                      Outstanding / closed remainder
+                    </th>
+                    {has("suppliers.prices.read") && (
+                      <th className="numeric-heading">Unit price</th>
+                    )}
                   </tr>
                 </thead>
                 <tbody>
@@ -1716,7 +1722,7 @@ export function PurchasingScreen({
                       <thead>
                         <tr>
                           <th>Item / identity</th>
-                          <th>Measured quantity</th>
+                          <th className="numeric-heading">Measured quantity</th>
                           <th>Source / destination</th>
                         </tr>
                       </thead>
@@ -1768,7 +1774,7 @@ export function PurchasingScreen({
                       : "field-hint"
                   }
                 >
-                  {text(stage.delivery_status)}
+                  <StatusBadge status={text(stage.delivery_status)} />
                   {stage.due_on ? ` · ${stage.due_on}` : ""}
                 </p>
                 {["DRAFT", "ACTIVE"].includes(text(row.status)) &&
@@ -2073,8 +2079,12 @@ export function PurchasingScreen({
                     </td>
                     <td>{text(row.supplier_name ?? row.item_name)}</td>
                     <td>
-                      {row.status ??
-                        (row.is_active === false ? "Inactive" : "Active")}
+                      <StatusBadge
+                        status={
+                          row.status ??
+                          (row.is_active === false ? "Inactive" : "Active")
+                        }
+                      />
                       <span className="table-subtext">
                         {text(row.delivery_status ?? row.availability_status)}
                       </span>
@@ -2164,7 +2174,13 @@ export function PurchasingScreen({
             ).map(([label, key]) => (
               <section className="data-panel" key={key}>
                 <span>{label}</span>
-                <strong>{text(result.data?.[key])}</strong>
+                <strong>
+                  {result.data?.[key] != null ? (
+                    <CountUp value={text(result.data[key])} />
+                  ) : (
+                    "Unavailable"
+                  )}
+                </strong>
               </section>
             ))}
           </div>

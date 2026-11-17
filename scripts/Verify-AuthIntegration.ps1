@@ -1,6 +1,8 @@
-param([switch]$Browser, [switch]$Production, [switch]$MasterData, [switch]$MasterOnly, [switch]$Inventory, [switch]$InventoryOnly, [switch]$Purchasing, [switch]$PurchasingOnly, [switch]$Sales, [switch]$SalesOnly, [switch]$Routing, [switch]$RoutingOnly)
+param([switch]$Browser, [switch]$Production, [switch]$MasterData, [switch]$MasterOnly, [switch]$Inventory, [switch]$InventoryOnly, [switch]$Purchasing, [switch]$PurchasingOnly, [switch]$Sales, [switch]$SalesOnly, [switch]$Routing, [switch]$RoutingOnly, [switch]$Premium, [switch]$PremiumOnly)
 
 $ErrorActionPreference = 'Stop'
+if ($PremiumOnly) { $Premium = $true; $Browser = $true }
+if ($Premium -and !$PremiumOnly) { $Routing = $true }
 if ($RoutingOnly) { $Routing = $true; $Browser = $true }
 if ($Routing -and !$RoutingOnly) { $Sales = $true }
 if ($SalesOnly) { $Sales = $true; $Browser = $true }
@@ -56,7 +58,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Could not seed the isolated HTTP test database' }
     $null = $credentialJson | ConvertFrom-Json
     $apiModule = if ($Routing) { 'tests.routing_server:app' } else { 'app.main:app' }
-    $null = Invoke-CheckedDocker -DockerArgs @('compose','run','-d','--rm','--no-deps','--name',$apiContainer,'--volume','/data/item-images','-e',"POSTGRES_DB=$testDatabase",'-e','APP_ENV=test','backend','uvicorn',$apiModule,'--host','0.0.0.0','--port','8000','--no-access-log')
+    $null = Invoke-CheckedDocker -DockerArgs @('compose','run','-d','--rm','--no-deps','--name',$apiContainer,'--volume','/data/item-images','-e',"POSTGRES_DB=$testDatabase",'-e','APP_ENV=test','-e','ORS_API_KEY=','backend','uvicorn',$apiModule,'--host','0.0.0.0','--port','8000','--no-access-log')
     $apiStarted = $true
     Wait-TestService -Container $apiContainer -Runtime 'python'
     $webArguments = @('compose','run','-d','--rm','--no-deps','--name',$webContainer,'-e',"INTERNAL_API_URL=http://${apiContainer}:8000",'--volume','/app/.next','--volume','/app/node_modules','frontend')
@@ -75,12 +77,12 @@ try {
         Invoke-CheckedDocker -DockerArgs @('run','--rm','--volumes-from',"${webContainer}:ro",'-e','FRONTEND_SOURCE=/app','--mount',$scriptMount,'ambs-auth-browser-tools:local','/work/tests/verify-router-suspense.mjs','--esm')
         $browserArguments = @('run','--rm','-i','--network',"container:$webContainer",'--mount',$scriptMount,'ambs-auth-browser-tools:local','/work/tests/verify-login-browser.mjs')
         if ($Production) { $browserArguments += '--production' }
-        if (!$MasterOnly -and !$InventoryOnly -and !$PurchasingOnly -and !$SalesOnly -and !$RoutingOnly) {
+        if (!$MasterOnly -and !$InventoryOnly -and !$PurchasingOnly -and !$SalesOnly -and !$RoutingOnly -and !$PremiumOnly) {
             $credentialJson | & docker @browserArguments
             if ($LASTEXITCODE -ne 0) { throw 'Browser authentication verification failed' }
         }
     }
-    if (!$MasterOnly -and !$InventoryOnly -and !$PurchasingOnly -and !$SalesOnly -and !$RoutingOnly) {
+    if (!$MasterOnly -and !$InventoryOnly -and !$PurchasingOnly -and !$SalesOnly -and !$RoutingOnly -and !$PremiumOnly) {
         $credentialJson | & docker exec -i $webContainer node scripts/verify-auth.mjs
         if ($LASTEXITCODE -ne 0) { throw 'Live authentication integration verification failed' }
     }
@@ -154,6 +156,16 @@ try {
         Wait-TestService -Container $webContainer -Runtime 'node'
         $credentialJson | & docker @routingArguments --persistence
         if ($LASTEXITCODE -ne 0) { throw 'Routing restart persistence verification failed' }
+    }
+    if ($Premium) {
+        $mode = if ($Production) { 'production' } else { 'development' }
+        $artifactDirectory = Join-Path $projectRoot "artifacts\phase6c\$mode"
+        $null = New-Item -ItemType Directory -Force -Path $artifactDirectory
+        $artifactMount = "type=bind,source=$artifactDirectory,target=/artifacts"
+        $premiumArguments = @('run','--rm','-i','--network',"container:$webContainer",'--mount',$scriptMount,'--mount',$artifactMount,'ambs-auth-browser-tools:local','/work/tests/verify-premium-browser.mjs')
+        if ($Routing) { $premiumArguments += '--after-routing' }
+        $credentialJson | & docker @premiumArguments
+        if ($LASTEXITCODE -ne 0) { throw 'Premium UI browser verification failed' }
     }
 } finally {
     $credentialJson = $null

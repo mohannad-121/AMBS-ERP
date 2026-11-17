@@ -1,7 +1,7 @@
 import "server-only";
 import { NextRequest } from "next/server";
 const allowedPath =
-  /^(auth\/(csrf|login|logout|me)|users(?:\/[0-9a-f-]{36}(?:\/(roles|activation|password))?)?|roles|permissions|audit|system\/status)$/;
+  /^(auth\/(csrf|login|logout|me)|users(?:\/[0-9a-f-]{36}(?:\/(roles|activation|password))?)?|roles|permissions|audit|system\/status|dashboard)$/;
 const requestTooLarge = () =>
   Response.json(
     {
