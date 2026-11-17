@@ -411,6 +411,7 @@ try {
       ) === 8,
       "Route calculation and assignment leave physical stock unchanged",
     );
+    await modal().locator(".route-preview").first().scrollIntoViewIfNeeded();
     await page.screenshot({
       path: "/artifacts/route-preview-desktop.png",
       fullPage: true,
@@ -514,7 +515,18 @@ try {
       true,
       "Read-only item journey derives receive, reserve, pick, load and dispatch events",
     );
+    await modal().getByRole("heading", { name: "Item journey", exact: true }).evaluate(el => {
+      const dialog = el.closest("dialog");
+      dialog.scrollTop += el.getBoundingClientRect().top - dialog.getBoundingClientRect().top - 110;
+    });
+    await page.screenshot({ path: "/artifacts/journey-desktop.png", fullPage: true });
     await page.setViewportSize({ width: 390, height: 844 });
+    await modal().getByRole("heading", { name: "Item journey", exact: true }).evaluate(el => {
+      const dialog = el.closest("dialog");
+      dialog.scrollTop += el.getBoundingClientRect().top - dialog.getBoundingClientRect().top - 110;
+    });
+    await page.screenshot({ path: "/artifacts/journey-mobile.png", fullPage: true });
+    await modal().locator(".route-preview").first().scrollIntoViewIfNeeded();
     await page.screenshot({
       path: "/artifacts/routing-mobile.png",
       fullPage: true,

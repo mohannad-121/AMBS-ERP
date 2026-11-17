@@ -56,3 +56,8 @@ Prepare Linux server capacity, internal DNS, TLS reverse proxy, firewall rules, 
 ## Accepted scope updates: 6A and 6B
 
 The later owner-aligned Phase 6A request implements original customer orders, partial deliveries/backorders and automatic ledger-linked fulfillment. Phase 6B implements verified endpoint/driver assignments, ORS planning estimates, route revision history, restricted driver trip evidence and derived item journey. These replace the earlier assumption that all driver assignments wait until Phase 10. Live GPS, vehicle-specific routing, electronic customer proof of delivery and broader transport/accountability remain deferred. No Phase 6C redesign or deployment has started. Current technical acceptance and live-provider verification status are in PHASE_6B_REPORT.md.
+
+
+## Phase 6C: unified interface and operational dashboard
+
+The separately requested Phase 6C covers the shared premium AMBS visual system, grouped responsive shell, exact animated live counters and the presentation of all implemented modules. It does not implement finance, PDF documents, GPS tracking, new business workflows or deployment. Existing Phase 6A/6B actions and security rules remain authoritative. See [Phase 6C report](PHASE_6C_REPORT.md) for actual verification and acceptance status.

@@ -458,6 +458,7 @@ try {
     await login("phase4.admin", credentials.workerPassword);
     check(true, "Logout and subsequent login work in a clean browser context");
   }
+  if (diagnostics.length) console.error(JSON.stringify(diagnostics));
   check(
     !diagnostics.some(
       (d) =>

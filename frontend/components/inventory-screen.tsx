@@ -1,6 +1,8 @@
 "use client";
 import { useId, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
+import { StatusBadge } from "./status-badge";
+import { CountUp } from "./count-up";
 import { api, errorMessage } from "@/lib/api";
 import { useResource } from "@/lib/use-resource";
 import {
@@ -1334,7 +1336,13 @@ export function InventoryScreenView({ screen }: { screen: InventoryScreen }) {
             ].map(([label, key]) => (
               <section className="data-panel" key={key}>
                 <span>{label}</span>
-                <strong>{string(result.data?.[key])}</strong>
+                <strong>
+                  {result.data?.[key] != null ? (
+                    <CountUp value={string(result.data[key])} />
+                  ) : (
+                    "Unavailable"
+                  )}
+                </strong>
               </section>
             ))}
           </div>
@@ -1346,19 +1354,19 @@ export function InventoryScreenView({ screen }: { screen: InventoryScreen }) {
                   <tr>
                     <th>Unit</th>
                     <th>On Hand</th>
-                    <th>Reserved</th>
-                    <th>Available</th>
-                    <th>Non-usable</th>
+                    <th className="numeric-heading">Reserved</th>
+                    <th className="numeric-heading">Available</th>
+                    <th className="numeric-heading">Non-usable</th>
                   </tr>
                 </thead>
                 <tbody>
                   {rowList(result.data.totals_by_unit).map((row) => (
                     <tr key={string(row.unit_id)}>
                       <td>{string(row.unit_name)}</td>
-                      <td>{string(row.on_hand)}</td>
-                      <td>{string(row.reserved)}</td>
-                      <td>{string(row.available)}</td>
-                      <td>{string(row.nonusable)}</td>
+                      <td className="numeric">{string(row.on_hand)}</td>
+                      <td className="numeric">{string(row.reserved)}</td>
+                      <td className="numeric">{string(row.available)}</td>
+                      <td className="numeric">{string(row.nonusable)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -1414,7 +1422,7 @@ export function InventoryScreenView({ screen }: { screen: InventoryScreen }) {
             <h2>Recent movements</h2>
             {rowList(result.data.recent_movements).map((row) => (
               <p key={row.id}>
-                {row.code} · {row.kind} · {row.status}
+                {row.code} · {row.kind} · <StatusBadge status={row.status} />
               </p>
             ))}
             {rowList(result.data.recent_movements).length === 0 && (
@@ -1433,9 +1441,9 @@ export function InventoryScreenView({ screen }: { screen: InventoryScreen }) {
                   {balanceScreen ? (
                     <>
                       <th>On Hand</th>
-                      <th>Reserved</th>
-                      <th>Available</th>
-                      <th>Non-usable</th>
+                      <th className="numeric-heading">Reserved</th>
+                      <th className="numeric-heading">Available</th>
+                      <th className="numeric-heading">Non-usable</th>
                     </>
                   ) : (
                     <>
@@ -1469,24 +1477,30 @@ export function InventoryScreenView({ screen }: { screen: InventoryScreen }) {
                     </td>
                     {balanceScreen ? (
                       <>
-                        <td>{string(row.on_hand)}</td>
-                        <td>{string(row.reserved)}</td>
+                        <td className="numeric">{string(row.on_hand)}</td>
+                        <td className="numeric">{string(row.reserved)}</td>
                         <td>
                           {string(row.available)}
                           <span className="table-subtext">
-                            {row.status}
+                            <StatusBadge status={row.status} />
                             {row.low_stock ? " · Low stock" : ""}
                           </span>
                         </td>
-                        <td>{string(row.nonusable)}</td>
+                        <td className="numeric">{string(row.nonusable)}</td>
                       </>
                     ) : (
                       <>
                         <td>
                           {row.kind ?? ""}
                           <span className="table-subtext">
-                            {row.status ??
-                              (row.is_active === false ? "Inactive" : "Active")}
+                            <StatusBadge
+                              status={
+                                row.status ??
+                                (row.is_active === false
+                                  ? "Inactive"
+                                  : "Active")
+                              }
+                            />
                           </span>
                         </td>
                         <td>
@@ -1941,7 +1955,7 @@ function InventoryDetails({
           {rowList(data.movements).map((row) => (
             <section key={row.id}>
               <p>
-                {row.code} · {row.kind} · {row.status}
+                {row.code} · {row.kind} · <StatusBadge status={row.status} />
               </p>
               <InventoryDetails data={row} hasCosts={hasCosts} />
             </section>

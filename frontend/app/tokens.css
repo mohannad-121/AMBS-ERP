@@ -1,0 +1,57 @@
+/* AMBS Phase 6C: the single source for visual decisions. */
+:root {
+  --brand: #cc0605;
+  --brand-hover: #a80504;
+  --brand-soft: #fff1ef;
+  --amber: #f7a600;
+  --charcoal: #161b24;
+  --ink: #161b24;
+  --muted: #606875;
+  --paper: #f4f5f7;
+  --surface: #ffffff;
+  --surface-subtle: #f8f9fb;
+  --line: #e2e5ea;
+  --control-line: #a8afba;
+  --success: #17613d;
+  --success-bg: #eaf6ee;
+  --warning: #835000;
+  --warning-bg: #fff5dc;
+  --danger: #a92724;
+  --danger-hover: #84201e;
+  --danger-bg: #fff0ef;
+  --nav-text: #d2d7e1;
+  --nav-muted: #a4adbc;
+  --nav-active: #ffffff;
+  --nav-hover: #ffffff0d;
+  --nav-selected: #ffffff12;
+  --glass: #ffffffde;
+  --hover: #161b2404;
+  --overlay: #161b2480;
+  --shadow-color: #161b241f;
+  --shadow-sm: 0 2px 5px #161b2405, 0 8px 24px #161b2404;
+  --shadow-lg: 0 24px 80px #161b2429;
+  --radius-sm: 8px;
+  --radius: 14px;
+  --radius-lg: 20px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --font-body: Inter, Arial, sans-serif;
+  --text-small: 12px;
+  --text-body: 14px;
+  --text-title: clamp(26px, 2.3vw, 34px);
+  --duration: 180ms;
+  --duration-enter: 260ms;
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --focus: 0 0 0 3px var(--surface), 0 0 0 5px var(--brand);
+  --z-header: 10;
+  --z-overlay: 20;
+  --z-nav: 30;
+  --sidebar-width: 264px;
+  /* Compatibility names for existing operational components. */
+  --green: var(--brand);
+  --green-bg: var(--success-bg);
+}

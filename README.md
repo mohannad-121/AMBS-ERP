@@ -14,7 +14,7 @@ docker compose exec backend alembic upgrade head
 docker compose exec backend python -m app.cli provision-admin
 ```
 
-Open http://127.0.0.1:3000 to sign in. The authenticated workspace contains system status, business master data, user administration and audit history according to backend permissions. Development API documentation is at http://127.0.0.1:8000/docs. PostgreSQL listens on 127.0.0.1:5433.
+Open http://127.0.0.1:3000 to sign in. The authenticated workspace opens an operational dashboard with live permission-aware metrics, system status, business master data, user administration and audit history according to backend permissions. Development API documentation is at http://127.0.0.1:8000/docs. PostgreSQL listens on 127.0.0.1:5433.
 
 ```powershell
 docker compose stop
@@ -22,6 +22,17 @@ docker compose start --wait
 ```
 
 `docker compose down` removes the project's containers and network while retaining named volumes. Never add `--volumes` when preserving local data.
+
+## Phase 6C interface
+
+The shared AMBS red, amber and charcoal interface covers login, grouped navigation, operational tables, forms and dialogs. The root operational dashboard reads real PostgreSQL quantities; `/system` retains connectivity status. No sample business data is installed in the main database.
+
+- [Phase 6C verification report](docs/PHASE_6C_REPORT.md)
+- [AMBS design system](docs/AMBS_DESIGN_SYSTEM.md)
+- [Frontend UX architecture](docs/FRONTEND_UX_ARCHITECTURE.md)
+- [Dashboard metric definitions](docs/DASHBOARD_METRICS.md)
+
+Run the complete isolated browser chain with `powershell -File scripts/Verify-AuthIntegration.ps1 -Premium`; add `-Production` to compare the production build. `-PremiumOnly` exercises the new UI against an initially empty scratch database. These commands preserve the main database and generate synthetic test identities only in isolated databases.
 
 ## Documentation
 

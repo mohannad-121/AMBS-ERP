@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useId, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
+import { StatusBadge } from "./status-badge";
 import { useUser } from "./app-shell";
 import { Modal, Pagination, utcTime } from "./forms";
 import { api, ApiError, errorMessage } from "@/lib/api";
@@ -780,11 +781,11 @@ export function MasterScreen({
                       </span>
                     </td>
                     <td>
-                      <span className="neutral-badge">
-                        {String(
+                      <StatusBadge
+                        status={String(
                           row.status ?? (row.is_active ? "Active" : "Archived"),
                         )}
-                      </span>
+                      />
                     </td>
                     <td>{utcTime(row.updated_at)}</td>
                     <td>{actions(row)}</td>

@@ -1,4 +1,5 @@
 "use client";
+import { StatusBadge } from "./status-badge";
 import { useId, useState, useSyncExternalStore } from "react";
 import { useUser } from "./app-shell";
 import { Modal, Pagination, utcTime } from "./forms";
@@ -281,7 +282,8 @@ export function SalesScreen() {
       <article className="inventory-detail" key={d.id} data-delivery-id={d.id}>
         <h3>{d.code}</h3>
         <p>
-          {d.order_code} / {d.status} / Destination: {d.destination}
+          {d.order_code} / <StatusBadge status={d.status} /> / Destination:{" "}
+          {d.destination}
         </p>
         <p className="field-hint">
           Prepared {utcTime(d.created_at)}
@@ -433,7 +435,8 @@ export function SalesScreen() {
               <>
                 <h2 className="sales-code">{detail.data.code}</h2>
                 <p>
-                  {detail.data.customer_name} / {detail.data.status} / Priority{" "}
+                  {detail.data.customer_name} /{" "}
+                  <StatusBadge status={detail.data.status} /> / Priority{" "}
                   {detail.data.priority} / Requested{" "}
                   {detail.data.requested_date ?? "Not specified"}
                 </p>
@@ -646,7 +649,9 @@ export function SalesScreen() {
                       <td>{o.code}</td>
                       <td>{o.customer_name}</td>
                       <td>{o.requested_date ?? "Not specified"}</td>
-                      <td>{o.status}</td>
+                      <td>
+                        <StatusBadge status={o.status} />
+                      </td>
                       <td>
                         {o.lines.map((l) => (
                           <div key={l.id}>
