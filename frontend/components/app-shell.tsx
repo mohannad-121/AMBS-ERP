@@ -219,6 +219,8 @@ const navigationGroups = [
     links: [
       ["/imports", "Import Center", "role:SUPER_ADMIN|role:OPERATIONS", "document"],
       ["/inventory/overview", "Inventory", "inventory.read", "box"],
+      ["/inventory-reconciliation", "Stock reconciliation", "inventory.read", "box"],
+      ["/item-journey", "Global Item Journey", "items.trace.company", "box"],
       ["/packing", "Packing documents", "packing.read", "document"],
       ["/material-plans", "Material requirements", "material_plans.read", "production"],
       ["/inventory/warehouses", "Warehouses", "inventory.read", "building"],

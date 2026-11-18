@@ -1,6 +1,6 @@
 """Inert inspection, validation and report export. There is no import endpoint."""
 from typing import Annotated, Literal
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
@@ -26,6 +26,10 @@ class Validation(Upload):
     header_span: int = Field(default=1, ge=1, le=2)
     mapping: dict[Annotated[str, Field(max_length=40)], Annotated[str, Field(pattern=r"^[A-Z]{1,2}$")]] = Field(max_length=15)
     date_format: Literal["iso", "dmy", "mdy"] = "iso"
+
+
+class PhysicalValidation(Validation):
+    category: Literal['physical_stock']
 
 
 def access(context=Depends(current_context), db: Session = Depends(get_session)):
@@ -65,3 +69,24 @@ def validate_upload(data: Validation, context=Depends(access), db: Session = Dep
 def report(data: Validation, context=Depends(access), db: Session = Depends(get_session)):
     result = audited(db, context, "report_exported", data, lambda: engine.validate(data, db))
     return Response(content=engine.validation_csv(result), media_type="text/csv; charset=utf-8", headers={"Content-Disposition": 'attachment; filename="ambs-validation-preview.csv"', "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"})
+
+
+@router.post('/reconcile')
+def reconcile(data: PhysicalValidation, request: Request, context=Depends(access), db: Session=Depends(get_session)):
+    from app.services.inventory_review import reconcile_file
+    from app.services.review_snapshot import review_request
+    def operation():
+        with review_request(db,context,request) as snapshot:
+            return reconcile_file(snapshot,data)
+    return audited(db,context,'reconciled_preview',data,operation)
+
+
+@router.post('/reconciliation-report')
+def reconciliation_report(data: PhysicalValidation, request: Request, context=Depends(access), db: Session=Depends(get_session)):
+    from app.services.inventory_review import reconcile_file,reconciliation_csv
+    from app.services.review_snapshot import review_request
+    def operation():
+        with review_request(db,context,request) as snapshot:
+            return reconcile_file(snapshot,data)
+    result=audited(db,context,'reconciliation_report',data,operation)
+    return Response(content=reconciliation_csv(result),media_type='text/csv; charset=utf-8',headers={'Content-Disposition':'attachment; filename="ambs-reconciliation-preview.csv"','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'})

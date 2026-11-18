@@ -12,7 +12,7 @@ class RequestBodyLimit:
             return await self.app(scope, receive, send)
         limit = (
             7_000_000
-            if scope["path"] in {"/api/onboarding/inspect", "/api/onboarding/validate", "/api/onboarding/report"}
+            if scope["path"] in {"/api/onboarding/inspect", "/api/onboarding/validate", "/api/onboarding/report", "/api/onboarding/reconcile", "/api/onboarding/reconciliation-report"}
             or scope["path"].startswith("/api/master/items/") and scope["path"].endswith("/image")
             else 65536 if scope["path"].startswith(("/api/inventory/", "/api/purchasing/", "/api/sales/", "/api/routing/", "/api/boms", "/api/material-plans", "/api/packing/")) else 16384
         )

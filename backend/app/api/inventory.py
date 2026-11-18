@@ -1,6 +1,6 @@
 import uuid
 from decimal import Decimal
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -37,6 +37,7 @@ from app.schemas.master import normalized
 from app.services.master import get_record, output, record_audit
 from app.services import inventory as engine
 from app.services import inventory_queries as queries
+from app.services.review_snapshot import review_request
 
 router = APIRouter(prefix="/inventory", tags=["Inventory"])
 
@@ -157,10 +158,13 @@ def dashboard(
 
 @router.get("/reconciliation")
 def reconcile(
+    request: Request,
     context=Depends(require_permission("inventory.read")),
     db: Session = Depends(get_session),
 ):
-    return finish(db, context, engine.reconciliation(db))
+    with review_request(db, context, request) as snapshot:
+        result = engine.reconciliation(snapshot)
+    return finish(db, context, result)
 
 
 @router.get("/options/{resource}")
