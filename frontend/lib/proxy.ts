@@ -21,7 +21,7 @@ export async function proxy(
     /^master\/(customers(?:\/duplicates)?|projects|lpos|items|categories|units|families)(?:\/[0-9a-f-]{36}(?:\/(activation|image))?)?$/.test(
       path,
     );
-  const inventoryPath =
+  const inventoryPath = /^inventory\/(?:review(?:\/physical-preview)?|journey\/[0-9a-f-]{36})$/.test(path) ||
     /^inventory\/(overview|balances|reconciliation|warehouses|locations|movements|reservations|counts|thresholds|lots|policies|options|records)(?:\/(?:[0-9a-f-]{36}|items|warehouses|locations|lots|movements|reservations|counts|thresholds))?(?:\/(?:post|reverse|cancel|release|consume|record|recount|start|status|trace))?$/.test(
       path,
     );
@@ -37,7 +37,7 @@ export async function proxy(
     /^routing\/(?:mine|sites|deliveries\/[0-9a-f-]{36}(?:\/(?:options|assign|calculate|confirm|trip|journey\/[0-9a-f-]{36}))?)$/.test(
       path,
     );
-  const onboardingPath = /^onboarding\/(?:options|inspect|validate|report)$/.test(path);
+  const onboardingPath = /^onboarding\/(?:options|inspect|validate|report|reconcile|reconciliation-report)$/.test(path);
   const packingPath = /^(?:packing\/deliveries(?:\/[0-9a-f-]{36}\/(?:documents|preview))?|packing\/documents\/[0-9a-f-]{36}(?:\/(?:download|void))?|boms(?:\/[0-9a-f-]{36}(?:\/(?:submit|approve|archive))?)?|material-plans(?:\/[0-9a-f-]{36}(?:\/review)?)?|manufacturing\/options\/(?:items|orders|production|warehouses))$/.test(path);
   if (
     !onboardingPath &&

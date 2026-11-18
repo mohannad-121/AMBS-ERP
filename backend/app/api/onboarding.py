@@ -28,6 +28,10 @@ class Validation(Upload):
     date_format: Literal["iso", "dmy", "mdy"] = "iso"
 
 
+class PhysicalValidation(Validation):
+    category: Literal['physical_stock']
+
+
 def access(context=Depends(current_context), db: Session = Depends(get_session)):
     if not {r.code for r in context.user.roles}.intersection({"SUPER_ADMIN", "OPERATIONS"}):
         deny(db, 403, "PERMISSION_DENIED", "Import previews are restricted to administrators and operations", context.user, details={"resource": "onboarding"})
@@ -65,3 +69,16 @@ def validate_upload(data: Validation, context=Depends(access), db: Session = Dep
 def report(data: Validation, context=Depends(access), db: Session = Depends(get_session)):
     result = audited(db, context, "report_exported", data, lambda: engine.validate(data, db))
     return Response(content=engine.validation_csv(result), media_type="text/csv; charset=utf-8", headers={"Content-Disposition": 'attachment; filename="ambs-validation-preview.csv"', "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"})
+
+
+@router.post('/reconcile')
+def reconcile(data: PhysicalValidation, context=Depends(access), db: Session=Depends(get_session)):
+    from app.services.inventory_review import reconcile_file
+    return audited(db,context,'reconciled_preview',data,lambda:reconcile_file(db,data))
+
+
+@router.post('/reconciliation-report')
+def reconciliation_report(data: PhysicalValidation, context=Depends(access), db: Session=Depends(get_session)):
+    from app.services.inventory_review import reconcile_file,reconciliation_csv
+    result=audited(db,context,'reconciliation_report',data,lambda:reconcile_file(db,data))
+    return Response(content=reconciliation_csv(result),media_type='text/csv; charset=utf-8',headers={'Content-Disposition':'attachment; filename="ambs-reconciliation-preview.csv"','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'})

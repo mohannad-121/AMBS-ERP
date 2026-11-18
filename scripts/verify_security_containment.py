@@ -101,6 +101,8 @@ def main():
         if "--onboarding" in sys.argv:
             print(run([*browser_args, "/work/tests/verify-onboarding-browser.mjs"], data=credentials), flush=True)
         print(run([*browser_args, "/work/tests/verify-packing-browser.mjs"], data=credentials), flush=True)
+        if "--inventory-review" in sys.argv:
+            print(run([*browser_args, "/work/tests/verify-inventory-review-browser.mjs"], data=credentials), flush=True)
         trace = run(["exec", frontend, "cat", "/tmp/glob-trace.jsonl"])
         assert "trusted-control/**" in trace
         assert "__AMBS_UNTRUSTED_GLOB__" not in trace
@@ -109,6 +111,8 @@ def main():
         print(run([*browser_args, "/work/tests/verify-packing-browser.mjs", "--persistence"], data=credentials), flush=True)
         if "--onboarding" in sys.argv:
             print(run([*browser_args, "/work/tests/verify-onboarding-browser.mjs", "--persistence"], data=credentials), flush=True)
+        if "--inventory-review" in sys.argv:
+            print(run([*browser_args, "/work/tests/verify-inventory-review-browser.mjs", "--persistence"], data=credentials), flush=True)
         trace += run(["exec", frontend, "cat", "/tmp/glob-trace.jsonl"])
         assert "__AMBS_UNTRUSTED_GLOB__" not in trace
         (work / "runtime-glob-trace.jsonl").write_text(trace)

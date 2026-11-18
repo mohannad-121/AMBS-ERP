@@ -1,7 +1,7 @@
-param([switch]$Browser, [switch]$Production, [switch]$MasterData, [switch]$MasterOnly, [switch]$Inventory, [switch]$InventoryOnly, [switch]$Purchasing, [switch]$PurchasingOnly, [switch]$Sales, [switch]$SalesOnly, [switch]$Routing, [switch]$RoutingOnly, [switch]$Premium, [switch]$PremiumOnly, [switch]$Packing, [switch]$PackingOnly, [switch]$Onboarding)
+param([switch]$Browser, [switch]$Production, [switch]$MasterData, [switch]$MasterOnly, [switch]$Inventory, [switch]$InventoryOnly, [switch]$Purchasing, [switch]$PurchasingOnly, [switch]$Sales, [switch]$SalesOnly, [switch]$Routing, [switch]$RoutingOnly, [switch]$Premium, [switch]$PremiumOnly, [switch]$Packing, [switch]$PackingOnly, [switch]$Onboarding, [switch]$InventoryReview)
 
 $ErrorActionPreference = 'Stop'
-if ($Onboarding) { $Browser = $true }
+if ($Onboarding -or $InventoryReview) { $Browser = $true }
 if ($PackingOnly) { $Packing = $true; $Browser = $true }
 if ($Packing -and !$PackingOnly) { $Premium = $true }
 if ($PremiumOnly) { $Premium = $true; $Browser = $true }
@@ -198,6 +198,20 @@ try {
         Wait-TestService -Container $webContainer -Runtime 'node'
         $credentialJson | & docker @onboardingArguments --persistence
         if ($LASTEXITCODE -ne 0) { throw 'Stateless onboarding restart verification failed' }
+    }
+    if ($InventoryReview) {
+        $mode = if ($Production) { 'production' } else { 'development' }
+        $artifactDirectory = Join-Path $projectRoot "artifacts\phase8b\$mode"
+        $null = New-Item -ItemType Directory -Force -Path $artifactDirectory
+        $artifactMount = "type=bind,source=$artifactDirectory,target=/artifacts"
+        $reviewArguments = @('run','--rm','-i','--network',"container:$webContainer",'--mount',$scriptMount,'--mount',$artifactMount,'ambs-auth-browser-tools:local','/work/tests/verify-inventory-review-browser.mjs')
+        $credentialJson | & docker @reviewArguments
+        if ($LASTEXITCODE -ne 0) { throw 'Inventory review browser verification failed' }
+        $null = Invoke-CheckedDocker -DockerArgs @('restart',$apiContainer,$webContainer)
+        Wait-TestService -Container $apiContainer -Runtime 'python'
+        Wait-TestService -Container $webContainer -Runtime 'node'
+        $credentialJson | & docker @reviewArguments --persistence
+        if ($LASTEXITCODE -ne 0) { throw 'Inventory review restart verification failed' }
     }
 } finally {
     $credentialJson = $null
