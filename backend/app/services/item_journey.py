@@ -11,12 +11,13 @@ from app.models.security import User, AuditEvent
 from app.models.purchasing import ProductionEvent, ProductionStage, ProductionOrder, PurchaseReceipt
 from app.services.master import get_record
 from app.services import inventory as inv
+from app.services.review_snapshot import require_snapshot
 
 
 def journey(db, ctx, delivery, item_id, lot_id=None, page=1, search='', kind='', location_id=None, since=None, until=None):
     filter_kind=kind
     inv.authorize(db,ctx,'items.trace.read')
-    inv.lock_inventory(db)
+    require_snapshot(db)
     global_read='items.trace.company' in ctx.permissions
     if delivery is None:
         inv.authorize(db,ctx,'items.trace.company')

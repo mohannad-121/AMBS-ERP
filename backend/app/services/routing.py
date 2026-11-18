@@ -3,7 +3,7 @@ from datetime import timedelta
 from decimal import Decimal, ROUND_HALF_UP
 from sqlalchemy import select, func
 from app.core.config import get_settings
-from app.core.security import utcnow
+from app.core.security import utcnow, SecurityError
 from app.models.routing import VerifiedSite, DriverAssignment, RouteCalculation, RouteConfirmation, TripEvent
 from app.models.sales import SalesDelivery, SalesOrder, SalesDeliveryLine, SalesAllocation, SalesReservationLink
 from app.models.master import Customer, Project
@@ -23,12 +23,16 @@ def latest(db, model, delivery_id):
     return db.scalar(select(model).where(model.delivery_id == delivery_id).order_by(ordering, model.id.desc()).limit(1))
 
 
-def access(db, ctx, delivery_id, permission='routes.read'):
+def access(db, ctx, delivery_id, permission='routes.read', audit_denial=True):
     delivery = get_record(db, SalesDelivery, delivery_id)
     if permission in ctx.permissions:
         return delivery
     if permission == 'routes.read' and 'deliveries.trip.own' in ctx.permissions and delivery.driver_id == ctx.user.id:
         return delivery
+    if not audit_denial:
+        # The read-only snapshot cannot write a denial audit; its request boundary
+        # writes the same denial through the separate authentication session.
+        raise SecurityError(403,'PERMISSION_DENIED','You do not have permission for this inventory action')
     authorize(db, ctx, permission)
 
 

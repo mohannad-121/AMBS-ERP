@@ -1,6 +1,6 @@
 """Inert inspection, validation and report export. There is no import endpoint."""
 from typing import Annotated, Literal
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
@@ -72,13 +72,21 @@ def report(data: Validation, context=Depends(access), db: Session = Depends(get_
 
 
 @router.post('/reconcile')
-def reconcile(data: PhysicalValidation, context=Depends(access), db: Session=Depends(get_session)):
+def reconcile(data: PhysicalValidation, request: Request, context=Depends(access), db: Session=Depends(get_session)):
     from app.services.inventory_review import reconcile_file
-    return audited(db,context,'reconciled_preview',data,lambda:reconcile_file(db,data))
+    from app.services.review_snapshot import review_request
+    def operation():
+        with review_request(db,context,request) as snapshot:
+            return reconcile_file(snapshot,data)
+    return audited(db,context,'reconciled_preview',data,operation)
 
 
 @router.post('/reconciliation-report')
-def reconciliation_report(data: PhysicalValidation, context=Depends(access), db: Session=Depends(get_session)):
+def reconciliation_report(data: PhysicalValidation, request: Request, context=Depends(access), db: Session=Depends(get_session)):
     from app.services.inventory_review import reconcile_file,reconciliation_csv
-    result=audited(db,context,'reconciliation_report',data,lambda:reconcile_file(db,data))
+    from app.services.review_snapshot import review_request
+    def operation():
+        with review_request(db,context,request) as snapshot:
+            return reconcile_file(snapshot,data)
+    result=audited(db,context,'reconciliation_report',data,operation)
     return Response(content=reconciliation_csv(result),media_type='text/csv; charset=utf-8',headers={'Content-Disposition':'attachment; filename="ambs-reconciliation-preview.csv"','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'})

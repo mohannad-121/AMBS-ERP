@@ -5,13 +5,14 @@ from app.models.inventory import LedgerEffect, MovementLine, StockMovement, Rese
 from app.models.master import Item, Unit
 from app.services import inventory as inv
 from app.services.master import get_record
+from app.services.review_snapshot import require_snapshot
 
 ZERO = Decimal(0)
 NOTICE = 'REVIEW ONLY — no stock balances or ledger entries have been changed. Owner approval is required before any real business-data change.'
 
 
 def review(db, *, item_id=None, location_id=None, lot_id=None, page=1):
-    inv.lock_inventory(db)
+    require_snapshot(db)
     ledger = select(LedgerEffect.balance_id, func.sum(LedgerEffect.quantity_delta).label('quantity')).group_by(LedgerEffect.balance_id).subquery()
     holds = select(Reservation.balance_id, func.sum(Reservation.quantity).label('quantity')).where(Reservation.status=='ACTIVE').group_by(Reservation.balance_id).subquery()
     query = select(StockBalance, func.coalesce(ledger.c.quantity, 0), func.coalesce(holds.c.quantity, 0)).outerjoin(ledger, ledger.c.balance_id==StockBalance.id).outerjoin(holds, holds.c.balance_id==StockBalance.id)
@@ -34,7 +35,7 @@ def review(db, *, item_id=None, location_id=None, lot_id=None, page=1):
 
 
 def physical_preview(db, data):
-    inv.lock_inventory(db)
+    require_snapshot(db)
     seen=set();rows=[]
     for n, line in enumerate(data.lines,1):
         identity=(line.item_id,line.location_id,line.lot_id)
@@ -71,7 +72,7 @@ def reconcile_file(db, data):
     import uuid
     from app.services.onboarding import validate
     from app.schemas.inventory_review import PhysicalLine, PhysicalPreview
-    inv.lock_inventory(db)
+    require_snapshot(db)
     result=validate(data,db)
     if len(result['records'])>100:
         inv.fail('RECONCILIATION_ROW_LIMIT','Reconcile at most 100 count rows per review; split the source without duplicating identities',422)
