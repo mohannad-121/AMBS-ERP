@@ -2,6 +2,8 @@
 
 ## Verdict and approval boundary
 
+Follow-up: [PHASE_7_SECURITY_CONTAINMENT_REPORT.md](PHASE_7_SECURITY_CONTAINMENT_REPORT.md) records the subsequent image-optimizer closure, actual standalone artifact inspection and isolated production Docker verification. The configuration/default-path observations below describe the earlier review state; the OPEN advisory and owner-approval boundary remain in force.
+
 **SECURITY CONDITIONALLY ACCEPTABLE PENDING OWNER APPROVAL.** This is a proposed, limited risk disposition for review, not risk acceptance. **SECURITY REMEDIATED: NO.** GHSA-fc5q-39xc-vjpf / CVE-2026-112366 remains an OPEN security exception. No owner approval has been inferred, no audit result suppressed, and no automatic fix/major tooling downgrade or private library patch applied. Publishing the private review PR does not authorize merge or deployment.
 
 ## Current official status

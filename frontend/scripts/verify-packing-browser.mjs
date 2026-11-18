@@ -3,12 +3,12 @@ import { chromium } from "playwright";
 const credentials=JSON.parse(readFileSync(0,"utf8"));
 const after=process.argv.includes("--after-premium"), persistence=process.argv.includes("--persistence");
 const browser=await chromium.launch({headless:true});
-const base="http://127.0.0.1:3000";
+const base=process.env.AMBS_BROWSER_BASE_URL || "http://127.0.0.1:3000";
 let stage="startup", page, checks=0;
 const diagnostics=[];
 function check(value,label){if(!value)throw new Error(label);console.log("PASS "+label);checks++;}
 try {
-  const context=await browser.newContext({viewport:{width:1440,height:1000},acceptDownloads:true});
+  const context=await browser.newContext({viewport:{width:1440,height:1000},acceptDownloads:true,ignoreHTTPSErrors:process.env.AMBS_QA_SELF_SIGNED_TLS === "1"});
   page=await context.newPage();page.setDefaultTimeout(60000);
   page.on("pageerror",e=>diagnostics.push(e.message));
   page.on("console",m=>{if(["warning","error"].includes(m.type()))diagnostics.push(m.text());});
@@ -54,7 +54,7 @@ try {
     const plans=await request("GET",`/material-plans?sales_order_id=${demand.id}`);const plan=await request("GET",`/material-plans/${plans.items[0].id}`);check(plan.lines[0].required==="10.000000"&&plan.lines[0].shortage==="4.000000"&&plan.review,"UI plan uses approved demand, stock and review");
     fixture={delivery:delivery.id,doc:docs.items[0].id,sha256:docs.items[0].sha256,plan:plan.id,item:item.id};writeFileSync("/artifacts/fixture.json",JSON.stringify(fixture));
     for(const role of ["packing","operations","management","sales","driver","accounts"]){
-      stage="role "+role;const roleContext=await browser.newContext();const csrf=await(await roleContext.request.get(base+"/api/auth/csrf")).json();const r=await roleContext.request.post(base+"/api/auth/login",{data:{identifier:"phase7."+role,password:credentials.workerPassword},headers:{Origin:base,"X-CSRF-Token":csrf.csrf_token}});check(r.ok(),role+" isolated login");
+      stage="role "+role;const roleContext=await browser.newContext({ignoreHTTPSErrors:process.env.AMBS_QA_SELF_SIGNED_TLS === "1"});const csrf=await(await roleContext.request.get(base+"/api/auth/csrf")).json();const r=await roleContext.request.post(base+"/api/auth/login",{data:{identifier:"phase7."+role,password:credentials.workerPassword},headers:{Origin:base,"X-CSRF-Token":csrf.csrf_token}});check(r.ok(),role+" isolated login");
       const result=await roleContext.request.get(base+`/api/packing/documents/${fixture.doc}`);check(result.status()===(role==="driver"?404:role==="accounts"?403:200),role+" document access bound to permissions and assignment");await roleContext.close();
     }
   }

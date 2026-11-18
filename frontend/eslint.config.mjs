@@ -10,6 +10,11 @@ export default defineConfig([
   js.configs.recommended,
   ts.configs.recommended,
   { languageOptions: { globals: { ...globals.browser, ...globals.node } } },
+  // Node preload hooks and the generated standalone server use CommonJS.
+  {
+    files: ["scripts/*.cjs"],
+    rules: { "@typescript-eslint/no-require-imports": "off" },
+  },
   {
     files: ["**/*.tsx"],
     extends: [next.configs["core-web-vitals"], hooks.configs.flat.recommended],
