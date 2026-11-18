@@ -1,6 +1,7 @@
-param([switch]$Browser, [switch]$Production, [switch]$MasterData, [switch]$MasterOnly, [switch]$Inventory, [switch]$InventoryOnly, [switch]$Purchasing, [switch]$PurchasingOnly, [switch]$Sales, [switch]$SalesOnly, [switch]$Routing, [switch]$RoutingOnly, [switch]$Premium, [switch]$PremiumOnly, [switch]$Packing, [switch]$PackingOnly)
+param([switch]$Browser, [switch]$Production, [switch]$MasterData, [switch]$MasterOnly, [switch]$Inventory, [switch]$InventoryOnly, [switch]$Purchasing, [switch]$PurchasingOnly, [switch]$Sales, [switch]$SalesOnly, [switch]$Routing, [switch]$RoutingOnly, [switch]$Premium, [switch]$PremiumOnly, [switch]$Packing, [switch]$PackingOnly, [switch]$Onboarding)
 
 $ErrorActionPreference = 'Stop'
+if ($Onboarding) { $Browser = $true }
 if ($PackingOnly) { $Packing = $true; $Browser = $true }
 if ($Packing -and !$PackingOnly) { $Premium = $true }
 if ($PremiumOnly) { $Premium = $true; $Browser = $true }
@@ -183,6 +184,20 @@ try {
         Wait-TestService -Container $webContainer -Runtime 'node'
         $credentialJson | & docker @packingArguments --persistence
         if ($LASTEXITCODE -ne 0) { throw 'Phase 7 restart persistence verification failed' }
+    }
+    if ($Onboarding) {
+        $mode = if ($Production) { 'production' } else { 'development' }
+        $artifactDirectory = Join-Path $projectRoot "artifacts\phase8a\$mode"
+        $null = New-Item -ItemType Directory -Force -Path $artifactDirectory
+        $artifactMount = "type=bind,source=$artifactDirectory,target=/artifacts"
+        $onboardingArguments = @('run','--rm','-i','--network',"container:$webContainer",'--mount',$scriptMount,'--mount',$artifactMount,'ambs-auth-browser-tools:local','/work/tests/verify-onboarding-browser.mjs')
+        $credentialJson | & docker @onboardingArguments
+        if ($LASTEXITCODE -ne 0) { throw 'Onboarding browser verification failed' }
+        $null = Invoke-CheckedDocker -DockerArgs @('restart',$apiContainer,$webContainer)
+        Wait-TestService -Container $apiContainer -Runtime 'python'
+        Wait-TestService -Container $webContainer -Runtime 'node'
+        $credentialJson | & docker @onboardingArguments --persistence
+        if ($LASTEXITCODE -ne 0) { throw 'Stateless onboarding restart verification failed' }
     }
 } finally {
     $credentialJson = $null

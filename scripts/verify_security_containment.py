@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import secrets
+import sys
 import subprocess
 import time
 import uuid
@@ -97,6 +98,8 @@ def main():
         print("PASS image optimizer returns 404 directly from Next.js, independently of edge filtering", flush=True)
         browser_args = ["run", "--rm", "-i", "--network", "container:" + gateway, "--mount", "type=bind,source=" + str(ROOT / "frontend/scripts") + ",target=/work/tests,readonly", "--mount", "type=bind,source=" + str(work) + ",target=/artifacts", "-e", "AMBS_BROWSER_BASE_URL=https://127.0.0.1:8443", "-e", "AMBS_QA_SELF_SIGNED_TLS=1", "ambs-auth-browser-tools:local"]
         print(run([*browser_args, "/work/tests/verify-containment-browser.mjs"], data=credentials), flush=True)
+        if "--onboarding" in sys.argv:
+            print(run([*browser_args, "/work/tests/verify-onboarding-browser.mjs"], data=credentials), flush=True)
         print(run([*browser_args, "/work/tests/verify-packing-browser.mjs"], data=credentials), flush=True)
         trace = run(["exec", frontend, "cat", "/tmp/glob-trace.jsonl"])
         assert "trusted-control/**" in trace
@@ -104,6 +107,8 @@ def main():
         run([*compose, "restart", "backend", "frontend"])
         wait("backend"); wait("frontend")
         print(run([*browser_args, "/work/tests/verify-packing-browser.mjs", "--persistence"], data=credentials), flush=True)
+        if "--onboarding" in sys.argv:
+            print(run([*browser_args, "/work/tests/verify-onboarding-browser.mjs", "--persistence"], data=credentials), flush=True)
         trace += run(["exec", frontend, "cat", "/tmp/glob-trace.jsonl"])
         assert "__AMBS_UNTRUSTED_GLOB__" not in trace
         (work / "runtime-glob-trace.jsonl").write_text(trace)

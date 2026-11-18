@@ -1,0 +1,29 @@
+.import-center { display: grid; gap: 24px; min-width: 0; }
+.import-center .panel { min-width: 0; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 24px; }
+.import-center p { overflow-wrap: anywhere; }
+.import-digest code { font-size: 12px; overflow-wrap: anywhere; }
+.import-center .table-wrap { max-width: 100%; overflow: auto; }
+.import-center table { width: 100%; min-width: 640px; }
+.import-notice { border: 1px solid var(--amber); border-left: 5px solid var(--amber); padding: 18px 22px; background: var(--warning-bg); color: var(--warning); border-radius: var(--radius); }
+.import-notice p { margin: 8px 0 0; }
+.import-fields, .import-mapping { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 16px; padding: 0; border: 0; margin: 20px 0; min-width: 0; }
+.import-mapping legend { font-weight: 700; padding: 12px 0; }
+.import-center .field { min-width: 0; }
+.import-center select, .import-center input[type=file] { max-width: 100%; min-width: 0; width: 100%; min-height: 44px; }
+.import-caution { padding: 12px; background: var(--warning-bg); color: var(--warning); border-radius: var(--radius-sm); }
+.import-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; margin: 20px 0; }
+.import-summary > div { padding: 16px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-subtle); }
+.import-summary span { display: block; color: var(--muted); text-transform: capitalize; }
+.import-summary strong { display: block; font-size: 28px; }
+.import-center td { vertical-align: top; overflow-wrap: anywhere; max-width: 500px; white-space: normal; }
+.import-value { display: grid; gap: 3px; margin-bottom: 14px; }
+.import-value strong { text-transform: capitalize; }
+.import-value small { color: var(--success); }
+.import-center details summary { cursor: pointer; min-height: 44px; padding: 10px 0; }
+.import-center .actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
+.import-center .actions label { display: flex; align-items: center; gap: 8px; min-height: 44px; }
+.import-center .actions input[type=checkbox] { width: auto; }
+.import-center ul { padding-left: 18px; }
+.import-center li + li { margin-top: 10px; }
+.import-center section:focus { outline: 2px solid var(--brand); outline-offset: 4px; }
+@media (max-width: 600px) { .import-center .panel { padding: 16px; } .import-center .actions > button { width: 100%; } .import-notice { padding: 14px; } }

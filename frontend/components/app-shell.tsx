@@ -116,7 +116,7 @@ export function AppShell({
           <nav aria-label="Main navigation">
             {navigationGroups.map((group) => {
               const links = group.links.filter(([, , permission]) =>
-                permission.split("|").some((p) => user.permissions.includes(p)),
+                permission.split("|").some((p) => p.startsWith("role:") ? user.roles.includes(p.slice(5)) : user.permissions.includes(p)),
               );
               return (
                 links.length > 0 && (
@@ -217,6 +217,7 @@ const navigationGroups = [
   {
     title: "Operations",
     links: [
+      ["/imports", "Import Center", "role:SUPER_ADMIN|role:OPERATIONS", "document"],
       ["/inventory/overview", "Inventory", "inventory.read", "box"],
       ["/packing", "Packing documents", "packing.read", "document"],
       ["/material-plans", "Material requirements", "material_plans.read", "production"],
