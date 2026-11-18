@@ -11,8 +11,9 @@
 * Parent [PR #2](https://github.com/mohannad-121/AMBS-ERP/pull/2) remains OPEN and unmerged; its head and description are preserved.
 * New PR targets **feature/phase-7-packing-bom**, not main. It is explicitly stacked on PR #2.
 * Main is preserved at `0264699e1ab11d4c4dc2ac6e243f0faf569bc9ef` locally and remotely.
-* Source commit SHA: recorded in the publication update below after backup and security gates pass.
-* New PR URL and source-publication head SHA: recorded in that update after creation. The final report-only commit/head is bound by the restricted backup's `checkpoint-binding.json` and the PR description, avoiding a self-referential commit hash inside its own tracked file.
+* Source commit SHA: `99a46ba388dc5bd93fa6dbdfbe7b3968e4b5274a` ([implementation checkpoint](https://github.com/mohannad-121/AMBS-ERP/commit/99a46ba388dc5bd93fa6dbdfbe7b3968e4b5274a)).
+* New PRIVATE stacked PR: [PR #3](https://github.com/mohannad-121/AMBS-ERP/pull/3).
+* PR head SHA at source publication: `99a46ba388dc5bd93fa6dbdfbe7b3968e4b5274a`. The sole follow-up is this publication report; it changes no implementation or test. The final report-only head is recorded exactly in the restricted backup's `checkpoint-binding.json`, its SHA-256 companion and the PR description. A tracked file cannot contain its own enclosing commit hash without self-reference; those external records and the final handoff are authoritative for that head.
 
 ## Reviewed scope and verification basis
 
@@ -51,7 +52,7 @@ The private environment remains byte-identical to the prior verified release. Th
 
 The directory is restricted to the Windows owner and SYSTEM. Database/storage archives are ACL-protected private recovery data, not independently passphrase-encrypted; use approved encrypted storage/transport off-host. Previous backups remain intact. Original company workbooks/prototypes and private operational notes/reports remain outside Git. Recover only into new controlled directories/databases/volumes.
 
-The immutable core manifest, final-source supplement manifest and `checkpoint-binding.json` record actual hashes and the source/report commit identities. Core/source backup verification passes before the source commit/push. Publication metadata is bound afterward without rewriting the sealed core. No private backup artifact is uploaded to GitHub.
+The immutable core manifest, final-source supplement manifest and `checkpoint-binding.json` record actual hashes and the source/report commit identities. Core manifest SHA-256: `71d4eb133e9131dcd62f306ea57b03f3ab8b6f206cef34321016b9495c70acbc`. **43 core artifacts and 251 source members verified.** Core/source backup verification passed before the source commit/push. Publication metadata is bound afterward without rewriting the sealed core. No private backup artifact is uploaded to GitHub.
 
 ## Actual real-data limitations
 
@@ -72,6 +73,25 @@ The [mapping document](PHASE_8_DATA_MAPPING.md) and [owner checklist](PHASE_8_OW
 
 Installed versions and Next's unversioned vendored matcher are unchanged. Existing optimizer closure, non-root/private-network/read-only candidate, restricted runtime credentials and file-secret controls remain. No unverified patch, forced upgrade, audit suppression, glob-pattern input path or zero-risk claim is introduced. Owner/security review must reconcile publisher/registry evidence and decide the residual risk before merge/production approval. Neither this stacked PR nor withdrawal of the publisher advisory authorizes acceptance, merge or deployment.
 
+## Publication verification and working tree
+
+The source implementation was committed and pushed normally only to `feature/phase-8a-data-onboarding`; PR #3 was created OPEN, with the requested title, against `feature/phase-7-packing-bom`. GitHub repository privacy was checked before creation. Source/staged/history configured-secret scans and redacted Gitleaks passed before publication. The 20 staged paths were exactly the reviewed implementation/documentation and private-prototype ignore rules; no archives, source workbooks, private reports, generated artifacts or credentials were staged.
+
+This report-only follow-up is separately audited and preserved in a final-source supplement. The local tree is checked clean after its commit/push, with main and the Phase 7 branch/PR unchanged. Exact final identities, health, privacy, both OPEN/unmerged PR states and clean-tree/preservation results are recorded in the immutable backup binding after GitHub confirms the new head. No final acceptance is inferred unless that binding says VERIFIED.
+
 ## Acceptance boundary
 
 The source publication and final report update are complete only once the external binding and PR description contain the verified actual source/head identities, PRIVATE visibility, OPEN stacked PR, clean local worktree, unchanged main/parent PR, matching data fingerprints and healthy development services. The final handoff supplies those exact identities. No automatic merge/deployment is enabled. Phase 8B remains unimplemented and unapproved.
+
+
+## Checkpoint acceptance checklist
+
+- [x] Preview-only implementation reviewed; no actual import route or stock posting introduced.
+- [x] Complete 272-case regression/browser evidence checked against unchanged source; fresh 28-case security/static/build checks passed.
+- [x] New backup core hashes/archive integrity and isolated 70-table restore verified before commit.
+- [x] Source/staged/history secret gates passed; private originals/data/reports/artifacts excluded from Git.
+- [x] Source committed normally and PRIVATE PR #3 created, stacked on OPEN PR #2, targeting the parent feature branch.
+- [x] Source commit and PR creation head recorded above; final report-only head is bound externally and supplied in the final handoff.
+- [x] Internal security exception remains OPEN; publisher/registry discrepancy documented without risk acceptance.
+- [ ] Owner mapping, physical-count, engineering, historical-reconciliation and real-data import decisions remain pending.
+- [ ] Merge, production deployment, credential reset and Phase 8B authorization are NOT granted or performed.
