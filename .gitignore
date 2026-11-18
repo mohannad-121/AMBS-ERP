@@ -2,6 +2,10 @@
 .env
 .env.*
 !.env.example
+
+# Original company HTML prototypes are private references, never application source.
+AMBS_EdgeOps.html
+AMBS_Production_System.html
 *.local
 __pycache__/
 *.py[cod]

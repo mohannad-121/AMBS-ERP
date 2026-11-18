@@ -37,8 +37,10 @@ export async function proxy(
     /^routing\/(?:mine|sites|deliveries\/[0-9a-f-]{36}(?:\/(?:options|assign|calculate|confirm|trip|journey\/[0-9a-f-]{36}))?)$/.test(
       path,
     );
+  const onboardingPath = /^onboarding\/(?:options|inspect|validate|report)$/.test(path);
   const packingPath = /^(?:packing\/deliveries(?:\/[0-9a-f-]{36}\/(?:documents|preview))?|packing\/documents\/[0-9a-f-]{36}(?:\/(?:download|void))?|boms(?:\/[0-9a-f-]{36}(?:\/(?:submit|approve|archive))?)?|material-plans(?:\/[0-9a-f-]{36}(?:\/review)?)?|manufacturing\/options\/(?:items|orders|production|warehouses))$/.test(path);
   if (
+    !onboardingPath &&
     !packingPath &&
     !allowedPath.test(path) &&
     !masterPath &&
@@ -63,7 +65,7 @@ export async function proxy(
       { status: 426 },
     );
   const unsafe = !["GET", "HEAD"].includes(request.method);
-  const maxBytes = /^master\/items\/[0-9a-f-]{36}\/image$/.test(path)
+  const maxBytes = onboardingPath && path !== "onboarding/options" ? 7_000_000 : /^master\/items\/[0-9a-f-]{36}\/image$/.test(path)
     ? 7_000_000
     : inventoryPath || purchasingPath || salesPath || routingPath || packingPath
       ? 65536
@@ -126,7 +128,7 @@ export async function proxy(
     });
     for (const value of upstream.headers.getSetCookie())
       headers.append("Set-Cookie", value);
-    if (packingPath && upstream.headers.get("content-type")?.startsWith("application/pdf")) {
+    if ((packingPath || onboardingPath) && upstream.headers.get("content-type") && (upstream.headers.get("content-type")?.startsWith("application/pdf") || upstream.headers.get("content-type")?.startsWith("text/csv"))) {
       for (const key of ["Content-Disposition", "X-AMBS-Document-SHA256", "X-AMBS-Source-Status", "X-AMBS-Document-Status"]) {
         const value = upstream.headers.get(key);
         if (value) headers.set(key, value);

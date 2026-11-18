@@ -205,3 +205,28 @@ These are append-only business histories; do not update rows or stock quantities
 ## Phase 7 read-only inspection
 
 At head `0009_packing_bom`, inspect `packing_documents`, `packing_document_events`, `bom_versions`, `bom_components`, `material_plans`, `material_plan_lines`, `material_plan_reviews` and `packing_planning_operations`. Issued content and calculation snapshots are protected by append-only triggers; approval/version transitions are guarded. Do not edit or delete evidence through SQL, bypass triggers or export customer PDFs into Git. Use authorized ERP actions for drafts, approvals, replacements and voids. No extra stock balance table is introduced.
+
+## Phase 8A preview-only inspection
+
+No staging/import tables or migration are added. Head remains `0009_packing_bom`. Uploaded files and parsed rows are not persisted; there is no stored preview to recover from SQL. Existing audit events retain only actor/category, file hash and aggregate counts, never source filenames, customer values or report content. Access to the Import Center is restricted to SUPER_ADMIN/OPERATIONS and remains subject to session/CSRF controls.
+
+Use a read-only connection/transaction. Do not run an UPDATE, DELETE, INSERT, reset, restore or manual stock adjustment against the main database.
+
+```sql
+BEGIN READ ONLY;
+SELECT version_num FROM alembic_version;
+SELECT occurred_at, actor_username, action,
+       details->>'category' AS preview_category,
+       details->'summary' AS validation_counts
+FROM audit_events
+WHERE action IN ('onboarding.inspected', 'onboarding.validated',
+                 'onboarding.report_exported', 'onboarding.rejected')
+ORDER BY occurred_at DESC
+LIMIT 100;
+SELECT count(*) AS posted_effects FROM stock_ledger_effects;
+SELECT count(*) AS stock_balance_rows FROM stock_balances;
+SELECT count(*) AS customer_rows FROM customers;
+COMMIT;
+```
+
+Audit/session metadata may change during an authorized preview; business records and stock ledger must not. Counts alone are not a complete preservation proof: the automated verification compares all existing table fingerprints with established session-timestamp normalization. Reports and source data remain private; do not paste query results containing business records into Git or public support channels.
