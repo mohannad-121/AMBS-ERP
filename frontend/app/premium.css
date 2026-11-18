@@ -1199,3 +1199,18 @@ td .row-actions {
     scroll-behavior: auto !important;
   }
 }
+
+/* Phase 7 uses the existing AMBS surfaces and responsive table containers. */
+.phase7-panel { margin-top: 1rem; }
+.phase7-reference { overflow-wrap: anywhere; font-family: var(--font-mono, monospace); font-size: .8rem; }
+.phase7-links { margin: 1rem 0; }
+.phase7-component { border-bottom: 1px solid var(--border, #e2e5ea); padding: 1rem 0; }
+.phase7-material-table { min-width: 1120px; }
+.phase7-panel .inventory-detail { margin-top: 1rem; }
+.phase7-panel .row-actions { flex-wrap: wrap; gap: .65rem; }
+.phase7-panel button, .phase7-links a { min-height: 44px; }
+@media (max-width: 480px) { .phase7-panel { padding: 1rem; } .phase7-panel .row-actions > span { width: 100%; } }
+
+.phase7-panel, .phase7-manufacturing { overflow-wrap: anywhere; }
+.phase7-material-table td:not(:first-child) { white-space: nowrap; min-width: 105px; font-variant-numeric: tabular-nums; }
+.phase7-manufacturing > h3 { margin: 1.25rem 1.5rem; }

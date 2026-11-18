@@ -14,7 +14,7 @@ class RequestBodyLimit:
             7_000_000
             if scope["path"].startswith("/api/master/items/")
             and scope["path"].endswith("/image")
-            else 65536 if scope["path"].startswith(("/api/inventory/", "/api/purchasing/", "/api/sales/", "/api/routing/")) else 16384
+            else 65536 if scope["path"].startswith(("/api/inventory/", "/api/purchasing/", "/api/sales/", "/api/routing/", "/api/boms", "/api/material-plans", "/api/packing/")) else 16384
         )
         chunks, size = [], 0
         while True:

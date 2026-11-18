@@ -37,7 +37,9 @@ export async function proxy(
     /^routing\/(?:mine|sites|deliveries\/[0-9a-f-]{36}(?:\/(?:options|assign|calculate|confirm|trip|journey\/[0-9a-f-]{36}))?)$/.test(
       path,
     );
+  const packingPath = /^(?:packing\/deliveries(?:\/[0-9a-f-]{36}\/(?:documents|preview))?|packing\/documents\/[0-9a-f-]{36}(?:\/(?:download|void))?|boms(?:\/[0-9a-f-]{36}(?:\/(?:submit|approve|archive))?)?|material-plans(?:\/[0-9a-f-]{36}(?:\/review)?)?|manufacturing\/options\/(?:items|orders|production|warehouses))$/.test(path);
   if (
+    !packingPath &&
     !allowedPath.test(path) &&
     !masterPath &&
     !inventoryPath &&
@@ -63,7 +65,7 @@ export async function proxy(
   const unsafe = !["GET", "HEAD"].includes(request.method);
   const maxBytes = /^master\/items\/[0-9a-f-]{36}\/image$/.test(path)
     ? 7_000_000
-    : inventoryPath || purchasingPath || salesPath || routingPath
+    : inventoryPath || purchasingPath || salesPath || routingPath || packingPath
       ? 65536
       : 16384;
   if (Number(request.headers.get("content-length") ?? 0) > maxBytes)
@@ -124,6 +126,12 @@ export async function proxy(
     });
     for (const value of upstream.headers.getSetCookie())
       headers.append("Set-Cookie", value);
+    if (packingPath && upstream.headers.get("content-type")?.startsWith("application/pdf")) {
+      for (const key of ["Content-Disposition", "X-AMBS-Document-SHA256", "X-AMBS-Source-Status", "X-AMBS-Document-Status"]) {
+        const value = upstream.headers.get(key);
+        if (value) headers.set(key, value);
+      }
+    }
     const retryAfter = upstream.headers.get("retry-after");
     if (retryAfter) headers.set("Retry-After", retryAfter);
     return new Response(await upstream.arrayBuffer(), {

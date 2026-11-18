@@ -91,3 +91,7 @@ The same `/sales` route gives drivers only current assignments and human arrival
 ## Phase 6C presentation and operational reads
 
 The shared design system, shell and all existing operational screens use centralized tokens and consistent table/form/dialog patterns. The root dashboard calls a single permission-filtered read endpoint; the original status panel moves to `/system`. The backend adds only `app/api/dashboard.py`: grouped Decimal stock/demand aggregates, bounded operational queues and audit-authorized activity. No migration or stock/business service changed. Driver metrics are scoped to current assignments. See [Frontend UX architecture](FRONTEND_UX_ARCHITECTURE.md), [Dashboard metrics](DASHBOARD_METRICS.md) and [Design system](AMBS_DESIGN_SYSTEM.md).
+
+## Phase 7 documents and planning
+
+Additive migration `0009_packing_bom` introduces eight evidence/definition tables. `app/services/packing.py` reads the existing sales consumption evidence and stores issued bytes/snapshots; `packing_pdf.py` renders bounded escaped A4 content. `material_planning.py` manages approved, single-level BOMs and Decimal material requirements using existing inventory availability and purchasing receipts. `phase7.py` provides actor-bound request replay under the existing transaction gate. No inventory posting engine is added. See PACKING_DOCUMENT_ARCHITECTURE.md and MATERIAL_REQUIREMENTS_RULES.md for invariants and ownership boundaries.

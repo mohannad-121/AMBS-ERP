@@ -6,7 +6,7 @@ Phase 2 uses Argon2id password hashes, random revocable server-side sessions, on
 
 Username and email normalization occurs before persistence, with unique database indexes and normalization constraints. SQLAlchemy builds parameterized queries. User responses expose a deliberate field list. Audit metadata is assembled from known safe fields, including changed field names and role codes. Public responses exclude exception traces and validation input bodies.
 
-The frontend proxy accepts a fixed set of application paths, forwards selected security headers and authentication cookies, limits mutation bodies to 16 KiB, and uses bounded uncached requests. Response cookies are forwarded individually. Pages use clickjacking, content-type and referrer headers, with CSP restrictions for framing, object embedding, base URLs and form destinations. The current CSP is a partial policy. A full script policy requires a reviewed Next.js nonce strategy.
+The frontend proxy accepts a fixed set of application paths, forwards selected security headers and authentication cookies, bounds mutation bodies (16 KiB general requests, 64 KiB operational declarations, and 7,000,000 bytes for the protected image-upload path), and uses bounded uncached requests. Response cookies are forwarded individually. Pages use clickjacking, content-type and referrer headers, with CSP restrictions for framing, object embedding, base URLs and form destinations. The current CSP is a partial policy. A full script policy requires a reviewed Next.js nonce strategy.
 
 ## Environment
 
@@ -63,3 +63,9 @@ Browser automation and physical-browser interaction are separate acceptance chec
 Keep real .env/configuration, private keys/certificates, database archives, customer documents/uploads, traces and runtime data out of Git even when the repository is private. The initial publication audit uses exact configured-secret matching in memory, prohibited-path/binary/size inspection and a maintained redacted Gitleaks scan of selected source and stored Git objects. The staged snapshot is scanned again before commit. No matching secret text is printed.
 
 The verified local backup is outside the repository with restricted NTFS ACLs. Configuration is age passphrase-encrypted and decrypt-and-hash verified without a plaintext temporary file. Database/storage archives contain confidential data and require approved encrypted off-host storage/transport. Keep the age passphrase separately. See BACKUP_AND_RECOVERY.md and GITHUB_BACKUP_SETUP_REPORT.md. No GitHub Actions deployment, Pages or public release is configured by this workflow.
+
+## Phase 7 open dependency security exception
+
+See [PHASE_7_SECURITY_REVIEW.md](PHASE_7_SECURITY_REVIEW.md) for GHSA-fc5q-39xc-vjpf / CVE-2026-112366, all affected dependency/peer paths and Next's separate vendored matcher. Full npm audit reports 12 HIGH development-tool findings rooted in one unresolved advisory. No official compatible patched release was found. Standalone runtime and Python package audits are clean, but runtime audit does not cover Next's vendored copy; inspected runtime matching uses trusted configuration rather than user-controlled glob patterns.
+
+Security remediation and risk acceptance have not been granted. The private review PR must retain the OPEN exception for explicit owner/security review before merge or production acceptance. Do not substitute an unreviewed patch, suppress audit output or automatically downgrade tooling. The release report records fresh test, backup and publication evidence; no deployment is authorized.

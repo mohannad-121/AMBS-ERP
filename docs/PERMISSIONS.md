@@ -104,3 +104,19 @@ Allocation also requires inventory.reservations.create; release requires invento
 `deliveries.trip.own` is granted to DRIVER and SUPER_ADMIN. The normal route-read permission covers delivery route/trip review; drivers instead pass an explicit current-driver ownership check for every detail and trip mutation. The driver list used for assignments is available only to routing managers. Current assignments never authorize customer administration or stock posting. Driver role/active status is revalidated at assignment, route confirmation and physical dispatch. Assigned drivers cannot submit distance/estimate fields: strict input schemas reject them. Existing stock permissions remain independently required for dispatch and reversal.
 
 Transport cost/basis fields in route reads require existing inventory.costs.read; other route readers receive no financial basis. Assignment, reassignment, verified-site creation, calculation/revision, confirmation, trip status and permission denials use the existing audit table. API keys and raw provider responses are excluded.
+
+## Phase 7 document, BOM and planning grants
+
+| Capability | SUPER_ADMIN | OPERATIONS | MANAGEMENT | PACKING | SALES | DRIVER | ACCOUNTS |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| packing.read / download | Yes | Yes | Yes | Yes | Yes | Current assigned delivery only | No |
+| packing.company | Yes | Yes | Yes | Yes | Yes | No | No |
+| packing.prepare | Yes | Yes | No | Yes | No | No | No |
+| packing.issue / void | Yes | Yes | No | No | No | No | No |
+| bom.read | Yes | Yes | Yes | No | No | No | No |
+| bom.create / edit | Yes | Yes | No | No | No | No | No |
+| bom.approve | Yes | No | Yes | No | No | No | No |
+| bom.archive | Yes | Yes | Yes | No | No | No | No |
+| material_plans.read / calculate / review | Yes | Yes | Yes | No | No | No | No |
+
+Calculation independently requires sales.orders.read or production.read for the chosen source. Incoming purchase quantities require purchasing.orders.read and contain no price fields. Driver access is scoped before any document metadata/bytes are returned; a guessed unrelated ID returns generic 404. Existing reserved Phase 2 packing_lists.* permission names are preserved and do not implicitly grant these capabilities. Successful actions and permission/ownership denials use the existing audit table; no credential, CSRF or role administration policy is weakened.

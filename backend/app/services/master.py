@@ -85,6 +85,25 @@ def validate_values(db, resource, values, row=None):
             )
         ) or (resource == "units" and values["decimal_places"] != row.decimal_places)
         if identity_change:
+            from app.models.packing import BomVersion, BomComponent
+
+            output_reference = db.scalar(
+                select(BomVersion.id).where(
+                    BomVersion.status != "DRAFT",
+                    BomVersion.item_id == row.id if resource == "items" else BomVersion.unit_id == row.id,
+                ).limit(1)
+            )
+            component_reference = db.scalar(
+                select(BomComponent.id).join(BomVersion, BomVersion.id == BomComponent.bom_id).where(
+                    BomVersion.status != "DRAFT",
+                    BomComponent.item_id == row.id if resource == "items" else BomComponent.unit_id == row.id,
+                ).limit(1)
+            )
+            if output_reference or component_reference:
+                raise SecurityError(
+                    409, "BOM_IDENTITY_LOCKED",
+                    "Submitted BOMs preserve unit precision and item/variant identity; create a distinct item or unit",
+                )
             from app.models.sales import SalesLine, SalesOrder
             if db.scalar(select(SalesLine.id).join(SalesOrder, SalesOrder.id == SalesLine.order_id).where(
                 SalesOrder.confirmed_at.is_not(None),

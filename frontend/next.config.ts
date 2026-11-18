@@ -1,6 +1,11 @@
 import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  output: "standalone",
+  // Private item images use authenticated API routes, never Next's optimizer.
+  // Keep this unused pattern-matching entry point closed in every environment.
+  images: { unoptimized: true, localPatterns: [], remotePatterns: [] },
+  productionBrowserSourceMaps: false,
   allowedDevOrigins: ["127.0.0.1", "localhost"],
   // Legacy native GET submissions may contain credentials. Never log login URLs.
   logging: { incomingRequests: { ignore: [/^\/login(?:\?|$)/] } },

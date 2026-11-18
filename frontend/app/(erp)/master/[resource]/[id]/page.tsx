@@ -1,3 +1,4 @@
+import { ManufacturingLinks } from "@/components/packing-screen";
 import { notFound } from "next/navigation";
 import { requireUserPermission } from "@/lib/server-api";
 import { isResource } from "@/lib/master-data";
@@ -14,5 +15,5 @@ export default async function MasterDetail({
       ? ["items.read", `${resource}.manage`]
       : `${resource}.read`,
   );
-  return <MasterScreen resource={resource} recordId={id} />;
+  return <><MasterScreen resource={resource} recordId={id} />{resource === "items" && <ManufacturingLinks itemId={id} />}</>;
 }

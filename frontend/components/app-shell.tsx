@@ -218,6 +218,8 @@ const navigationGroups = [
     title: "Operations",
     links: [
       ["/inventory/overview", "Inventory", "inventory.read", "box"],
+      ["/packing", "Packing documents", "packing.read", "document"],
+      ["/material-plans", "Material requirements", "material_plans.read", "production"],
       ["/inventory/warehouses", "Warehouses", "inventory.read", "building"],
       [
         "/purchasing/purchasing-dashboard",
@@ -238,6 +240,7 @@ const navigationGroups = [
     title: "Catalog",
     links: [
       ["/master/items", "Items", "items.read", "box"],
+      ["/boms", "Bills of materials", "bom.read", "box"],
       [
         "/master/categories",
         "Product categories",

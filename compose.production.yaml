@@ -1,0 +1,92 @@
+# Separate, opt-in production candidate. Never combine with compose.yaml.
+# Requires operator-provided TLS, secret files and a migrated non-owner DB role.
+name: ambs-production-candidate
+x-restricted: &restricted
+  restart: unless-stopped
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  pids_limit: 128
+  tmpfs: ["/tmp:rw,noexec,nosuid,size=64m"]
+services:
+  gateway:
+    <<: *restricted
+    image: nginxinc/nginx-unprivileged:stable-bookworm@sha256:cd33960e98e93d4d63385790ff7f8f5bf2ca95184c581b7f42ae8aea1139fbfc
+    user: "101:101"
+    entrypoint: [nginx, -g, "daemon off;"]
+    ports: ["${PRODUCTION_BIND_ADDRESS:-127.0.0.1}:${PRODUCTION_HTTPS_PORT:-8443}:8443"]
+    volumes: [./deploy/nginx.conf:/etc/nginx/nginx.conf:ro]
+    secrets: [tls_certificate, tls_private_key]
+    networks: [ingress]
+    mem_limit: 128m
+    cpus: 0.5
+    depends_on:
+      frontend: {condition: service_healthy}
+  frontend:
+    <<: *restricted
+    build: {context: ./frontend, dockerfile: Dockerfile.production}
+    environment:
+      APP_ENV: production
+      INTERNAL_API_URL: http://backend:8000
+    secrets: [bff_secret]
+    networks: [ingress, application]
+    mem_limit: 768m
+    cpus: 1
+    depends_on:
+      backend: {condition: service_healthy}
+  backend:
+    <<: *restricted
+    build: {context: ./backend, dockerfile: Dockerfile.production}
+    environment:
+      APP_ENV: production
+      POSTGRES_HOST: db
+      POSTGRES_DB: ${PRODUCTION_DB_NAME:?Explicit production database required}
+      POSTGRES_USER: ${PRODUCTION_DB_RUNTIME_USER:?Non-owner runtime role required}
+      AUTH_ALLOWED_ORIGINS: ${PRODUCTION_ALLOWED_ORIGINS:?Explicit HTTPS origin required}
+      AUTH_COOKIE_SECURE: "true"
+    secrets: [database_password, bff_secret, ors_api_key]
+    volumes: [production_images:/data/item-images]
+    networks: [application, database, routing_egress]
+    mem_limit: 768m
+    cpus: 1
+    depends_on:
+      db: {condition: service_healthy}
+  db:
+    image: postgres:17-alpine@sha256:a77aa70e641402a21411b92b721c58d10f23b50ae5fdd2333efd22d166e1e5f7
+    user: "70:70"
+    read_only: true
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=32m", "/var/run/postgresql:rw,noexec,nosuid,size=8m"]
+    restart: unless-stopped
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    pids_limit: 128
+    environment:
+      POSTGRES_DB: ${PRODUCTION_DB_NAME:?Explicit production database required}
+      POSTGRES_USER: ${PRODUCTION_DB_OWNER:?Separate migration owner required}
+      POSTGRES_PASSWORD_FILE: /run/secrets/database_owner_password
+    secrets: [database_owner_password]
+    volumes: [production_pg:/var/lib/postgresql/data]
+    networks: [database]
+    mem_limit: 768m
+    cpus: 1
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+      interval: 10s
+      timeout: 3s
+      retries: 10
+networks:
+  ingress: {internal: true}
+  application: {internal: true}
+  database: {internal: true}
+  # ORS routing needs outbound HTTPS. Apply host egress policy before deployment.
+  routing_egress: {}
+volumes:
+  production_pg: {}
+  production_images: {}
+secrets:
+  database_owner_password: {file: '${PRODUCTION_DB_OWNER_PASSWORD_FILE:?Secret file required}'}
+  database_password: {file: '${PRODUCTION_DB_PASSWORD_FILE:?Secret file required}'}
+  bff_secret: {file: '${PRODUCTION_BFF_SECRET_FILE:?Secret file required}'}
+  ors_api_key: {file: '${PRODUCTION_ORS_KEY_FILE:?Secret file required}'}
+  tls_certificate: {file: '${PRODUCTION_TLS_CERTIFICATE_FILE:?Certificate file required}'}
+  tls_private_key: {file: '${PRODUCTION_TLS_PRIVATE_KEY_FILE:?TLS key file required}'}

@@ -201,3 +201,7 @@ SELECT delivery_id, assignment_id, status, occurred_at, actor_id FROM delivery_t
 ```
 
 These are append-only business histories; do not update rows or stock quantities in DBeaver. Route estimates are not actual kilometers, customer receipt or live traffic. API keys are never database records. Reassignment/recalculation uses reviewed API/UI actions and preserves prior snapshots.
+
+## Phase 7 read-only inspection
+
+At head `0009_packing_bom`, inspect `packing_documents`, `packing_document_events`, `bom_versions`, `bom_components`, `material_plans`, `material_plan_lines`, `material_plan_reviews` and `packing_planning_operations`. Issued content and calculation snapshots are protected by append-only triggers; approval/version transitions are guarded. Do not edit or delete evidence through SQL, bypass triggers or export customer PDFs into Git. Use authorized ERP actions for drafts, approvals, replacements and voids. No extra stock balance table is introduced.

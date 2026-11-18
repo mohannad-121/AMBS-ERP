@@ -186,3 +186,9 @@ Read ORS_LOCAL_SETUP.md. Add an optional backend ORS_API_KEY privately to existi
 The current forward migration head is `0008_delivery_routes`. Back up PostgreSQL before upgrading, preserve volumes, and run `docker compose exec -T backend alembic check` afterward. No downgrade/reset is needed.
 
 `powershell -NoProfile -File scripts/Verify-AuthIntegration.ps1 -Routing` runs complete prior-phase and routing browser checks with synthetic HTTP results. Add `-Production` for an isolated build/start comparison. `-RoutingOnly` is focused. All create private generated test databases/accounts and restart only their own scratch services. No provider request uses the real key.
+
+## Phase 7 local verification
+
+Rebuild the backend image for the new hash-pinned PDF packages before running Phase 7. Preserve `.env` and both existing PostgreSQL/image volumes. After a verified backup, apply `docker compose exec backend alembic upgrade head`; expected head is `0009_packing_bom`. `alembic check` must report no drift. This migration adds schema and permission grants only. It does not create business users, BOM recipes, documents or stock. Existing accounts resolve updated permissions without credential changes.
+
+Run `docker compose exec -T -e ORS_API_KEY= backend pytest -q --tb=short`, frontend typecheck/lint/test:compat, and the isolated `Verify-AuthIntegration.ps1 -Packing` chain (`-Production` for built UI). `-PackingOnly` verifies Phase 7 in a fresh isolated database. Browser screenshots, fixture credentials/IDs and PDF samples are private ignored artifacts, never source-control inputs. Tests mock routing and do not use the owner's API key or real administrator.

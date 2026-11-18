@@ -1,4 +1,6 @@
 ﻿"use client";
+import Link from "next/link";
+import { DocumentPanel } from "./packing-screen";
 import { useId, useRef, useState } from "react";
 import { useResource } from "@/lib/use-resource";
 import { api, errorMessage } from "@/lib/api";
@@ -101,6 +103,8 @@ type Options = {
   drivers: { id: string; name: string }[];
 };
 type Journey = {
+  document_references: { id: string; code: string; delivery_id: string }[];
+  material_plan_references: { id: string; code: string }[];
   identity_note: string;
   scope: string;
   items: {
@@ -837,6 +841,7 @@ export function RoutingPanel({ deliveryId }: { deliveryId: string }) {
                         </tbody>
                       </table>
                     </div>
+                    <div className="row-actions">{journey.data.document_references?.map(r => <Link key={r.id} href={`/packing?delivery=${r.delivery_id}`}>{r.code}</Link>)}{journey.data.material_plan_references?.map(r => <Link key={r.id} href={`/material-plans?id=${r.id}`}>{r.code}</Link>)}</div>
                     <Pagination
                       page={journeyPage}
                       total={journey.data.total}
@@ -934,7 +939,7 @@ export function DriverTrips() {
           <button onClick={() => setSelected(null)}>
             Back to my assignments
           </button>
-          <RoutingPanel deliveryId={selected} />
+          <RoutingPanel deliveryId={selected} /><DocumentPanel deliveryId={selected} />
         </>
       ) : (
         <section className="data-panel">

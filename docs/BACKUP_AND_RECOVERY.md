@@ -1,8 +1,14 @@
-﻿# Backup and recovery
+# Backup and recovery
 
 The pre-GitHub backup is stored outside the repository under `C:\AMBS-Backups\AMBS-ERP\AMBS-ERP-PreGitHub-20261117-144328-ad33e93d`. Its manifest lists artifact sizes, SHA256 hashes, source/storage inventories, encryption verification and the scratch restore result. Backups contain private company/security data and must not be committed or shared as source releases. NTFS access is limited to the current Windows user and SYSTEM.
 
-## Latest approved backup: post-Phase 6C
+## Latest verified review backup: post-Phase 7
+
+`C:\AMBS-Backups\AMBS-ERP\AMBS-ERP-PostPhase7-20261117-234909` is the new post-Phase-7 review backup. It contains the reviewed application source, a consistent custom PostgreSQL dump, protected storage, age-encrypted configuration, checksums and isolated restore evidence at `0009_packing_bom`. All 70 restored table fingerprints match; existing user/credential and ledger data are preserved. The manifest digest and final release binding are recorded in PHASE_7_RELEASE_REPORT.md.
+
+The immutable core recovery manifest covers the pre-publication source and data. A separately verified release supplement preserves the final source tree including publication-only release metadata; its manifest is checked independently. This avoids changing an already verified core manifest when PR/commit identifiers become available. Preserve every earlier backup. This backup does not grant security risk acceptance or deployment authorization.
+
+## Earlier approved backup: post-Phase 6C
 
 `C:\AMBS-Backups\AMBS-ERP\AMBS-ERP-PostPhase6C-20261117-180306` contains the complete approved Phase 6C source snapshot, a fresh custom PostgreSQL dump, private item-image storage, recovery metadata and age-encrypted current configuration including current ORS settings. Source/archive hashes, in-memory configuration decryption and an isolated restore matching all 62 tables/head/schema were verified. No main database overwrite or volume deletion occurred.
 
@@ -20,7 +26,7 @@ The database dump contains credential hashes/session verifiers and private busin
 ## Restore safely
 
 1. Read `manifest.json` and recompute every artifact SHA256 before using it. A mismatched artifact is not verified. Preserve the original backup; work from a copy on controlled storage.
-2. Extract source into a new empty recovery directory, not over the working tree. Verify required Dockerfiles, lockfiles, migration 0008 and `frontend/scripts/patch-next-router.mjs`. The initial source ZIP is the pre-audit point-in-time snapshot. New backup/Git audit documentation can also be recovered from the reviewed private Git commit after push. Caches and virtual environments are regenerated.
+2. Extract source into a new empty recovery directory, not over the working tree. Verify required Dockerfiles, lockfiles, migrations matching the selected manifest (Phase 7 includes 0009; Phase 6C includes 0008), and `frontend/scripts/patch-next-router.mjs`. The initial source ZIP is the pre-audit point-in-time snapshot. New backup/Git audit documentation can also be recovered from the reviewed private Git commit after push. Caches and virtual environments are regenerated.
 3. Restore configuration into that new directory only. Ensure the output `.env` does not already exist. Run age interactively and enter the backup passphrase locally:
 
 ```powershell
@@ -47,3 +53,7 @@ docker exec <recovery-postgres-container> pg_restore -U <configured-role> --no-o
 `create_source_backup.py` creates a new source ZIP and per-member inventory outside the repository, refusing an existing ZIP. `Backup-PrivateConfiguration.ps1` requires local age passphrase input and verifies decryption in memory. `tests.backup_inventory` supplies read-only fingerprints. Database and storage dumps must use unique names and the inspected current volume mappings. A new manifest and scratch restore are required for each accepted full backup.
 
 Back up PostgreSQL and uploaded storage on a coordinated schedule, retain encrypted off-host copies and test recovery regularly. The current verified local backup is not a substitute for an off-host disaster-recovery policy. Source-only GitHub is not a database/secrets backup.
+
+## Phase 7 recovery coverage
+
+Issued PDF bytes, thumbnails, approval evidence and material snapshots are stored in PostgreSQL and therefore included in database dumps. Original item images still require the protected image-volume archive. Verify the new migration head and all evidence tables on a fresh scratch restore; triggers intentionally prevent historical deletion and destructive downgrade. Retain the verified pre-Phase-7 backup for recovery, without overwriting the active company database. See PHASE_7_REPORT.md for the actual backup path, manifest digest and preservation checks. Configuration remains age-encrypted; no passphrase or plaintext `.env` enters Git.
