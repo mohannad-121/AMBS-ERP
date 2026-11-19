@@ -1,7 +1,7 @@
-param([switch]$Browser, [switch]$Production, [switch]$MasterData, [switch]$MasterOnly, [switch]$Inventory, [switch]$InventoryOnly, [switch]$Purchasing, [switch]$PurchasingOnly, [switch]$Sales, [switch]$SalesOnly, [switch]$Routing, [switch]$RoutingOnly, [switch]$Premium, [switch]$PremiumOnly, [switch]$Packing, [switch]$PackingOnly, [switch]$Onboarding, [switch]$InventoryReview)
+param([switch]$Browser, [switch]$Production, [switch]$MasterData, [switch]$MasterOnly, [switch]$Inventory, [switch]$InventoryOnly, [switch]$Purchasing, [switch]$PurchasingOnly, [switch]$Sales, [switch]$SalesOnly, [switch]$Routing, [switch]$RoutingOnly, [switch]$Premium, [switch]$PremiumOnly, [switch]$Packing, [switch]$PackingOnly, [switch]$Onboarding, [switch]$InventoryReview, [switch]$Reporting)
 
 $ErrorActionPreference = 'Stop'
-if ($Onboarding -or $InventoryReview) { $Browser = $true }
+if ($Onboarding -or $InventoryReview -or $Reporting) { $Browser = $true }
 if ($PackingOnly) { $Packing = $true; $Browser = $true }
 if ($Packing -and !$PackingOnly) { $Premium = $true }
 if ($PremiumOnly) { $Premium = $true; $Browser = $true }
@@ -74,6 +74,7 @@ try {
     $webStarted = $true
     Wait-TestService -Container $webContainer -Runtime 'node'
     Invoke-CheckedDocker -DockerArgs @('exec',$webContainer,'npm','run','test:compat')
+    Invoke-CheckedDocker -DockerArgs @('exec',$webContainer,'npm','run','test:quantities')
     if ($Browser) {
         $scriptMount = "type=bind,source=$projectRoot\frontend\scripts,target=/work/tests,readonly"
         Invoke-CheckedDocker -DockerArgs @('run','--rm','--volumes-from',"${webContainer}:ro",'-e','FRONTEND_SOURCE=/app','--mount',$scriptMount,'ambs-auth-browser-tools:local','/work/tests/verify-router-suspense.mjs')
@@ -223,8 +224,45 @@ try {
         $reviewCredentialJson | & docker @reviewArguments --persistence
         if ($LASTEXITCODE -ne 0) { throw 'Inventory review restart verification failed' }
     }
+    if ($Reporting) {
+        $mode = if ($Production) { 'production' } else { 'development' }
+        $artifactDirectory = Join-Path $projectRoot "artifacts\phase8c\$mode"
+        $null = New-Item -ItemType Directory -Force -Path $artifactDirectory
+        $artifactMount = "type=bind,source=$artifactDirectory,target=/artifacts"
+        $reportArguments = @('run','--rm','-i','--network',"container:$webContainer",'--mount',$scriptMount,'--mount',$artifactMount,'ambs-auth-browser-tools:local','/work/tests/verify-reporting-browser.mjs')
+        $reportCredentialJson = $credentialJson
+        if ($InventoryReview -or $Onboarding) {
+            $reportCredentials = $credentialJson | ConvertFrom-Json
+            $reportCredentials.username = if ($InventoryReview) { 'phase8b.admin' } else { 'phase8a.admin' }
+            $reportCredentials.password = $reportCredentials.workerPassword
+            $reportCredentialJson = $reportCredentials | ConvertTo-Json -Compress
+        }
+        $reportCredentialJson | & docker @reportArguments
+        if ($LASTEXITCODE -ne 0) { throw 'Reporting browser verification failed' }
+        $null = Invoke-CheckedDocker -DockerArgs @('restart',$apiContainer,$webContainer)
+        Wait-TestService -Container $apiContainer -Runtime 'python'
+        Wait-TestService -Container $webContainer -Runtime 'node'
+        $reportCredentialJson | & docker @reportArguments --persistence
+        if ($LASTEXITCODE -ne 0) { throw 'Reporting restart verification failed' }
+    }
+} catch {
+    $originalVerificationError = $_
+    if ($Reporting) {
+        $failureDirectory = Join-Path $projectRoot 'artifacts\phase8c'
+        $null = New-Item -ItemType Directory -Force -Path $failureDirectory
+        $captureErrorPreference = $ErrorActionPreference
+        try {
+            # Diagnostic stderr must not replace the original failed verification.
+            $ErrorActionPreference = 'Continue'
+            if ($webStarted) { & docker logs --tail 250 $webContainer *> (Join-Path $failureDirectory 'development-web-failure.log') }
+            if ($apiStarted) { & docker logs --tail 250 $apiContainer *> (Join-Path $failureDirectory 'development-api-failure.log') }
+        } finally { $ErrorActionPreference = $captureErrorPreference }
+    }
+    throw $originalVerificationError
 } finally {
     $credentialJson = $null
+    $reportCredentialJson = $null
+    $reportCredentials = $null
     $reviewCredentialJson = $null
     $reviewCredentials = $null
     if ($webStarted) { $null = & docker stop $webContainer }

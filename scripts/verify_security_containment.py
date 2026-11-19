@@ -103,6 +103,15 @@ def main():
         print(run([*browser_args, "/work/tests/verify-packing-browser.mjs"], data=credentials), flush=True)
         if "--inventory-review" in sys.argv:
             print(run([*browser_args, "/work/tests/verify-inventory-review-browser.mjs"], data=credentials), flush=True)
+        if "--reporting" in sys.argv:
+            # Reuse an existing synthetic suite administrator's remaining login
+            # budget, then create a dedicated reporting account in this QA DB.
+            report_credentials = json.loads(credentials)
+            if "--inventory-review" in sys.argv or "--onboarding" in sys.argv:
+                report_credentials['username'] = 'phase8b.admin' if '--inventory-review' in sys.argv else 'phase8a.admin'
+                report_credentials['password'] = report_credentials['workerPassword']
+            print(run([*browser_args, "/work/tests/verify-reporting-browser.mjs"], data=json.dumps(report_credentials)), flush=True)
+            report_credentials = None
         trace = run(["exec", frontend, "cat", "/tmp/glob-trace.jsonl"])
         assert "trusted-control/**" in trace
         assert "__AMBS_UNTRUSTED_GLOB__" not in trace
@@ -113,6 +122,8 @@ def main():
             print(run([*browser_args, "/work/tests/verify-onboarding-browser.mjs", "--persistence"], data=credentials), flush=True)
         if "--inventory-review" in sys.argv:
             print(run([*browser_args, "/work/tests/verify-inventory-review-browser.mjs", "--persistence"], data=credentials), flush=True)
+        if "--reporting" in sys.argv:
+            print(run([*browser_args, "/work/tests/verify-reporting-browser.mjs", "--persistence"], data=credentials), flush=True)
         trace += run(["exec", frontend, "cat", "/tmp/glob-trace.jsonl"])
         assert "__AMBS_UNTRUSTED_GLOB__" not in trace
         (work / "runtime-glob-trace.jsonl").write_text(trace)
