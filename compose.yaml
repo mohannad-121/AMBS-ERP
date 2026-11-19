@@ -69,7 +69,10 @@ services:
       AUTH_BFF_SECRET: ${AUTH_BFF_SECRET:?Set AUTH_BFF_SECRET in .env}
       NEXT_TELEMETRY_DISABLED: "1"
       WATCHPACK_POLLING: "true"
-    command: sh -c "npm ci --no-audit --no-fund && npm run dev -- --hostname 0.0.0.0"
+      # Next's default 100 ms child cleanup budget can SIGKILL a busy dev worker.
+      NEXT_EXIT_TIMEOUT_MS: "5000"
+    # Replace the setup shell so Docker's SIGTERM reaches Next's shutdown handler.
+    command: sh -c "npm ci --no-audit --no-fund && exec node node_modules/next/dist/bin/next dev --webpack --hostname 0.0.0.0"
     ports:
       - "127.0.0.1:3000:3000"
     volumes:

@@ -1,7 +1,8 @@
 """Bounded, permission-filtered operational reads. No business mutations or costs."""
 
 from datetime import date
-from fastapi import APIRouter, Depends
+from zoneinfo import ZoneInfo
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.orm import Session
 from app.core.security import require_permission, utcnow
@@ -11,6 +12,8 @@ from app.models.inventory import StockBalance, StockLot, StockThreshold, Locatio
 from app.models.purchasing import PurchaseOrder, ProductionOrder
 from app.models.sales import SalesOrder, SalesLine, SalesAllocation, SalesConsumption, SalesDelivery, SalesDeliveryLine
 from app.models.security import AuditEvent
+from app.services.review_snapshot import review_request, require_snapshot, DASHBOARD_SLOTS
+from app.services.schedule_dates import due, TIMEZONE
 
 router = APIRouter(prefix="/dashboard", tags=["Operational dashboard"])
 
@@ -28,9 +31,19 @@ def stock_source():
 
 
 @router.get("")
-def summary(ctx=Depends(require_permission("system.read")), db: Session = Depends(get_session)):
+def summary(request: Request, ctx=Depends(require_permission("system.read")), db: Session = Depends(get_session)):
+    with review_request(db, ctx, request, slots=DASHBOARD_SLOTS) as snapshot:
+        result = project_summary(ctx, snapshot)
+    db.commit()
+    return result
+
+
+def project_summary(ctx, db):
+    require_snapshot(db)
     permissions = ctx.permissions
-    result = {"cards": [], "queues": [], "as_of": utcnow().isoformat()}
+    generated = utcnow()
+    result = {"cards": [], "queues": [], "as_of": generated.isoformat()}
+    today = generated.astimezone(ZoneInfo(TIMEZONE)).date()
 
     def card(key, label, model, condition, href, note):
         value = db.scalar(select(func.count()).select_from(model).where(condition))
@@ -67,7 +80,7 @@ def summary(ctx=Depends(require_permission("system.read")), db: Session = Depend
         active = PurchaseOrder.status.in_(["CONFIRMED", "PARTIALLY_RECEIVED"])
         card("purchases", "Open purchase orders", PurchaseOrder, active, "/purchasing/outstanding", "Awaiting full supplier receipt")
         queue("Overdue supplier receipts", PurchaseOrder,
-              and_(active, PurchaseOrder.expected_on < date.today()), "/purchasing/outstanding")
+              and_(active, due(PurchaseOrder.id, fallback=PurchaseOrder.expected_on) < today), "/purchasing/outstanding")
     if "production.read" in permissions:
         card("production", "Active production", ProductionOrder, ProductionOrder.status == "ACTIVE",
              "/purchasing/production", "Outsourced work in progress")

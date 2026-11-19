@@ -8,9 +8,37 @@ export class ApiError extends Error {
     super(message);
   }
 }
+type ApiOptions = { method?: string; body?: unknown };
+const dashboardReads = new Set<AbortController>();
+let pendingLogouts = 0;
+
 export async function api<T>(
   path: string,
-  options: { method?: string; body?: unknown } = {},
+  options: ApiOptions = {},
+): Promise<T> {
+  const logout = path === "/auth/logout" && options.method !== undefined && options.method !== "GET";
+  const dashboard = path === "/dashboard" && (options.method ?? "GET") === "GET";
+  if (dashboard && pendingLogouts) throw new DOMException("Dashboard read cancelled for sign out", "AbortError");
+  const controller = dashboard ? new AbortController() : undefined;
+  if (controller) dashboardReads.add(controller);
+  if (logout) {
+    pendingLogouts++;
+    // Snapshot access is revalidated at completion. Cancel obsolete reads before
+    // revoking the session so their late 401 cannot override successful logout.
+    for (const read of dashboardReads) read.abort();
+  }
+  try {
+    return await request<T>(path, options, controller?.signal);
+  } finally {
+    if (controller) dashboardReads.delete(controller);
+    if (logout) pendingLogouts--;
+  }
+}
+
+async function request<T>(
+  path: string,
+  options: ApiOptions,
+  cancellation?: AbortSignal,
 ): Promise<T> {
   const method = options.method ?? "GET";
   const headers: Record<string, string> = {
@@ -36,7 +64,9 @@ export async function api<T>(
     cache: "no-store",
     credentials: "same-origin",
     body: method === "GET" ? undefined : JSON.stringify(options.body ?? {}),
-    signal: AbortSignal.timeout(15000),
+    signal: cancellation
+      ? AbortSignal.any([cancellation, AbortSignal.timeout(15000)])
+      : AbortSignal.timeout(15000),
   });
   const data = await response.json();
   if (!response.ok) {
