@@ -65,3 +65,7 @@ The separately requested Phase 6C covers the shared premium AMBS visual system, 
 ## Phase 7 - Packing documents, approved BOM and material requirements
 
 Local feature branch `feature/phase-7-packing-bom` implements actual-dispatch documents, immutable PDF revisions, controlled BOM approval and material snapshots/shortages. Owner-specific engineering definitions remain unapproved and absent from live data. See PHASE_7_REPORT.md for verification and acceptance limits. This operation does not start Phase 8 or authorize deployment/publication.
+
+## Phase 8C - operational reporting and finance readiness
+
+The separately authorized Phase 8C starts from Phase 8B `cc4931a2dfa04d4b9fa41e40ccb4263fb0ed98c5` on `feature/phase-8c-operational-reporting`. It adds read-only operational reports, authoritative exception findings, bounded filters/CSV and a finance decision assessment. Existing Phase 8A preview and Phase 8B reconciliation/journey remain intact. See [Phase 8C report](PHASE_8C_REPORT.md) and [finance decisions](PHASE_8C_FINANCE_DECISIONS.md). The follow-up review checkpoint authorizes a normal push and a stacked PR targeting Phase 8B only after verification, backup and audits pass; no merge is authorized. No accounting transactions, real data import, stock adjustment, merge, deployment or Phase 9 is authorized.

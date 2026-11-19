@@ -1,14 +1,8 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { counterProgress, fixedQuantity, formatQuantity } from "@/lib/quantity";
+export { formatQuantity } from "@/lib/quantity";
 
-// Decimal strings never pass through Number: database quantities can exceed 2^53.
-export function formatQuantity(value: string, precision = 0): string {
-  const [integer, fraction = ""] = value.split(".");
-  return (
-    new Intl.NumberFormat("en-AE").format(BigInt(integer)) +
-    (precision ? "." + fraction.padEnd(precision, "0").slice(0, precision) : "")
-  );
-}
 export function CountUp({
   value,
   precision = 0,
@@ -43,17 +37,16 @@ export function CountUp({
         stop();
         return;
       }
-      const start = performance.now();
+      let start: number | undefined;
       const tick = (now: number) => {
-        const progress = Math.min(1, (now - start) / 1400);
+        // Use one RAF timeline instead of mixing its frame stamp with performance.now().
+        if (start === undefined) start = now;
+        const progress = counterProgress(now - start);
         const scaled =
           (target *
             BigInt(Math.round((1 - Math.pow(1 - progress, 3)) * 1000000))) /
           BigInt(1000000);
-        const digits = scaled.toString().padStart(precision + 1, "0");
-        const raw = precision
-          ? digits.slice(0, -precision) + "." + digits.slice(-precision)
-          : digits;
+        const raw = fixedQuantity(scaled, precision);
         setDisplay(progress === 1 ? final : formatQuantity(raw, precision));
         if (progress < 1) frame = requestAnimationFrame(tick);
       };

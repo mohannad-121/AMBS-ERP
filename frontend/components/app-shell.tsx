@@ -198,7 +198,8 @@ export function AppShell({
 const navigationGroups = [
   {
     title: "Overview",
-    links: [["/", "Dashboard", "system.read", "dashboard"]],
+    links: [["/", "Dashboard", "system.read", "dashboard"],
+      ["/reports", "Reporting Center", "sales.orders.read|purchasing.orders.read|inventory.read|production.read|sales.deliveries.read|packing.company", "document"]],
   },
   {
     title: "Business",

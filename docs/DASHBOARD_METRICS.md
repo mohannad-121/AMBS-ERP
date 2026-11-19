@@ -40,3 +40,7 @@ These are overlapping views of stock and must not be added together. A reservati
 Counts are strings of integers; quantities are PostgreSQL Decimal strings. The client uses BigInt fixed-point arithmetic for count-up and exact final formatting. The browser regression creates a real isolated confirmed demand of `99999999999999.123456` in a six-decimal unit, avoiding JavaScript Number conversion. Large values wrap without truncation. Document IDs and timestamps never animate.
 
 KPI animations run once on first viewport entry and settle exactly after 1,400ms. A manual refresh loads a new snapshot and starts its counters once; hover and small scroll changes do not reset them. Reduced motion presents final values directly. Screen readers receive the final truthful number, not every frame.
+
+## Phase 8C Reporting Center
+
+The authorized shell links to `/reports`, and inventory readers have a reporting quick action. Existing dashboard metric definitions, API and animations are unchanged. Reporting Center is a separate filtered, paginated point-in-time read using the shared Phase 8B read-only repeatable-read architecture. It never holds the inventory posting lock. See [exact report definitions](PHASE_8C_REPORT.md) for row grains, date bases, status counts, units, permission scopes and limits. A creation-date filter does not convert cumulative fulfillment into a period-dispatch statistic. Reports calculate no financial performance or unapproved accounting values.

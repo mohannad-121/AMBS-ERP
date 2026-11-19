@@ -1,0 +1,14 @@
+.reporting-center { display: grid; gap: 1.25rem; min-width: 0; }
+.reporting-center > .panel { min-width: 0; padding: 1.5rem; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+.report-filter-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr)); gap: 1rem; margin-block: 1rem; }
+.report-result-heading { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: start; gap: 1rem; }
+.report-statuses { display: flex; flex-wrap: wrap; gap: .75rem; margin-block: 1rem; }
+.report-statuses > div { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem; border: 1px solid var(--line); border-radius: 8px; padding: .75rem; }
+.reporting-center .table-wrap { width: 100%; max-width: 100%; min-width: 0; overflow-x: auto; }
+.reporting-center table { width: max-content; min-width: 100%; table-layout: auto; }
+.reporting-center td { min-width: 10rem; max-width: 24rem; overflow-wrap: anywhere; }
+.reporting-center td .status-badge { white-space: nowrap; }
+.reporting-center td a { display: block; margin-block: .5rem; }
+.reporting-center .field button, .reporting-center select { min-height: 44px; }
+.reporting-center .field button { white-space: normal; overflow-wrap: anywhere; }
+@media (max-width: 640px) { .reporting-center .panel { padding: 1rem; } .report-result-heading > button { width: 100%; } }

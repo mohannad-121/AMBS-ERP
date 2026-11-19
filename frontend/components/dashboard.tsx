@@ -57,6 +57,7 @@ export function Dashboard() {
     ],
     ["sales.deliveries.prepare", "/sales", "Prepare deliveries", "truck"],
     ["inventory.read", "/inventory/low-stock", "Review low stock", "pulse"],
+    ["inventory.read", "/reports", "Reporting Center", "document"],
   ].filter(([permission]) => user.permissions.includes(permission));
   return (
     <>

@@ -5,6 +5,7 @@
   "scripts": {
     "postinstall": "node scripts/patch-next-router.mjs",
     "test:compat": "node --test scripts/test-next-patch.mjs",
+    "test:quantities": "node --test scripts/test-count-up.mjs",
     "dev": "next dev --webpack",
     "build": "next build --webpack",
     "start": "next start --hostname 0.0.0.0",

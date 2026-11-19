@@ -38,8 +38,10 @@ export async function proxy(
       path,
     );
   const onboardingPath = /^onboarding\/(?:options|inspect|validate|report|reconcile|reconciliation-report)$/.test(path);
+  const reportingPath = /^reports(?:\/(?:options|choices|export))?$/.test(path);
   const packingPath = /^(?:packing\/deliveries(?:\/[0-9a-f-]{36}\/(?:documents|preview))?|packing\/documents\/[0-9a-f-]{36}(?:\/(?:download|void))?|boms(?:\/[0-9a-f-]{36}(?:\/(?:submit|approve|archive))?)?|material-plans(?:\/[0-9a-f-]{36}(?:\/review)?)?|manufacturing\/options\/(?:items|orders|production|warehouses))$/.test(path);
   if (
+    !reportingPath &&
     !onboardingPath &&
     !packingPath &&
     !allowedPath.test(path) &&
