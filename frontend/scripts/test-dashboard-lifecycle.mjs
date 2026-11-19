@@ -63,3 +63,40 @@ test('logout does not cancel unrelated requests',()=>setup(async({api})=>{
   const report=api('/reports');await api('/auth/logout',{method:'POST'});
   assert.equal(signal.aborted,false);finish.resolve(json({items:[]}));assert.deepEqual(await report,{items:[]});
 }));
+
+test('durable reviews are cancelled before logout and remain blocked until a new login',()=>setup(async({api},redirects)=>{
+  const signals=[];let reads=0;
+  globalThis.fetch=async(url,options)=>{
+    if(url==='/api/auth/csrf')return json({csrf_token:'synthetic-token'});
+    if(url==='/api/auth/logout'){assert.ok(signals.every(s=>s.aborted));return json({ok:true});}
+    if(url==='/api/auth/login')return json({ok:true});
+    reads++;return new Promise((resolve,reject)=>{signals.push(options.signal);options.signal.addEventListener('abort',()=>reject(options.signal.reason),{once:true});});
+  };
+  const read=assert.rejects(api('/onboarding/review/sources?offset=0'),e=>e.name==='AbortError');
+  await api('/auth/logout',{method:'POST'});await read;
+  await assert.rejects(api('/onboarding/review/sources'),e=>e.name==='AbortError');
+  assert.equal(reads,1);assert.deepEqual(redirects,[]);
+  await api('/auth/login',{method:'POST'});
+  globalThis.fetch=async()=>json({sources:[]});
+  assert.deepEqual(await api('/onboarding/review/sources'),{sources:[]});
+}));
+
+test('late durable-review 401 cannot override successful logout navigation',()=>setup(async({api},redirects)=>{
+  const body=deferred();
+  globalThis.fetch=async(url)=>url==='/api/auth/csrf'?json({csrf_token:'synthetic-token'}):url==='/api/auth/logout'?json({ok:true}):{ok:false,status:401,json:()=>body.promise};
+  const read=assert.rejects(api('/onboarding/review/sources'),e=>e.name==='AbortError');
+  await api('/auth/logout',{method:'POST'});body.resolve({error:{code:'AUTHENTICATION_REQUIRED'}});await read;
+  assert.deepEqual(redirects,[]);
+}));
+
+test('genuine durable-review 401 still rejects and redirects',()=>setup(async({api,ApiError},redirects)=>{
+  globalThis.fetch=async()=>json({error:{code:'AUTHENTICATION_REQUIRED',message:'Please sign in'}},401);
+  await assert.rejects(api('/onboarding/review/sources'),e=>e instanceof ApiError&&e.status===401);
+  assert.deepEqual(redirects,['/unauthorized']);
+}));
+
+test('failed logout restores durable-review availability',()=>setup(async({api,ApiError})=>{
+  globalThis.fetch=async(url)=>url==='/api/auth/csrf'?json({csrf_token:'synthetic-token'}):url==='/api/auth/logout'?json({error:{code:'CSRF_REJECTED',message:'Refresh and retry'}},403):json({sources:[]});
+  await assert.rejects(api('/auth/logout',{method:'POST'}),e=>e instanceof ApiError&&e.status===403);
+  assert.deepEqual(await api('/onboarding/review/sources'),{sources:[]});
+}));

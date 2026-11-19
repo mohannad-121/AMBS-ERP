@@ -51,8 +51,9 @@ def audited(db, context, action, data, operation):
 
 
 @router.get("/options")
-def options(context=Depends(access)):
-    return {"notice": engine.NOTICE, "categories": [{"id": c, "fields": list(fields), "required": list(engine.REQUIRED[c])} for c, fields in engine.FIELDS.items()], "limits": {"upload_mib": 4, "sheets": 16, "rows_per_sheet": 2000, "total_rows": 5000, "columns": 50, "cells": 50000, "cell_characters": 2048}, "retention": "Request memory only; no server file or preview is retained. Reselect the source after a page refresh."}
+def options(context=Depends(access), db: Session=Depends(get_session)):
+    from app.services.import_review import available
+    return {"durable_review_available": available(db), "notice": engine.NOTICE, "categories": [{"id": c, "fields": list(fields), "required": list(engine.REQUIRED[c])} for c, fields in engine.FIELDS.items()], "limits": {"upload_mib": 4, "sheets": 16, "rows_per_sheet": 2000, "total_rows": 5000, "columns": 50, "cells": 50000, "cell_characters": 2048}, "retention": "Request memory only; no server file or preview is retained. Reselect the source after a page refresh."}
 
 
 @router.post("/inspect")

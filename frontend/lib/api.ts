@@ -11,6 +11,7 @@ export class ApiError extends Error {
 type ApiOptions = { method?: string; body?: unknown };
 const dashboardReads = new Set<AbortController>();
 let pendingLogouts = 0;
+let reviewSignedOut = false;
 
 export async function api<T>(
   path: string,
@@ -18,17 +19,24 @@ export async function api<T>(
 ): Promise<T> {
   const logout = path === "/auth/logout" && options.method !== undefined && options.method !== "GET";
   const dashboard = path === "/dashboard" && (options.method ?? "GET") === "GET";
-  if (dashboard && pendingLogouts) throw new DOMException("Dashboard read cancelled for sign out", "AbortError");
-  const controller = dashboard ? new AbortController() : undefined;
+  const durableReview = path.startsWith("/onboarding/review/") && (options.method ?? "GET") === "GET";
+  if ((dashboard || durableReview) && (pendingLogouts || durableReview && reviewSignedOut)) throw new DOMException("Review read cancelled for sign out", "AbortError");
+  const controller = dashboard || durableReview ? new AbortController() : undefined;
   if (controller) dashboardReads.add(controller);
   if (logout) {
     pendingLogouts++;
+    reviewSignedOut = true;
     // Snapshot access is revalidated at completion. Cancel obsolete reads before
     // revoking the session so their late 401 cannot override successful logout.
     for (const read of dashboardReads) read.abort();
   }
   try {
-    return await request<T>(path, options, controller?.signal);
+    const result = await request<T>(path, options, controller?.signal);
+    if (path === "/auth/login" && options.method === "POST") reviewSignedOut = false;
+    return result;
+  } catch (failure) {
+    if (logout) reviewSignedOut = false;
+    throw failure;
   } finally {
     if (controller) dashboardReads.delete(controller);
     if (logout) pendingLogouts--;
@@ -69,6 +77,7 @@ async function request<T>(
       : AbortSignal.timeout(15000),
   });
   const data = await response.json();
+  cancellation?.throwIfAborted();
   if (!response.ok) {
     if (response.status === 401 && path !== "/auth/login")
       window.location.replace("/unauthorized");

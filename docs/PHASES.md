@@ -42,7 +42,7 @@ Define finance boundaries with stakeholders, operational metrics, reconciliation
 
 ## 9. Data migration, integration and acceptance testing
 
-Prepare repeatable imports, validation, reconciliation and rollback procedures using approved source access. Build integrations only after source-system approval. Run stakeholder acceptance testing, performance checks and migration rehearsals. Access to the current Odoo instance is a future dependency to confirm.
+Prepare repeatable internal data validation, review, reconciliation and recovery using separately approved source access. Owner decision (19 November 2026): AMBS-ERP is independent; Odoo is permanently out of scope. No connector, synchronization, adapter, credential configuration or external ERP dependency is permitted. Production uses company-owned on-premise PostgreSQL infrastructure, not Supabase. P9-1 authorizes synthetic-only durable source manifests, validation and approval metadata in isolated databases. Actual imports, execution endpoints and later stages require separate authorization. See PHASE_9_READINESS_PLAN.md and PHASE_9_P9_1_REPORT.md.
 
 ## 10. Drivers and delivery tracking
 

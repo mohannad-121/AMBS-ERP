@@ -9,6 +9,8 @@
 .import-fields, .import-mapping { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 16px; padding: 0; border: 0; margin: 20px 0; min-width: 0; }
 .import-mapping legend { font-weight: 700; padding: 12px 0; }
 .import-center .field { min-width: 0; }
+.import-center pre { max-width: 100%; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+.import-center textarea { width: 100%; min-height: 80px; }
 .import-center select, .import-center input[type=file] { max-width: 100%; min-width: 0; width: 100%; min-height: 44px; }
 .import-caution { padding: 12px; background: var(--warning-bg); color: var(--warning); border-radius: var(--radius-sm); }
 .import-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; margin: 20px 0; }
