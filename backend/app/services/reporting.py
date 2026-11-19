@@ -23,7 +23,7 @@ from app.models.inventory import (
 )
 from app.models.purchasing import (
     Supplier, PurchaseOrder, OrderLine, PurchaseReceipt, ReceiptLine,
-    ProductionOrder, ProductionStage, ProductionEvent, ScheduleUpdate,
+    ProductionOrder, ProductionStage, ProductionEvent,
 )
 from app.models.sales import (
     SalesOrder, SalesLine, SalesAllocation, SalesConsumption, SalesDelivery,
@@ -32,8 +32,8 @@ from app.models.sales import (
 from app.models.packing import PackingDocument, DocumentEvent
 from app.models.routing import DriverAssignment
 from app.services.review_snapshot import require_snapshot
+from app.services.schedule_dates import due, TIMEZONE
 
-TIMEZONE = 'Asia/Dubai'
 PAGE_SIZE = 50
 EXPORT_LIMIT = 1000
 PERMISSIONS = {
@@ -83,12 +83,6 @@ class Source:
 
 def col(value, name):
     return (value if hasattr(value, 'label') else literal(value)).label(name)
-
-
-def due(model_id, *, stage=False, fallback=None):
-    match = ScheduleUpdate.stage_id == model_id if stage else ScheduleUpdate.order_id == model_id
-    latest = select(func.coalesce(ScheduleUpdate.eta, ScheduleUpdate.confirmed_on, ScheduleUpdate.requested_on)).where(match).order_by(ScheduleUpdate.created_at.desc(), ScheduleUpdate.id.desc()).limit(1).correlate_except(ScheduleUpdate).scalar_subquery()
-    return func.coalesce(latest, fallback)
 
 
 def sales_source():

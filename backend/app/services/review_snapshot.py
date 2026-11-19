@@ -14,6 +14,10 @@ SNAPSHOT_KEY = 'inventory_review_snapshot'
 # The existing application pool is 5 + 5 overflow connections per worker.
 # Two bounded reviews leave capacity for authentication and stock mutations.
 REVIEW_SLOTS = BoundedSemaphore(2)
+# Dashboard reads are short and must not compete for the two long-review slots.
+# At most 2 review + 3 dashboard snapshot connections leave 5 of the existing
+# 5+5 pool available. Authentication transactions are released before admission.
+DASHBOARD_SLOTS = BoundedSemaphore(3)
 
 
 def require_snapshot(db):
@@ -23,7 +27,7 @@ def require_snapshot(db):
 
 
 @contextmanager
-def inventory_snapshot(db):
+def inventory_snapshot(db, *, slots=None):
     """Fresh identity map and transaction; never commit the caller's transaction.
 
     The connection isolation option is reset by SQLAlchemy on pool return.
@@ -33,7 +37,8 @@ def inventory_snapshot(db):
     bind = db.get_bind()
     if not isinstance(bind, Engine):
         raise RuntimeError('Review snapshot requires an engine, not a caller-owned connection')
-    if not REVIEW_SLOTS.acquire(blocking=False):
+    admission = REVIEW_SLOTS if slots is None else slots
+    if not admission.acquire(blocking=False):
         raise SecurityError(429, 'REVIEW_BUSY', 'Inventory review slots are busy. Retry shortly; no stock has changed.')
     try:
         with Session(bind=bind, autoflush=False, expire_on_commit=False) as snapshot:
@@ -49,7 +54,7 @@ def inventory_snapshot(db):
                 snapshot.info.pop(SNAPSHOT_KEY, None)
                 snapshot.rollback()
     finally:
-        REVIEW_SLOTS.release()
+        admission.release()
 
 
 def principal(context):
@@ -58,7 +63,7 @@ def principal(context):
 
 
 @contextmanager
-def review_request(db, context, request):
+def review_request(db, context, request, *, slots=None):
     """Release authentication locks before a long read, then recheck access.
 
     Only current_context's last-seen update may be pending at this route boundary.
@@ -75,7 +80,7 @@ def review_request(db, context, request):
     identity = principal(context)
     db.commit()  # Releases the initial unsafe-request SECURITY_LOCK as well.
     try:
-        with inventory_snapshot(db) as snapshot:
+        with inventory_snapshot(db, slots=slots) as snapshot:
             yield snapshot
     except SecurityError as error:
         if error.code == 'PERMISSION_DENIED':
