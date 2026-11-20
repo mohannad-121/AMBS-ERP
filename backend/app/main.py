@@ -10,6 +10,7 @@ from starlette.exceptions import HTTPException
 
 from app.api import audit, auth, system, users, master, images, inventory, purchasing, sales, routing, dashboard, packing, onboarding, inventory_review, reporting
 from app.api.health import router
+from app.api import import_review
 from app.core.config import get_settings
 from app.core.body_limit import RequestBodyLimit
 from app.core.logging import configure_logging
@@ -55,6 +56,7 @@ for api_router in (
     onboarding.router,
     inventory_review.router,
     reporting.router,
+    import_review.router,
 ):
     app.include_router(api_router, prefix="/api")
 

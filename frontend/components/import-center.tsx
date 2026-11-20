@@ -3,6 +3,7 @@ import { useRef, useState } from "react";
 import { api, errorMessage } from "@/lib/api";
 import { useResource } from "@/lib/use-resource";
 import "./import-center.css";
+import { DurableImportReview } from "./durable-import-review";
 
 type Category = { id: string; fields: string[]; required: string[] };
 type Candidate = { header_row: number; header_span: number; score: number; columns: { column: string; label: string }[]; suggested_mapping: Record<string, string> };
@@ -14,7 +15,7 @@ const names: Record<string, string> = { customers: "Customers", projects: "Proje
 const label = (value: string) => value.replaceAll("_", " ");
 
 export function ImportCenter() {
-  const options = useResource<{ categories: Category[]; retention: string }>("/onboarding/options");
+  const options = useResource<{ categories: Category[]; retention: string; durable_review_available: boolean }>("/onboarding/options");
   const [category, setCategory] = useState("customers"), [file, setFile] = useState<{ filename: string; content_base64: string } | null>(null);
   const [inspection, setInspection] = useState<Inspection | null>(null), [sheetIndex, setSheetIndex] = useState(0);
   const [candidateIndex, setCandidateIndex] = useState(0), [mapping, setMapping] = useState<Record<string, string>>({});
@@ -85,5 +86,6 @@ export function ImportCenter() {
       <div className="table-wrap"><table><caption>Original and proposed values · {records.length} records in this view</caption><thead><tr><th>Source row</th><th>Original → proposed</th><th>Review findings</th></tr></thead><tbody>{records.slice((page - 1) * 25, page * 25).map(row => <tr key={row.row}><td><strong>{row.row}</strong>{row.reconciliation && <div><strong>{row.reconciliation.status}</strong><p>Expected: {row.reconciliation.ledger_on_hand ?? "Unresolved"} · Cached: {row.reconciliation.cached_on_hand ?? "Unresolved"} · Counted: {row.reconciliation.counted_quantity} · Difference: {row.reconciliation.variance ?? "Not compared"}</p><p>Reserved: {row.reconciliation.active_reserved ?? "Unresolved"} · Unreserved: {row.reconciliation.ledger_unreserved ?? "Unresolved"}</p><p>{row.reconciliation.issues.join("; ")}</p><p>Supporting movements (up to 20): {row.reconciliation.references.join(", ") || "None"}</p></div>}<p>{row.valid ? row.issues.length ? "Valid with review" : "Valid" : "Invalid"}</p></td><td>{Object.entries(row.proposed).map(([field, value]) => <div className="import-value" key={field}><strong>{label(field)}</strong><span>{row.original[field] || "(empty)"}</span><span>→ {value || "(empty)"}</span>{row.matches[field] && <small>Existing ERP match {row.matches[field].code ?? ""}</small>}</div>)}</td><td>{row.issues.length ? <ul>{row.issues.map((i, j) => <li key={j}><strong>{i.severity === "error" ? "Error" : "Review"} · {label(i.field)}</strong>: {i.message}</li>)}</ul> : "No issues detected in these checks."}</td></tr>)}</tbody></table></div>
       <div className="actions"><button disabled={page === 1 || busy} onClick={() => setPage(p => p - 1)}>Previous records</button><span>Page {page} of {Math.max(1, Math.ceil(records.length / 25))}</span><button disabled={page * 25 >= records.length || busy} onClick={() => setPage(p => p + 1)}>Next records</button></div>
     </section>}
+    {options.data?.durable_review_available && <DurableImportReview file={file} sha256={inspection?.sha256} selection={candidate ? { category, sheet: sheetIndex, header_row: candidate.header_row, header_span: candidate.header_span, mapping, date_format: dateFormat } : null} />}
   </div>;
 }

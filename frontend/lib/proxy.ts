@@ -37,12 +37,13 @@ export async function proxy(
     /^routing\/(?:mine|sites|deliveries\/[0-9a-f-]{36}(?:\/(?:options|assign|calculate|confirm|trip|journey\/[0-9a-f-]{36}))?)$/.test(
       path,
     );
+  const durablePath = /^onboarding\/review\/sources(?:\/[0-9a-f-]{36}(?:\/(?:revisions|validate|review|approve|reject|cancel))?)?$/.test(path);
   const onboardingPath = /^onboarding\/(?:options|inspect|validate|report|reconcile|reconciliation-report)$/.test(path);
   const reportingPath = /^reports(?:\/(?:options|choices|export))?$/.test(path);
   const packingPath = /^(?:packing\/deliveries(?:\/[0-9a-f-]{36}\/(?:documents|preview))?|packing\/documents\/[0-9a-f-]{36}(?:\/(?:download|void))?|boms(?:\/[0-9a-f-]{36}(?:\/(?:submit|approve|archive))?)?|material-plans(?:\/[0-9a-f-]{36}(?:\/review)?)?|manufacturing\/options\/(?:items|orders|production|warehouses))$/.test(path);
   if (
     !reportingPath &&
-    !onboardingPath &&
+    !onboardingPath && !durablePath &&
     !packingPath &&
     !allowedPath.test(path) &&
     !masterPath &&
@@ -67,7 +68,7 @@ export async function proxy(
       { status: 426 },
     );
   const unsafe = !["GET", "HEAD"].includes(request.method);
-  const maxBytes = onboardingPath && path !== "onboarding/options" ? 7_000_000 : /^master\/items\/[0-9a-f-]{36}\/image$/.test(path)
+  const maxBytes = path === "onboarding/review/sources" ? 7_000_000 : durablePath ? 65536 : onboardingPath && path !== "onboarding/options" ? 7_000_000 : /^master\/items\/[0-9a-f-]{36}\/image$/.test(path)
     ? 7_000_000
     : inventoryPath || purchasingPath || salesPath || routingPath || packingPath
       ? 65536

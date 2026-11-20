@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     app_env: Literal["development", "test", "production"] = "development"
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
     image_storage_dir: str = "/data/item-images"
+    durable_review_enabled: bool = False
+    durable_review_storage_dir: str = "/data/synthetic-import-review"
     ors_api_key: SecretStr = SecretStr("")
     routing_provider: Literal["ors"] = "ors"
     routing_timeout_seconds: float = Field(default=8, ge=1, le=10)
