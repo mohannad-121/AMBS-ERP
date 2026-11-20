@@ -4,6 +4,23 @@
 is preserved byte-for-byte in private preflight evidence and the original workspace.
 Historical verification reports are unchanged.
 
+20 November 2026 update: P9-1's self-review correction was published normally as
+`51a705fa2e11a963c35e3b1ef10d0872f9a08ac0` on
+`feature/phase-9a-durable-import-review`. PR #7 remains OPEN/DRAFT with auto-merge
+disabled. Its original execution evidence in PHASE_9_P9_1_REPORT.md remains a
+historical checkpoint, not newly executed evidence for P9-2A.
+
+The owner separately authorized **P9-2A synthetic native customer import only** in
+`C:\Projects\AMBS-ERP-P9-2`, branch `feature/phase-9b-synthetic-master-import`,
+based exactly on that publication commit. Both existing worktrees remain untouched.
+The current slice has no executable HTTP route or UI activation. An internal service
+requires explicit synthetic flags, APP_ENV=test, a generated actual test database,
+native sessions/permissions and independently approved P9-1 metadata. Its additive
+schema and customer writes are rehearsed only in isolated synthetic PostgreSQL.
+See PHASE_9_P9_2A_REPORT.md for the transaction contract and actual verification.
+This authorization excludes company schema/data changes, deployment, real imports,
+stock/finance/LPO execution, publication and P9-2B.
+
 ## Authoritative architecture and scope
 
 AMBS-ERP is independent, using its own PostgreSQL and native internal workflows.
@@ -44,8 +61,9 @@ APPROVED, REJECTED and CANCELLED; no execution states or endpoints exist.
 
 | Stage | Proposed work | Required gate |
 | --- | --- | --- |
-| P9-1 current | Synthetic persistent review/approval only | Fresh security, parser, persistence, concurrency, backend, browser/build and preservation evidence; independent schema/code review |
-| P9-2 proposed only | Design/rehearse native master-import transaction/idempotency contract in disposable synthetic databases | Separate authorization, stable identity/content receipts, retry/crash/conflict proofs; no stock/finance adapter implied |
+| P9-1 published review base | Synthetic persistent review/approval, including enforced reviewer separation | PR #7 OPEN/DRAFT, unmerged; publication commit recorded above; historical evidence retained |
+| P9-2A current | Customers only: internal synthetic native transaction, durable identities/receipts, reconciliation and recovery | Fresh isolated tests/audits/preservation; no company migration, executable production route, release or publication |
+| P9-2B not started | Any later entity/dependency expansion | Separate owner authorization and independent review of P9-2A evidence first |
 | Controlled master migration | Owner-approved customers/projects/LPO/items | Approved sources, keys/mappings/conflicts, permissions, signed dry run, recovery drill and explicit execution approval |
 | Physical stock opening | Separately approved count/cutoff and lot/serial policy | Reconcile reservations/custody; native posting only; historical deliveries never generate stock issues |
 | Operational acceptance | Complete synthetic chain and failure/recovery rehearsal | Stakeholder sign-off; no deployment implied |

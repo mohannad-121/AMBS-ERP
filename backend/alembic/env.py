@@ -10,6 +10,7 @@ from app.models import sales  # noqa: F401
 from app.models import routing  # noqa: F401
 from app.models import packing  # noqa: F401
 from app.models import import_review  # noqa: F401
+from app.models import customer_import  # noqa: F401
 from app.models.base import Base
 
 # Import implemented model modules here so autogenerate sees their metadata.

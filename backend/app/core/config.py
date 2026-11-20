@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
     image_storage_dir: str = "/data/item-images"
     durable_review_enabled: bool = False
+    synthetic_customer_import_enabled: bool = False
     durable_review_storage_dir: str = "/data/synthetic-import-review"
     ors_api_key: SecretStr = SecretStr("")
     routing_provider: Literal["ors"] = "ors"

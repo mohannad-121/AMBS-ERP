@@ -348,7 +348,7 @@ def test_migrations_catalog_and_drift(security_db):
         } <= tables
         assert (
             db.scalar(text("SELECT version_num FROM alembic_version"))
-            == "0010_durable_review"
+            == "0011_customer_import"
         )
         assert db.scalar(select(func.count()).select_from(Role)) == 7
         assert db.scalar(select(func.count()).select_from(User)) == 0

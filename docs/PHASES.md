@@ -44,6 +44,14 @@ Define finance boundaries with stakeholders, operational metrics, reconciliation
 
 Prepare repeatable internal data validation, review, reconciliation and recovery using separately approved source access. Owner decision (19 November 2026): AMBS-ERP is independent; Odoo is permanently out of scope. No connector, synchronization, adapter, credential configuration or external ERP dependency is permitted. Production uses company-owned on-premise PostgreSQL infrastructure, not Supabase. P9-1 authorizes synthetic-only durable source manifests, validation and approval metadata in isolated databases. Actual imports, execution endpoints and later stages require separate authorization. See PHASE_9_READINESS_PLAN.md and PHASE_9_P9_1_REPORT.md.
 
+P9-2A was separately authorized on 20 November 2026, based on P9-1 publication
+`51a705fa2e11a963c35e3b1ef10d0872f9a08ac0` (PR #7 remains OPEN/DRAFT, unmerged).
+The isolated `feature/phase-9b-synthetic-master-import` worktree rehearses Customers
+only through native creation, immutable receipts, database idempotency and recovery.
+There is no execution HTTP route or company feature activation. Actual results and
+limits are recorded in PHASE_9_P9_2A_REPORT.md. Company schema/data changes, real
+imports, stock/finance/LPO execution, deployment, publication and P9-2B are excluded.
+
 ## 10. Drivers and delivery tracking
 
 Implement driver assignment, delivery progress, proof of delivery and mobile browser workflows after operational prerequisites are accepted. Define location-data permissions and retention if tracking is requested. Driver functionality remains deferred until this phase.
