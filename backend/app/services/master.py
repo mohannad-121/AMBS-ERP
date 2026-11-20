@@ -301,7 +301,7 @@ def validate_attributes(definitions, attributes):
         )
 
 
-def save(db: Session, context, resource, data, row=None):
+def save(db: Session, context, resource, data, row=None, *, commit_changes=True):
     model, prefix = RESOURCES[resource]
     values = data.model_dump()
     # Status changes require a separate archive permission even on full updates.
@@ -352,8 +352,12 @@ def save(db: Session, context, resource, data, row=None):
     try:
         db.flush()
         result = output(row)
-        commit(db)
+        if commit_changes:
+            commit(db)
     except IntegrityError:
+        if not commit_changes:
+            # A transaction owner must roll back the whole batch, not one row.
+            raise
         db.rollback()
         raise SecurityError(
             409,
