@@ -210,6 +210,8 @@ def save_validation(db, ctx, source_id, expected, result, refs):
 
 def decision(db, ctx, source_id, data, kind, refs=None):
     source, revision = locked(db, source_id, data.expected_version)
+    if kind == 'REVIEWED' and ctx.user.id == source.actor_id:
+        error('SEPARATION_REQUIRED', 'The reviewer must differ from the uploader', 403)
     if not revision or revision.state in {'REJECTED', 'CANCELLED'}:
         error('INVALID_STATE', 'This review is closed or has no selection revision')
     run = latest_run(db, revision.id)

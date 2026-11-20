@@ -1,5 +1,9 @@
 # Phase 9 / P9-1 implementation and verification
 
+The initial implementation record below is retained as historical evidence. The
+20 November 2026 PR #7 separation follow-up at the end records the current local
+changes and fresh verification; its results supersede earlier counts for this fix.
+
 19 November 2026. **Local implementation for independent owner review only.**
 No source is staged or committed. No push, merge, deployment, company migration,
 company import, stock adjustment, financial transaction or credential reset occurred.
@@ -114,7 +118,8 @@ not a claim that arbitrary content can be classified automatically as synthetic.
 
 Existing native authentication, session validation, roles, CSRF and denial architecture
 apply. Operations/Super Admin may inspect/review shared synthetic manifests; only a
-Super Admin may approve. The approver must differ from both uploader and reviewer.
+Super Admin may approve. The reviewer must differ from the source uploader. The
+approver must differ from both uploader and reviewer.
 No permission or role grants were added to company users. This is role-scoped internal
 review access, not a new tenant/namespace ownership model.
 
@@ -301,3 +306,117 @@ Recommended P9-2, **not implemented**: separately authorize design and synthetic
 rehearsal of native master-data transaction/idempotency receipts, cross-source keys,
 conflict handling, crash/retry recovery and pre-write revalidation. No stock/finance
 executor or real-data execution is implied. Stop here for independent owner review.
+
+## PR #7 independent-reviewer separation follow-up — 20 November 2026
+
+Work is confined to `C:\Projects\AMBS-ERP-P9-1`, branch
+`feature/phase-9a-durable-import-review`, starting HEAD
+`a134a375599aae50094426d3c9b74e1d4faac991`. This follow-up is uncommitted and
+unpushed. The preceding implementation/publication evidence is historical, not a
+claim that this change has been committed or remotely applied.
+
+### Change and regression coverage
+
+`decision()` now rejects `REVIEWED` when the actor is the immutable source
+manifest's uploader. It raises HTTP 403 / `SEPARATION_REQUIRED` immediately after
+locking/version checking, before validation/reference invalidation or any review
+mutation. The approver's existing separation from both uploader and reviewer is
+unchanged. The API's existing rollback-and-denial audit handler remains in use.
+
+Exactly four tracked files change relative to the starting HEAD:
+
+| Path | Follow-up change |
+| --- | --- |
+| `backend/app/services/import_review.py` | Reject uploader self-review before state-changing paths |
+| `backend/tests/test_import_review.py` | Six service/HTTP regressions, including stale references and privileged uploaders |
+| `frontend/scripts/verify-durable-review-browser.mjs` | Browser request verifies 403/code and unchanged revision/decision metadata before independent review/approval |
+| `docs/PHASE_9_P9_1_REPORT.md` | This current verification record |
+
+Service regressions commit after catching the denial and reopen the session to
+prove no changed state/version or decision can persist, even without caller rollback.
+They then complete independent review and approval. HTTP regressions cover both
+Operations and Super Admin uploaders with current and stale references; they verify
+unchanged state/version, no decision or successful-review audit, and exactly one
+denial audit containing only actor, source UUID and `SEPARATION_REQUIRED` reason.
+The submitted private review reason is absent from that audit. Existing approver
+separation and complete independent HTTP workflow tests remain in the focused suite.
+
+### Fresh execution evidence
+
+All evidence for this follow-up is under ignored `artifacts/p9-1-separation/`.
+The test runner checks that its grouped backend plan covers every `test_*.py` module.
+All test migrations and fixture data target generated synthetic databases on a new,
+isolated PostgreSQL instance. No company migrations or writes are authorized.
+
+| Fresh check | Actual result |
+| --- | --- |
+| Focused P9-1 service/HTTP suite | **35 passed**, 111.54 s pytest time (114.11 s runner wall time) |
+| Negative control: remove only the guard in process memory | All **6 new cases failed as expected**, 29 deselected; no source file modified |
+| Full backend regression | **410 passed** across every module: 144 + 152 + 114 |
+| Backend group 1: sales/routing/packing/master/dashboard/archive/health/CLI | **144 passed**, 416.54 s pytest time |
+| Backend group 2: purchasing/inventory/inventory review/security/onboarding | **152 passed**, 506.72 s pytest time |
+| Backend group 3: reporting/review concurrency/dashboard consistency/P9-1 | **114 passed**, 502.74 s pytest time |
+| TypeScript | PASS, 11.78 s |
+| ESLint | PASS, 14.25 s |
+| Compatibility | **3/3 passed** |
+| Exact quantities | **14/14 passed** |
+| Dashboard/logout lifecycle | **9/9 passed** |
+| Updated P9-1 Chromium workflow | **18/18 passed**, 97.30 s runner wall time |
+| Unchanged complete Phase 8A Chromium scenario | **44/44 passed**, 54.24 s runner wall time |
+| Retained synthetic source-byte integrity | **1/1 manifest SHA-256 matched** stored bytes |
+| Source hashes and secret/privacy audits | PASS: 291 files checked; 287 prior hashes unchanged; exactly the four listed paths differ; redacted tree/history scans and exact private-secret checks pass |
+
+The durable browser flow confirms denied uploader self-review, unchanged revision
+state/version/decisions, independent Uploader → Reviewer → Approver completion,
+approved metadata without execution, responsive layouts, protected navigation and
+logout without console/React/hydration errors. Before/after database fingerprints
+change only the four review tables and normal authentication/audit/rate-limit metadata.
+The Phase 8A scenario creates its normal synthetic customer/users/role fixtures in
+that isolated database; it separately verifies preview leaves customer/stock data
+unchanged. No company data is involved. No test timeout or assertion was relaxed.
+The 35 focused cases are included in the full 410-case suite; they are not added
+again to that total. Production image builds, standalone migration rehearsal and
+restart-durability checks from the initial implementation were not rerun for this
+two-line service guard. The fresh suite migrates only generated test databases.
+
+### Fresh preservation evidence and boundaries
+
+All **70 company table fingerprints** match both the pre-test baseline and retained
+publication fingerprints. Company migration remains **`0009_packing_bom`**. The
+company fingerprint helper uses PostgreSQL `default_transaction_read_only=on`.
+All **56 pre-existing containers** retain identity, configuration, mounts, networks
+and start/stop state; **19 volumes** retain full metadata; all **64 existing image
+IDs** remain. Original private configuration, readiness evidence and empty private
+image storage are unchanged. The company PostgreSQL is healthy; the company backend
+and frontend were already stopped at preflight and remain stopped. No company
+container was started, stopped, restarted or recreated. Earlier historical claims
+of three healthy company services do not describe this follow-up's preflight state.
+The original workspace remains on `feature/post-integration-hardening` at
+`d0e2e64cc9523a2277673b3f73879d85ceb30c2b`, with only its previously untracked
+readiness plan and no source changes. Recovery checks freshly rehash 69 checkpoint,
+6 partial-recovery and 17 non-VHDX cold-backup artifacts. The cold VHDX size/mtime
+and prior full hash evidence match; it was not fully rehashed, and no new backup or
+restore was performed. These copies still share one physical disk.
+
+Fresh browser/check services use a separate network and generated database, with
+the existing dependency volume mounted read-only. Frontend checks run in a private
+copy so generated files cannot change tracked frontend sources. No company Compose,
+environment, dependency, lockfile or migration file changes. The new synthetic
+frontend/backend runners are stopped after verification; their private evidence and
+the isolated synthetic PostgreSQL remain retained. No original resource is removed.
+No real import or execution endpoint, deployment, merge, company frontend activation, Docker cleanup, Odoo
+integration or Supabase dependency is introduced. PRs #2–#6 are untouched; PR #7
+remains OPEN and DRAFT at the starting HEAD, freshly rechecked through GitHub.
+No commit or push is authorized or performed. Staging is empty. The source/history
+privacy audits include all 961 stored Git objects for exact private-secret checks,
+redacted Gitleaks tree and complete reachable-history scans, and forbidden-path
+checks. Raw logs, snapshots, synthetic secrets and scan exports remain ignored.
+
+**Readiness verdict: PASS for closure of the local independent-reviewer separation
+gap; CONDITIONAL GO for independent P9-1 review only.** All requested fresh test
+groups passed. This remains **NO-GO for company schema application, real imports,
+deployment or P9-2** without separate authorization. The local fix has not been
+committed, pushed or applied to PR #7's remote source.
+The picomatch exception and historical protected-navigation findings remain **OPEN**.
+P9-2 has not started. No company schema application, real import, deployment or
+P9-2 authorization is inferred from this targeted local fix.

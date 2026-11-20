@@ -108,6 +108,63 @@ def test_separation(enabled, actors, security_db, actor):
         decide(maker, actors, source_id, 'APPROVED', actor)
 
 
+@pytest.mark.parametrize('stale_references', [False, True])
+def test_uploader_cannot_review_own_source(enabled, actors, security_db, stale_references):
+    maker, _ = security_db
+    source_id, revision_id = seeded(maker, actors)
+    validated(maker, actors, source_id)
+    with maker() as db:
+        revision = db.get(ReviewRevision, revision_id)
+        before = (revision.state, revision.version)
+        refs = 'stale' if stale_references else review.reference_version(db, 'customers')
+        with pytest.raises(SecurityError) as failure:
+            review.decision(db, ctx(db, actors['uploader']), source_id,
+                            Action(expected_version=revision.version, reason='Private self-review reason'),
+                            'REVIEWED', refs)
+        assert (failure.value.status, failure.value.code) == (403, 'SEPARATION_REQUIRED')
+        # Even a caller committing after the exception cannot persist review mutations.
+        db.commit()
+    with maker() as db:
+        revision = db.get(ReviewRevision, revision_id)
+        assert (revision.state, revision.version) == before
+        assert not list(db.scalars(select(ReviewDecision).where(ReviewDecision.revision_id == revision_id)))
+    assert decide(maker, actors, source_id, 'REVIEWED', 'reviewer') == 'READY_FOR_APPROVAL'
+    assert decide(maker, actors, source_id, 'APPROVED', 'approver') == 'APPROVED'
+
+
+@pytest.mark.parametrize('uploader', ['uploader', 'reviewer'])
+@pytest.mark.parametrize('stale_references', [False, True])
+def test_api_self_review_denied_without_mutation(enabled, actors, accounts, browser, security_db, uploader, stale_references):
+    maker, _ = security_db
+    source_actors = {**actors, 'uploader': actors[uploader]}
+    source_id, revision_id = seeded(maker, source_actors)
+    validated(maker, source_actors, source_id)
+    if stale_references:
+        with maker() as db:
+            db.add(Customer(name='Synthetic changed reference', normalized_name='synthetic changed reference',
+                            code='QA-SELF-REVIEW', created_by=actors['reviewer']))
+            db.commit()
+    with maker() as db:
+        revision = db.get(ReviewRevision, revision_id)
+        before = (revision.state, revision.version)
+    username = 'test.operations' if uploader == 'uploader' else 'test.admin'
+    assert login(browser, accounts, username).status_code == 200
+    response = browser.post(f'/api/onboarding/review/sources/{source_id}/review',
+                            json={'expected_version': before[1], 'reason': 'Private self-review reason'},
+                            headers=csrf(browser))
+    assert response.status_code == 403, response.text
+    assert response.json()['error']['code'] == 'SEPARATION_REQUIRED'
+    with maker() as db:
+        revision = db.get(ReviewRevision, revision_id)
+        assert (revision.state, revision.version) == before
+        assert not list(db.scalars(select(ReviewDecision).where(ReviewDecision.revision_id == revision_id)))
+        denials = list(db.scalars(select(AuditEvent).where(AuditEvent.action == 'import_review.decision_denied')))
+        assert len(denials) == 1
+        assert denials[0].actor_id == source_actors['uploader']
+        assert denials[0].details == {'reason': 'SEPARATION_REQUIRED', 'id': str(source_id)}
+        assert not list(db.scalars(select(AuditEvent).where(AuditEvent.action == 'import_review.reviewed')))
+
+
 def test_mapping_revision_invalidates_approval(enabled, actors, security_db):
     maker, _ = security_db; source_id, old_id = seeded(maker, actors); validated(maker, actors, source_id)
     decide(maker, actors, source_id, 'REVIEWED', 'reviewer'); decide(maker, actors, source_id, 'APPROVED', 'approver')

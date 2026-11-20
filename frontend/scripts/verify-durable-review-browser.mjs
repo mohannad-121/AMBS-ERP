@@ -42,6 +42,20 @@ try {
   await page.getByRole('button', { name: 'Save validation run' }).click();
   await page.getByText('VALIDATED', { exact: true }).last().waitFor();
   check(true, 'Selected rows and exact validation run persist');
+  stage = 'uploader self-review denial';
+  const sources = await (await context.request.get(base + '/api/onboarding/review/sources')).json();
+  const sourceId = sources.sources.find(source => source.namespace === namespace).id;
+  const detailUrl = base + '/api/onboarding/review/sources/' + sourceId;
+  const beforeDenial = await (await context.request.get(detailUrl)).json();
+  const csrf = await (await context.request.get(base + '/api/auth/csrf')).json();
+  const denial = await context.request.post(detailUrl + '/review', {
+    headers: { Origin: base, 'X-CSRF-Token': csrf.csrf_token },
+    data: { expected_version: beforeDenial.revision.version, reason: 'Synthetic forbidden self-review' },
+  });
+  check(denial.status() === 403 && (await denial.json()).error.code === 'SEPARATION_REQUIRED', 'Uploader self-review returns 403 SEPARATION_REQUIRED');
+  const afterDenial = await (await context.request.get(detailUrl)).json();
+  check(JSON.stringify(afterDenial.revision) === JSON.stringify(beforeDenial.revision)
+    && JSON.stringify(afterDenial.decisions) === JSON.stringify(beforeDenial.decisions), 'Denied self-review preserves revision state, version and decisions');
   await page.reload(); await openSaved();
   check(await page.getByLabel('Excel or CSV source').inputValue() === '', 'Refresh clears ephemeral upload while saved review persists');
   await page.getByText(/Valid selection ·/).click();
