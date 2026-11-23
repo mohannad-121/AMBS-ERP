@@ -2781,11 +2781,16 @@ const CLOUD = {
     this.role = remote.role;
     if (!remote.snapshot) {
       const data=emptyStateData();
-      addWorkbookNets(data);
-      data.workbookNetsAdded=true;
+      addWorkbookParts(data);
       const snapshot={state:data,legacy:Object.fromEntries(LEGACY.map(name=>[name,[]]))};
       try { await this.api('PUT',{revision:remote.revision,snapshot}); }
       catch(e) { if(e.status!==409)throw e; }
+    }else if(remote.role==='admin'){
+      const snapshot=structuredClone(remote.snapshot);
+      if(addWorkbookParts(snapshot.state)){
+        try{await this.api('PUT',{revision:remote.revision,snapshot});}
+        catch(e){if(e.status!==409)throw e;}
+      }
     }
     await refreshCloudWorkspace();
   },
@@ -2982,7 +2987,7 @@ const actionGroup=(...actions)=>`<div class="erp-actions">${actions.join('')}</d
 const link=(r,text=TITLES[r])=>button(text,`App.go(${escapeArg(r)})`,'btn-sm');
 const head=(group,title,...actions)=>`<div class="view-head"><div><div class="eyebrow">${esc(group)}</div><h1 class="h1">${esc(title)}</h1></div><div class="head-actions">${actions.join('')}</div></div>`;
 const note=(text,kind='info')=>`<div class="note ${kind}" style="margin-bottom:12px">${esc(text)}</div>`;
-const table=(columns,rows,empty='No records yet.')=>`<div class="tbl-wrap"><table class="tbl"><thead><tr>${columns.map(c=>`<th>${esc(c)}</th>`).join('')}</tr></thead><tbody>${rows.length?rows.map(r=>`<tr>${r.map(c=>`<td>${c??''}</td>`).join('')}</tr>`).join(''):`<tr><td colspan="${columns.length}">${esc(empty)}</td></tr>`}</tbody></table></div>`;
+const table=(columns,rows,empty='No records yet.',searchTerms=[])=>`<div class="tbl-wrap"><table class="tbl"><thead><tr>${columns.map(c=>`<th>${esc(c)}</th>`).join('')}</tr></thead><tbody>${rows.length?rows.map((r,i)=>`<tr${searchTerms[i]?` data-search="${esc(searchTerms[i])}"`:''}>${r.map(c=>`<td>${c??''}</td>`).join('')}</tr>`).join(''):`<tr><td colspan="${columns.length}">${esc(empty)}</td></tr>`}</tbody></table></div>`;
 const textTable=(columns,rows,empty)=>table(columns,rows.map(r=>r.map(esc)),empty);
 const panel=(name,html)=>`<section class="card erp-table"><div class="card-head"><div class="card-title">${esc(name)}</div></div>${html}</section>`;
 const chip=s=>statusChip(['Active','Approved','Complete','Completed','Delivered','Received','Closed'].includes(s)?'ok':
@@ -3242,8 +3247,31 @@ function packingValues(template,overrides=[]){
   }
   return rows.map((part,i)=>overrides[i]??packingRate(part,cells));
 }
+function applyPackingTemplate(form,rows,category,useEnteredNets=false){
+  const template=packingCategory(category);
+  if(!template)return;
+  const templateRows=packingRows(template);
+  const indexes=new Map(rows.map((part,i)=>[packingPartKey(part),i]));
+  const overrides=[];
+  if(useEnteredNets){
+    templateRows.forEach((part,i)=>{
+      if(part.formula||!/^C[67]$/.test(part.cell))return;
+      const index=indexes.get(packingPartKey(part));
+      if(index!=null)overrides[i]=Number(valOf(form,packingInput(index)));
+    });
+  }
+  const values=packingValues(template,overrides);
+  if(!useEnteredNets)rows.forEach((_,i)=>{form.elements.namedItem(packingInput(i)).value=0;});
+  templateRows.forEach((part,i)=>{
+    if(useEnteredNets&&!part.formula)return;
+    const index=indexes.get(packingPartKey(part));
+    need(index!=null,'Missing packing part '+part.name);
+    form.elements.namedItem(packingInput(index)).value=values[i];
+  });
+  form.elements.namedItem('orderQty').dispatchEvent(new Event('input',{bubbles:true}));
+}
 function packingParts(rows,quantities,editable=false,order=1){
-  return panel('Product parts',(editable?note('Enter the quantity per product for each part you need. Leave unused parts at 0.'):'')+
+  return panel('Product parts',(editable?note('Choose a packing formula template to calculate the workbook quantities. Changing its net quantities recalculates the other parts. For manual quantities, leave the template unselected. Unused parts should be 0.'):'')+
     table(['Picture','Part description','Unit','Quantity per product','Order total'],rows.flatMap((part,i)=>{
       const count=quantities[i];
       if(!editable&&!count)return [];
@@ -3263,7 +3291,8 @@ function packingCost(part,total){
   return packingFormula(part.costFormula,{['G'+part.requiredRow]:part.price,['F'+part.requiredRow]:total});
 }
 function packingPartName(name){
-  return String(name||'').toUpperCase().replace(/×/g,'X').replace(/ATTACHEMENT/g,'ATTACHMENT').replace(/[^A-Z0-9.]/g,'');
+  return String(name||'').toUpperCase().replace(/×/g,'X').replace(/ATTACHEMENT/g,'ATTACHMENT')
+    .replace(/\bROP\b/g,'ROPE').replace(/DIAMTER/g,'DIAMETER').replace(/[^A-Z0-9.]/g,'');
 }
 const WORKBOOK_NETS=(()=>{
   const nets=new Map();
@@ -3284,29 +3313,44 @@ const WORKBOOK_NETS=(()=>{
       size:match[1]+' × '+match[2]+' m',color,image:PACKING_IMAGES[part.image]||''};
   });
 })();
-function matchesWorkbookNet(row,net){
-  return row.unit===net.unit&&packingPartName(row.name)===packingPartName(net.name);
+function matchesWorkbookPart(row,part){
+  return row.unit===packingUnit(part)&&packingPartName(row.packingName||row.name)===packingPartName(part.name);
 }
-function addWorkbookNets(s){
-  for(const net of WORKBOOK_NETS){
-    if(item(s,net.id)||[...s.parts,...s.variants].some(row=>matchesWorkbookNet(row,net)))continue;
-    let code=net.code, suffix=2;
+function workbookPartRecord(part,index){
+  const net=WORKBOOK_NETS.find(row=>matchesWorkbookPart(row,part));
+  return net||{id:'workbook-part-'+packingPartName(part.name).toLowerCase(),
+    code:'PK-'+String(index+1).padStart(3,'0'),name:part.name,category:'Packing list',
+    unit:packingUnit(part),source:'Stocked',active:true,image:PACKING_IMAGES[part.image]||''};
+}
+function addWorkbookParts(s){
+  let added=0;
+  for(const [index,part] of WORKBOOK_PARTS.entries()){
+    const record=workbookPartRecord(part,index);
+    if(item(s,record.id)||[...s.parts,...s.variants].some(row=>matchesWorkbookPart(row,part)))continue;
+    let code=record.code, suffix=2;
     while(['parts','materials','products','variants'].some(group=>s[group].some(row=>row.code.toLowerCase()===code.toLowerCase()))){
-      code=net.code+'-'+suffix++;
+      code=record.code+'-'+suffix++;
     }
-    s.parts.push({...net,code});
+    s.parts.push({...record,code});
+    added++;
   }
+  return added;
 }
-function isDefaultWorkbookNet(row){
-  return WORKBOOK_NETS.some(net=>net.id===row.id&&sameCloudRecord(net,row));
+function isDefaultWorkbookPart(row){
+  return WORKBOOK_PARTS.some((part,index)=>{
+    const base=workbookPartRecord(part,index);
+    return base.id===row.id&&
+      (row.code===base.code||new RegExp('^'+base.code+'-\\d+$').test(row.code))&&
+      sameCloudRecord({...base,code:row.code},row);
+  });
 }
-function prepareNetBackupMerge(s,incoming){
-  // Imported net records take the place of untouched defaults on a fresh installation.
+function prepareWorkbookPartBackupMerge(s,incoming){
+  // Imported records take the place of untouched workbook defaults.
   const references=JSON.stringify({...s,parts:[]});
   s.parts=s.parts.filter(row=>{
-    const net=WORKBOOK_NETS.find(n=>n.id===row.id);
-    if(!net||!isDefaultWorkbookNet(row)||references.includes(JSON.stringify(row.id)))return true;
-    return ![...incoming.parts,...incoming.variants].some(other=>other.id===row.id||matchesWorkbookNet(other,net));
+    if(!isDefaultWorkbookPart(row)||references.includes(JSON.stringify(row.id)))return true;
+    const part=WORKBOOK_PARTS.find(part=>workbookPartRecord(part,WORKBOOK_PARTS.indexOf(part)).id===row.id);
+    return ![...incoming.parts,...incoming.variants].some(other=>other.id===row.id||matchesWorkbookPart(other,part));
   });
 }
 function packingStockPart(s,line){
@@ -3382,6 +3426,12 @@ function productPacking(s,product,recipe){
 function wireProductPacking(form,rows){
   form.addEventListener('input',e=>{
     if(e.target.name!=='orderQty'&&!(/^packingQty\d+$/.test(e.target.name||'')))return;
+    const category=valOf(form,'category'), template=packingCategory(category);
+    if(template&&e.target.name?.startsWith('packingQty')){
+      const changed=rows[Number(e.target.name.slice('packingQty'.length))];
+      if(changed&&packingRows(template).some(part=>!part.formula&&/^C[67]$/.test(part.cell)&&
+        packingPartKey(part)===packingPartKey(changed)))applyPackingTemplate(form,rows,category,true);
+    }
     const order=Number(valOf(form,'orderQty'));
     rows.forEach((part,i)=>{
       const total=$(`[data-packing-total="${i}"]`,form);
@@ -3400,7 +3450,9 @@ function masterEdit(type,id){
   const core=input('Code','code',row.code,{required:true})+input('Name','name',row.name,{required:true})+
     (company?input('Contact','contact',row.contact)+input('Email','email',row.email,{type:'email'})+
       input('Phone','phone',row.phone)+input(type==='processors'?'Services (comma separated)':'Business / Supply details','details',row.details):
-      (product?'':input('Category','category',row.category,{extra:'list="erp-categories"'}))+
+      (product?select('Packing formula template','category',same(Object.keys(PACKING_CATEGORIES)),
+        packingCategory(row.category)?row.category:'',false,'Manual quantities'):
+        input('Category','category',row.category,{extra:'list="erp-categories"'}))+
       select('Stock unit','unit',same(UNITS),UNITS.includes(row.unit)?row.unit:'PCS')+
       (product?number('Default order quantity','orderQty',row.orderQty??1,1,1):
         input('Dimensions / specifications','dimensions',row.dimensions,{full:true}))+
@@ -3420,8 +3472,9 @@ function masterEdit(type,id){
     if(company){
       for(const name of ['contact','email','phone','details'])data[name]=valOf(f,name);
     }else{
-      for(const name of (product?['unit']:['category','unit','dimensions','source','profileKey']))data[name]=valOf(f,name);
+      for(const name of (product?['category','unit']:['category','unit','dimensions','source','profileKey']))data[name]=valOf(f,name);
       if(product){
+        if(!data.category&&!packingCategory(row.category))data.category=row.category||'';
         data.orderQty=whole(valOf(f,'orderQty')||1,'Default order quantity');
         packingQuantities=packing.rows.map((part,i)=>componentQty(
           valOf(f,packingInput(i)),packingUnit(part),part.name,true));
@@ -3485,7 +3538,12 @@ function masterEdit(type,id){
       }
     });
   });
-  if(product)wireProductPacking(form,packing.rows);
+  if(product){
+    wireProductPacking(form,packing.rows);
+    form.elements.namedItem('category').addEventListener('change',e=>{
+      if(e.target.value)applyPackingTemplate(form,packing.rows,e.target.value);
+    });
+  }
   const lines=company?repeat(form,'[data-locations]',(l,n)=>locationFields(l,n,true),companyLocations(state,type,id),'Add Location'):null;
 }
 function masterArchive(type,id){
@@ -3512,13 +3570,37 @@ function masterView(type,id){
     (packing?packingParts(packing.rows,packing.quantities,false,r.orderQty??1):''));
 
 }
-function searchableTable(columns,rows,empty){
+function searchableTable(columns,rows,empty,searchTerms=[]){
   return `<div class="card erp-table"><div class="toolbar"><div class="search">${ic('search')}<input aria-label="Search records" class="inp"
-    placeholder="Search records…" oninput="filterTable(this)"></div><span class="pill-legend">${rows.length} records</span></div>${table(columns,rows,empty)}</div>`;
+    placeholder="Search by name, code or size…" oninput="filterTable(this)"></div><span class="pill-legend">${rows.length} records</span></div>${table(columns,rows,empty,searchTerms)}</div>`;
+}
+function searchKey(value){
+  return String(value||'').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/attachement/g,'attachment').replace(/diamter/g,'diameter').replace(/\brop\b/g,'rope')
+    .replace(/([a-z])(\d)/g,'$1 $2').replace(/(\d)([a-z])/g,'$1 $2')
+    .replace(/[^a-z0-9]+/g,' ').trim();
+}
+function searchDistance(a,b){
+  if(Math.abs(a.length-b.length)>2)return 3;
+  let previous=Array.from({length:b.length+1},(_,i)=>i);
+  for(let i=1;i<=a.length;i++){
+    const current=[i];
+    for(let j=1;j<=b.length;j++)current[j]=Math.min(current[j-1]+1,previous[j]+1,
+      previous[j-1]+(a[i-1]===b[j-1]?0:1));
+    previous=current;
+  }
+  return previous[b.length];
 }
 function filterTable(el){
-  const query=el.value.toLowerCase().trim();
-  el.closest('.card').querySelectorAll('tbody tr').forEach(tr=>{tr.hidden=!tr.textContent.toLowerCase().includes(query);});
+  const query=searchKey(el.value).split(' ').filter(Boolean), card=el.closest('.card');
+  let matches=0;
+  card.querySelectorAll('tbody tr').forEach(tr=>{
+    const text=searchKey(tr.dataset.search||tr.textContent), words=text.split(' ');
+    tr.hidden=!query.every(token=>text.includes(token)||words.some(word=>word.startsWith(token)||
+      (token.length>=4&&searchDistance(token,word)<=(token.length>=8?2:1))));
+    if(!tr.hidden)matches++;
+  });
+  card.querySelector('.pill-legend').textContent=query.length?`${matches} matches`:`${matches} records`;
 }
 function masterPage(type){
   const company=COMPANIES.includes(type), title=ENTITY[type], rows=state[type], isParts=type==='parts';
@@ -3537,7 +3619,8 @@ function masterPage(type){
             type==='parts'?small('Variants',`variantsView(${escapeArg(r.id)})`):'',
             ['parts','products'].includes(type)?small('BOM',`recipeEdit(${escapeArg(type)},${escapeArg(r.id)})`):'',
             small(r.active===false?'Restore':'Archive',`masterArchive(${args})`))];
-      }),'Add your first '+title.toLowerCase()+'.');
+      }),'Add your first '+title.toLowerCase()+'.',
+      isParts?rows.map(r=>[r.code,r.name,r.packingName,r.category,r.unit,r.size,r.color,r.dimensions].filter(Boolean).join(' ')):[]);
 }
 function variantsView(id){
   const rows=state.variants.filter(v=>v.partId===id);
@@ -4509,10 +4592,10 @@ async function previewBackup(input){
         const names=[...LEGACY,'erpV3'];
         const saved=await transaction(names,'readwrite',(t,done,abort)=>reads(t,names,stored=>{
           const next=stored.erpV3[0].data;
-          const empty=LIVE.every(n=>n==='parts'?next.parts.every(isDefaultWorkbookNet):!next[n].length);
+          const empty=LIVE.every(n=>n==='parts'?next.parts.every(isDefaultWorkbookPart):!next[n].length);
           const old=Object.fromEntries(LEGACY.map(n=>[n,mergeRows(stored[n],rows[n],n)]));
           if(data){
-            prepareNetBackupMerge(next,data);
+            prepareWorkbookPartBackupMerge(next,data);
             for(const n of LIVE)next[n]=mergeRows(next[n],data[n],n);
             if(empty)next.settings={...DEFAULTS,...data.settings};
           }else{
@@ -4520,7 +4603,7 @@ async function previewBackup(input){
             migrated(next,{...novel,bom:old.bom,movements:old.movements});
             if(empty)next.settings={...DEFAULTS,...old.meta.find(x=>x.id==='settings')?.data};
           }
-          addWorkbookNets(next);
+          addWorkbookParts(next);
           validateState(next);
           for(const n of LEGACY)for(const r of rows[n])if(!stored[n].some(x=>x.id===r.id))t.objectStore(n).put(r);
           t.objectStore('erpV3').put({id:'state',data:next});
