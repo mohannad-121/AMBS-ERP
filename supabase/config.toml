@@ -4,3 +4,7 @@ project_id = "ambs-erp"
 # This function verifies the Supabase user token itself.
 verify_jwt = false
 entrypoint = "./functions/ambs-erp/index.js"
+
+[auth.email.template.confirmation]
+subject = "Your AMBS confirmation code"
+content_path = "./supabase/templates/confirmation.html"

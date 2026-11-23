@@ -2813,21 +2813,16 @@ const CLOUD = {
         ${input('Password','password','',{type:'password',required:true,extra:'autocomplete="current-password"'})}
         <p id="ambs-login-status" role="status">${esc(message)}</p>
         <button type="submit" class="btn btn-primary">Sign in</button>
-        <button type="submit" class="btn" name="setup">Set up account</button>
+        <button type="button" class="btn" id="ambs-create-account">Create account</button>
       </form></section>`;
     const form=$('#ambs-login'), status=$('#ambs-login-status');
+    $('#ambs-create-account').addEventListener('click',()=>this.showSignup());
     form.addEventListener('submit',async e=>{
       e.preventDefault();
       const email=valOf(form,'email'),password=form.elements.password.value;
       const controls=[...form.querySelectorAll('button')];
       controls.forEach(button=>{button.disabled=true;});
       try {
-        if(e.submitter?.name==='setup'){
-          const result=await this.request('/setup',{method:'POST',body:JSON.stringify({email,password})},true);
-          status.textContent=result.message;
-          form.elements.password.value='';
-          return;
-        }
         const data=await this.request('/token?grant_type=password',{method:'POST',body:JSON.stringify({email,password})});
         this.saveSession(data);
         await this.connect();
@@ -2837,6 +2832,62 @@ const CLOUD = {
         sessionStorage.removeItem(this.sessionKey);
         status.textContent=error.message;
       }finally{controls.forEach(button=>{button.disabled=false;});}
+    });
+  },
+  showSignup(message = '') {
+    $('#app').classList.add('cloud-login-mode');
+    $('#view').innerHTML=`<section class="card card-pad startup-card">
+      <div class="eyebrow">AM Building Solutions</div><h1 class="h1">Create your AMBS account</h1>
+      <ol><li>Enter your authorized email and a password.</li>
+        <li>Open Gmail and find the AMBS confirmation code.</li>
+        <li>Enter the code here to confirm your email and sign in.</li></ol>
+      <p>Already confirmed your account? Use Sign in instead.</p>
+      <form id="ambs-signup">
+        ${input('Email','email','',{type:'email',required:true,extra:'autocomplete="email"'})}
+        ${input('Password','password','',{type:'password',required:true,extra:'minlength="12" maxlength="72" autocomplete="new-password"'})}
+        <p id="ambs-signup-status" role="status">${esc(message)}</p>
+        <button type="submit" class="btn btn-primary">Email me a code</button>
+        <button type="button" class="btn" id="ambs-back-to-login">Back to sign in</button>
+      </form></section>`;
+    const form=$('#ambs-signup'), status=$('#ambs-signup-status');
+    $('#ambs-back-to-login').addEventListener('click',()=>this.showLogin());
+    form.addEventListener('submit',async e=>{
+      e.preventDefault();
+      const email=valOf(form,'email').toLowerCase(), password=form.elements.password.value;
+      const controls=[...form.querySelectorAll('button')];
+      controls.forEach(button=>{button.disabled=true;});
+      try {
+        const result=await this.request('/setup',{method:'POST',body:JSON.stringify({email,password})},true);
+        this.showConfirmation(email,result.message);
+      }catch(error){status.textContent=error.message;}
+      finally{controls.forEach(button=>{button.disabled=false;});}
+    });
+  },
+  showConfirmation(email,message='Check your Gmail inbox for your confirmation code.') {
+    $('#view').innerHTML=`<section class="card card-pad startup-card">
+      <div class="eyebrow">AM Building Solutions</div><h1 class="h1">Confirm your email</h1>
+      <p>We sent a confirmation code to <strong>${esc(email)}</strong>. Check Gmail, including Spam, then enter the code below.</p>
+      <form id="ambs-confirmation">
+        ${input('Confirmation code','code','',{required:true,extra:'inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6,8}" minlength="6" maxlength="8"'})}
+        <p id="ambs-confirmation-status" role="status">${esc(message)}</p>
+        <button type="submit" class="btn btn-primary">Confirm and sign in</button>
+        <button type="button" class="btn" id="ambs-start-again">Start again</button>
+      </form></section>`;
+    const form=$('#ambs-confirmation'), status=$('#ambs-confirmation-status');
+    $('#ambs-start-again').addEventListener('click',()=>this.showSignup());
+    form.addEventListener('submit',async e=>{
+      e.preventDefault();
+      const token=valOf(form,'code').replace(/\s/g,'');
+      const controls=[...form.querySelectorAll('button')];
+      controls.forEach(button=>{button.disabled=true;});
+      try{
+        const data=await this.request('/verify',{method:'POST',body:JSON.stringify({email,token,type:'email'})});
+        if(!data.access_token){this.showLogin('Email confirmed. Sign in with your password.');return;}
+        this.saveSession(data);
+        await this.connect();
+        renderConnectedApp();
+      }catch(error){status.textContent=error.message;}
+      finally{controls.forEach(button=>{button.disabled=false;});}
     });
   },
   async start() {

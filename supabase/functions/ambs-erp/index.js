@@ -65,7 +65,7 @@ async function setup(request) {
     const error = await provider.json().catch(() => ({}));
     return answer({ message: String(error.msg || error.message || 'Account setup could not be completed.') }, provider.status);
   }
-  return answer({ message: 'Check your email to confirm your account, then return here and sign in.' });
+  return answer({ message: 'Check your email for the AMBS confirmation code and enter it in the app.' });
 }
 
 Deno.serve(async request => {
