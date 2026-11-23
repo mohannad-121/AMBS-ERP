@@ -2686,12 +2686,13 @@ const Nest={ _docId:'', _sets:1, _kerf:5, _minOff:500, _stock:{}, _res:null, _ra
 };
 
 
-// Localhost is an isolated test workspace. Hosted deployments still require Supabase Auth.
+// Open access workspace. Records remain in this browser; the cloud database stays private.
 const DEMO_STORE = {
   db: null,
   async open() {
     this.db ||= new Promise((resolve, reject) => {
-      const request = indexedDB.open('ambs-erp-local-demo', 1);
+      const request = indexedDB.open(['localhost','127.0.0.1'].includes(location.hostname)
+        ? 'ambs-erp-local-demo' : 'ambs-erp-browser-workspace', 1);
       request.onupgradeneeded = () => request.result.createObjectStore('workspace');
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error);
@@ -2733,7 +2734,7 @@ const DEMO_STORE = {
 };
 
 const CLOUD = {
-  demo: ['localhost', '127.0.0.1'].includes(location.hostname),
+  demo: true,
   session: null,
   role: null,
   email: null,
@@ -2761,7 +2762,7 @@ const CLOUD = {
   },
   async api(method = 'GET', data) {
     if (this.demo) {
-      if (method === 'GET') return { ...await DEMO_STORE.read(), role: 'admin', identity: 'Local demo' };
+      if (method === 'GET') return { ...await DEMO_STORE.read(), role: 'admin', identity: 'This browser' };
       if (method === 'PUT') return DEMO_STORE.write(data.revision, data.snapshot);
       throw Error('Unsupported local demo operation.');
     }
@@ -2972,7 +2973,7 @@ const CLOUD = {
         await this.connect();
         renderConnectedApp();
       } catch (error) {
-        $('#view').innerHTML = `<section class="card card-pad startup-card"><h1 class="h1">Local demo unavailable</h1><p>${esc(error.message)}</p></section>`;
+        $('#view').innerHTML = `<section class="card card-pad startup-card"><h1 class="h1">Workspace unavailable</h1><p>${esc(error.message)}</p></section>`;
       }
       return;
     }
@@ -4770,7 +4771,7 @@ const App={
       <nav class="nav" aria-label="Main navigation">${GROUPS.map(([group,rows])=>`<div class="nav-group">${group}</div>`+
       rows.map(([r,i])=>`<a href="#/${r}" class="${selected===r?'active':''}" ${selected===r?'aria-current="page"':''}
         onclick="event.preventDefault();App.go('${r}')">${ic(i)}<span>${esc(TITLES[r])}</span></a>`).join('')).join('')}</nav>
-      <div class="side-foot"><b>${esc(SET.company)}</b><br>${CLOUD.demo?'Local demo workspace':'Cloud workspace'}</div>`;
+      <div class="side-foot"><b>${esc(SET.company)}</b><br>${CLOUD.demo?'Browser workspace':'Cloud workspace'}</div>`;
   },
   toggleNavigation(open){
     document.body.classList.toggle('nav-open',open);
@@ -4783,7 +4784,7 @@ const App={
       <div class="topbar-spacer"></div>
       <button class="btn btn-sm erp-shortcut" onclick="App.go('purchase-new')">${ic('cart')}Purchase</button>
       <button class="btn btn-sm" onclick="refreshCloudWorkspace(true)">Refresh</button>
-      ${CLOUD.demo?'<span class="chip info">Local demo · saved in this browser</span>':'<button class="btn btn-sm" onclick="CLOUD.signOut()">Sign out</button>'}
+      ${CLOUD.demo?'<span class="chip info">Saved in this browser</span>':'<button class="btn btn-sm" onclick="CLOUD.signOut()">Sign out</button>'}
       <div class="clock" id="clock"></div>
       <div class="user"><div class="avatar">${esc((CLOUD.email||'U').slice(0,1).toUpperCase())}</div>
         <b style="font-size:12px">${esc(CLOUD.email)}</b></div></div>`;
