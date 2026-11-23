@@ -2814,9 +2814,11 @@ const CLOUD = {
         <p id="ambs-login-status" role="status">${esc(message)}</p>
         <button type="submit" class="btn btn-primary">Sign in</button>
         <button type="button" class="btn" id="ambs-create-account">Create account</button>
+        <button type="button" class="btn" id="ambs-forgot-password">Forgot password?</button>
       </form></section>`;
     const form=$('#ambs-login'), status=$('#ambs-login-status');
     $('#ambs-create-account').addEventListener('click',()=>this.showSignup());
+    $('#ambs-forgot-password').addEventListener('click',()=>this.showPasswordRecovery());
     form.addEventListener('submit',async e=>{
       e.preventDefault();
       const email=valOf(form,'email'),password=form.elements.password.value;
@@ -2888,6 +2890,80 @@ const CLOUD = {
         renderConnectedApp();
       }catch(error){status.textContent=error.message;}
       finally{controls.forEach(button=>{button.disabled=false;});}
+    });
+  },
+  showPasswordRecovery(message = '') {
+    $('#app').classList.add('cloud-login-mode');
+    $('#view').innerHTML=`<section class="card card-pad startup-card">
+      <div class="eyebrow">AM Building Solutions</div><h1 class="h1">Reset your password</h1>
+      <p>Enter your AMBS email. We will send a reset code to that inbox.</p>
+      <form id="ambs-recovery-request">
+        ${input('Email','email','',{type:'email',required:true,extra:'autocomplete="email"'})}
+        <p id="ambs-recovery-status" role="status">${esc(message)}</p>
+        <button type="submit" class="btn btn-primary">Send reset code</button>
+        <button type="button" class="btn" id="ambs-recovery-back">Back to sign in</button>
+      </form></section>`;
+    const form=$('#ambs-recovery-request'), status=$('#ambs-recovery-status');
+    $('#ambs-recovery-back').addEventListener('click',()=>this.showLogin());
+    form.addEventListener('submit',async e=>{
+      e.preventDefault();
+      const email=valOf(form,'email').toLowerCase();
+      const controls=[...form.querySelectorAll('button')];
+      controls.forEach(button=>{button.disabled=true;});
+      try{
+        await this.request('/recover',{method:'POST',body:JSON.stringify({email})});
+        this.showRecoveryCode(email);
+      }catch(error){status.textContent=error.message;}
+      finally{controls.forEach(button=>{button.disabled=false;});}
+    });
+  },
+  showRecoveryCode(email) {
+    $('#view').innerHTML=`<section class="card card-pad startup-card">
+      <div class="eyebrow">AM Building Solutions</div><h1 class="h1">Enter your reset code</h1>
+      <p>If an account exists for <strong>${esc(email)}</strong>, check its inbox, including Spam, for the reset code.</p>
+      <form id="ambs-recovery-code">
+        ${input('Reset code','code','',{required:true,extra:'inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6,8}" minlength="6" maxlength="8"'})}
+        <p id="ambs-recovery-code-status" role="status"></p>
+        <button type="submit" class="btn btn-primary">Verify code</button>
+        <button type="button" class="btn" id="ambs-recovery-retry">Request another code</button>
+      </form></section>`;
+    const form=$('#ambs-recovery-code'), status=$('#ambs-recovery-code-status');
+    $('#ambs-recovery-retry').addEventListener('click',()=>this.showPasswordRecovery());
+    form.addEventListener('submit',async e=>{
+      e.preventDefault();
+      const token=valOf(form,'code').replace(/\s/g,'');
+      const controls=[...form.querySelectorAll('button')];
+      controls.forEach(button=>{button.disabled=true;});
+      try{
+        const session=await this.request('/verify',{method:'POST',body:JSON.stringify({email,token,type:'recovery'})});
+        if(!session.access_token)throw Error('Unable to verify the reset code. Request a new code.');
+        this.showNewPassword(session);
+      }catch(error){status.textContent=error.message;}
+      finally{controls.forEach(button=>{button.disabled=false;});}
+    });
+  },
+  showNewPassword(session) {
+    $('#view').innerHTML=`<section class="card card-pad startup-card">
+      <div class="eyebrow">AM Building Solutions</div><h1 class="h1">Choose a new password</h1>
+      <form id="ambs-new-password">
+        ${input('New password','password','',{type:'password',required:true,extra:'minlength="12" maxlength="72" autocomplete="new-password"'})}
+        <p id="ambs-new-password-status" role="status"></p>
+        <button type="submit" class="btn btn-primary">Save new password</button>
+      </form></section>`;
+    const form=$('#ambs-new-password'), status=$('#ambs-new-password-status');
+    form.addEventListener('submit',async e=>{
+      e.preventDefault();
+      const password=form.elements.password.value;
+      const button=form.querySelector('button');
+      button.disabled=true;
+      try{
+        await this.request('/user',{method:'PUT',headers:{Authorization:'Bearer '+session.access_token},
+          body:JSON.stringify({password})});
+        this.saveSession(session);
+        await this.connect();
+        renderConnectedApp();
+      }catch(error){status.textContent=error.message;}
+      finally{button.disabled=false;}
     });
   },
   async start() {

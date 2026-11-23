@@ -8,3 +8,7 @@ entrypoint = "./functions/ambs-erp/index.js"
 [auth.email.template.confirmation]
 subject = "Your AMBS confirmation code"
 content_path = "./supabase/templates/confirmation.html"
+
+[auth.email.template.recovery]
+subject = "Your AMBS password reset code"
+content_path = "./supabase/templates/recovery.html"
