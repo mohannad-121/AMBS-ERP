@@ -2686,7 +2686,54 @@ const Nest={ _docId:'', _sets:1, _kerf:5, _minOff:500, _stock:{}, _res:null, _ra
 };
 
 
+// Localhost is an isolated test workspace. Hosted deployments still require Supabase Auth.
+const DEMO_STORE = {
+  db: null,
+  async open() {
+    this.db ||= new Promise((resolve, reject) => {
+      const request = indexedDB.open('ambs-erp-local-demo', 1);
+      request.onupgradeneeded = () => request.result.createObjectStore('workspace');
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    return this.db;
+  },
+  async read() {
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+      const request = db.transaction('workspace', 'readonly').objectStore('workspace').get('current');
+      request.onsuccess = () => resolve(request.result || { revision: 0, snapshot: null });
+      request.onerror = () => reject(request.error);
+    });
+  },
+  async write(expected, snapshot) {
+    nativeBackup({ _app: 'AMBS_MRP', _version: 3, ...snapshot });
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('workspace', 'readwrite');
+      const store = tx.objectStore('workspace');
+      const request = store.get('current');
+      let revision;
+      request.onsuccess = () => {
+        const current = request.result || { revision: 0, snapshot: null };
+        if (current.revision !== expected) {
+          tx.abort();
+          const error = new Error('Another tab saved a change. Refresh before saving again.');
+          error.status = 409;
+          reject(error);
+          return;
+        }
+        revision = expected + 1;
+        store.put({ revision, snapshot }, 'current');
+      };
+      tx.oncomplete = () => resolve({ revision });
+      tx.onerror = () => reject(tx.error);
+    });
+  }
+};
+
 const CLOUD = {
+  demo: ['localhost', '127.0.0.1'].includes(location.hostname),
   session: null,
   role: null,
   email: null,
@@ -2713,6 +2760,11 @@ const CLOUD = {
     sessionStorage.setItem(this.sessionKey, JSON.stringify(this.session));
   },
   async api(method = 'GET', data) {
+    if (this.demo) {
+      if (method === 'GET') return { ...await DEMO_STORE.read(), role: 'admin', identity: 'Local demo' };
+      if (method === 'PUT') return DEMO_STORE.write(data.revision, data.snapshot);
+      throw Error('Unsupported local demo operation.');
+    }
     if (!this.session) throw Error('Sign in to AMBS.');
     if (this.session.expires_at <= Date.now()/1000+45) {
       this.refreshing ||= this.request('/token?grant_type=refresh_token',{
@@ -2783,6 +2835,15 @@ const CLOUD = {
     });
   },
   async start() {
+    if (this.demo) {
+      try {
+        await this.connect();
+        renderConnectedApp();
+      } catch (error) {
+        $('#view').innerHTML = `<section class="card card-pad startup-card"><h1 class="h1">Local demo unavailable</h1><p>${esc(error.message)}</p></section>`;
+      }
+      return;
+    }
     const configured = /^https:\/\/[^/]+\/?$/.test(CLOUD_CONFIG.url) &&
       /^(sb_publishable_|eyJ)/.test(CLOUD_CONFIG.key);
     if(!configured){
@@ -4499,7 +4560,7 @@ const App={
       <nav class="nav" aria-label="Main navigation">${GROUPS.map(([group,rows])=>`<div class="nav-group">${group}</div>`+
       rows.map(([r,i])=>`<a href="#/${r}" class="${selected===r?'active':''}" ${selected===r?'aria-current="page"':''}
         onclick="event.preventDefault();App.go('${r}')">${ic(i)}<span>${esc(TITLES[r])}</span></a>`).join('')).join('')}</nav>
-      <div class="side-foot"><b>${esc(SET.company)}</b><br>Cloud workspace</div>`;
+      <div class="side-foot"><b>${esc(SET.company)}</b><br>${CLOUD.demo?'Local demo workspace':'Cloud workspace'}</div>`;
   },
   toggleNavigation(open){
     document.body.classList.toggle('nav-open',open);
@@ -4512,7 +4573,7 @@ const App={
       <div class="topbar-spacer"></div>
       <button class="btn btn-sm erp-shortcut" onclick="App.go('purchase-new')">${ic('cart')}Purchase</button>
       <button class="btn btn-sm" onclick="refreshCloudWorkspace(true)">Refresh</button>
-      <button class="btn btn-sm" onclick="CLOUD.signOut()">Sign out</button>
+      ${CLOUD.demo?'<span class="chip info">Local demo · saved in this browser</span>':'<button class="btn btn-sm" onclick="CLOUD.signOut()">Sign out</button>'}
       <div class="clock" id="clock"></div>
       <div class="user"><div class="avatar">${esc((CLOUD.email||'U').slice(0,1).toUpperCase())}</div>
         <b style="font-size:12px">${esc(CLOUD.email)}</b></div></div>`;
