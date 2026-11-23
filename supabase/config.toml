@@ -1,0 +1,6 @@
+project_id = "ambs-erp"
+
+[functions.ambs-erp]
+# This function verifies the Supabase user token itself.
+verify_jwt = false
+entrypoint = "./functions/ambs-erp/index.js"
