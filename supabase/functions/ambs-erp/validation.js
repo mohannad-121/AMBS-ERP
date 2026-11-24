@@ -1,7 +1,8 @@
 
 /* AMBS workspace domain model. */
 const LEGACY=['meta','materials','products','bom','plans','purchaseRequests','receipts','movements','stockChecks','weighDocs'];
-const LIVE=['customers','suppliers','processors','locations','materials','parts','products','variants','recipes','plans','orders','purchases','jobs','events','reviews'];
+const LIVE=['customers','suppliers','processors','locations','materials','parts','products','variants','recipes','plans','orders','purchases','jobs','events','reviews','sales'];
+function ensureTables(s){if(s&&typeof s==='object')for(const name of LIVE)if(!Array.isArray(s[name]))s[name]=[];return s;}
 const UNITS=['PCS','TUBE','SHEET','SET','M','M²','M³','MM','KG','G','T','L','ROLL','BOX','PACK','PAIR','BUNDLE'];
 const validUnit=value=>typeof value==='string'&&/^[A-Z][A-Z0-9²³ _/-]{0,23}$/.test(value);
 
@@ -80,6 +81,7 @@ function validateState(s){
   need(s&&s.schema===3&&s.settings&&typeof s.settings.company==='string'&&typeof s.settings.currentUser==='string','Invalid version 3 state.');
   need(s.deletedWorkbookParts==null||(Array.isArray(s.deletedWorkbookParts)&&s.deletedWorkbookParts.every(id=>typeof id==='string'&&id.length<=200)),
     'Invalid deleted workbook parts.');
+  ensureTables(s);
   for(const name of LIVE)validRows(s[name],name);
   const ids=new Set();
   for(const t of [...COMPANIES,'materials','parts','products','variants']){
@@ -135,7 +137,12 @@ function validateState(s){
     typeof j.destinationSnapshot?.name==='string'&&(j.trackAtDestination==null||typeof j.trackAtDestination==='boolean')&&
     (!j.trackAtDestination||j.location!==j.destination)&&
     ['Open','Partially delivered','Delivered','Cancelled'].includes(j.status),'Invalid dispatch job.');
-  const sums=new Map(), delivered=new Map(), received=new Map();
+  for(const o of s.sales)need(typeof o.no==='string'&&get(s,'customers',o.customerId)&&linkedSite('customers',o.customerId,o.siteId)&&
+    Array.isArray(o.lines)&&o.lines.length&&new Set(o.lines.map(l=>l.sku)).size===o.lines.length&&
+    o.lines.every(l=>sku(l.sku)&&component(l.qty,sku(l.sku).unit)&&Number.isFinite(l.price)&&l.price>=0&&
+      Number.isFinite(l.delivered)&&l.delivered>=0&&l.delivered<=l.qty+EPS)&&
+    ['Draft','Confirmed','Partially delivered','Delivered','Cancelled'].includes(o.status),'Invalid sales order.');
+  const sums=new Map(), delivered=new Map(), received=new Map(), shipped=new Map();
   for(const e of s.events){
     need(typeof e.at==='string'&&typeof e.type==='string'&&Array.isArray(e.lines),'Invalid stock event.');
     if(e.partyType||e.partyId||e.siteId){
@@ -168,11 +175,20 @@ function validateState(s){
     if(e.purchaseId&&e.partyId)need(e.partyType==='suppliers'&&e.partyId===get(s,'purchases',e.purchaseId).supplierId&&
       e.siteId===(get(s,'purchases',e.purchaseId).supplierSiteId||''),
       'Receipt event has an invalid supplier link.');
+    if(e.salesId){
+      const sale=get(s,'sales',e.salesId);
+      need(sale&&typeof e.reference==='string'&&e.partyType==='customers'&&e.partyId===sale.customerId&&
+        (e.siteId||'')===(sale.siteId||'')&&e.lines.every(line=>line.delta<0),'Invalid sales delivery event.');
+    }
     const sumsEvent=new Map();
     for(const l of e.lines){
       need(sku(l.sku)&&site(l.location)&&Number.isFinite(l.delta),'Stock event has an invalid SKU, location or quantity.');
       const k=JSON.stringify([l.sku,l.location]);
       sumsEvent.set(k,(sumsEvent.get(k)||0)+l.delta);
+      if(e.salesId){
+        const id=JSON.stringify([e.salesId,l.sku]);
+        shipped.set(id,(shipped.get(id)||0)-l.delta);
+      }
       if(e.purchaseId){
         const id=JSON.stringify([e.purchaseId,l.sku]);
         received.set(id,(received.get(id)||0)+l.delta);
@@ -185,6 +201,8 @@ function validateState(s){
   for(const j of s.jobs)need((delivered.get(j.id)||0)===j.delivered,'Delivery totals do not match the ledger.');
   for(const p of s.purchases)for(const l of p.lines)need(Math.abs((received.get(JSON.stringify([p.id,l.sku]))||0)-l.received)<EPS*10,'Receipt totals do not match the ledger.');
   for(const o of s.orders)need((o.status==='Completed')===!!get(s,'events','production:'+o.id),'Completion does not match the ledger.');
+  for(const o of s.sales)for(const l of o.lines)need(Math.abs((shipped.get(JSON.stringify([o.id,l.sku]))||0)-l.delivered)<EPS*10,
+    'Sales delivery totals do not match the ledger.');
 }
 function nativeBackup(d){
   need(d?._app==='AMBS_MRP'&&[1,3].includes(d._version),'Choose a valid AMBS JSON backup.');

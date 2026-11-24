@@ -594,6 +594,15 @@ body[data-page] .head-actions .btn-primary:hover{background:linear-gradient(180d
 @keyframes ctapulse-pc{0%,100%{box-shadow:0 8px 20px -8px color-mix(in srgb,var(--pc) 85%,transparent),0 0 0 0 transparent,inset 0 1px 0 rgba(255,255,255,.22)}
   50%{box-shadow:0 8px 20px -8px color-mix(in srgb,var(--pc) 85%,transparent),0 0 0 6px color-mix(in srgb,var(--pc) 18%,transparent),inset 0 1px 0 rgba(255,255,255,.22)}}
 
+.nav a[href="#/sales"]{--ic:#e879f9}
+body[data-page="sales"]{--pc:#e879f9}
+
+/* Sales orders */
+.sales-progress{width:90px;height:7px;border-radius:999px;background:#eef1f5;overflow:hidden}
+.sales-progress span{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#c026d3,#e879f9)}
+.sales-late{color:var(--bad);font-weight:700}
+.sales-available{display:flex;align-items:center;background:#f6f7f9;color:var(--ink-2);font-family:var(--mono);font-weight:600}
+
 /* AMBS Assistant (chat) */
 #toasts{bottom:96px}
 .as-fab{position:fixed;right:22px;bottom:22px;z-index:70;display:flex;align-items:center;gap:10px;height:56px;padding:0 22px 0 8px;border:0;border-radius:999px;cursor:pointer;
