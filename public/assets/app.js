@@ -3148,7 +3148,9 @@ const chip=s=>statusChip(['Active','Approved','Complete','Completed','Delivered'
   ['Review required','Partially delivered','Partially received','Reserved','Shortage','Low stock'].includes(s)?'warn':
   ['Released','Ordered','Open','In progress'].includes(s)?'info':'neutral',s);
 const cell=(main,sub='')=>`<strong>${esc(main)}</strong>${sub?`<div class="sub">${esc(sub)}</div>`:''}`;
-const thumb=src=>validImage(src)?`<img class="thumb" src="${esc(src)}" alt="">`:'';
+const thumb=(src,alt='',size='')=>validImage(src)?`<img class="thumb ${size}" src="${esc(src)}" alt="${esc(alt)}" loading="lazy">`:'';
+const recordPicture=(row,size='thumb-record')=>thumb(row.image,row.name,size)||
+  `<span class="thumb-ph ${size}" aria-label="No image">${ic('box')}</span>`;
 const kv=rows=>textTable(['Field','Value'],rows.filter(r=>r[1]!==''&&r[1]!=null));
 const dateSort=(a,b)=>(b.at||'').localeCompare(a.at||'');
 const valOf=(form,name)=>form.elements.namedItem(name)?.value?.trim()||'';
@@ -3236,6 +3238,7 @@ function formModal(title,body,save,{text='Save',intro='',danger=false}={}){
     finally{submit.disabled=false;}
   };
   wirePicks(form);
+  wireImagePreviews(form);
   return form;
 }
 function infoModal(title,body,footer=''){
@@ -3271,19 +3274,68 @@ function validImage(value){return typeof value==='string' && /^data:image\/(?:pn
 async function imageValue(form,existing=''){
   const file=form.elements.photo?.files[0];
   if(!file)return checked(form,'removeImage')?'':existing;
-  need(file.size<=5*1024*1024,'Image must be 5 MB or smaller.');
-  const value=await new Promise((resolve,reject)=>{
+  need(file.size<=10*1024*1024,'Image must be 10 MB or smaller.');
+  need(/^image\/(?:png|jpeg|webp|gif)$/.test(file.type),'Use a PNG, JPEG, WebP or GIF image.');
+  const original=await new Promise((resolve,reject)=>{
     const r=new FileReader(); r.onload=()=>resolve(r.result);r.onerror=()=>reject(r.error);r.readAsDataURL(file);
   });
-  need(validImage(value),'Use a PNG, JPEG, WebP or GIF image.');
-  const img=new Image(); img.src=value;
+  need(validImage(original),'Use a PNG, JPEG, WebP or GIF image.');
+  const img=new Image(); img.src=original;
   try{await img.decode();}catch{throw Error('The image could not be opened.');}
+  const canvas=document.createElement('canvas');
+  const context=canvas.getContext('2d');need(context,'This browser could not process the image.');
+  let value='';
+  for(const edge of [1200,900,700]){
+    const scale=Math.min(1,edge/Math.max(img.naturalWidth,img.naturalHeight));
+    canvas.width=Math.max(1,Math.round(img.naturalWidth*scale));
+    canvas.height=Math.max(1,Math.round(img.naturalHeight*scale));
+    context.clearRect(0,0,canvas.width,canvas.height);
+    context.drawImage(img,0,0,canvas.width,canvas.height);
+    const webp=canvas.toDataURL('image/webp',.84).startsWith('data:image/webp');
+    if(!webp){
+      // Browsers without WebP encoding fall back to JPEG; flatten transparency onto white.
+      context.globalCompositeOperation='destination-over';
+      context.fillStyle='#fff';context.fillRect(0,0,canvas.width,canvas.height);
+      context.globalCompositeOperation='source-over';
+    }
+    for(const quality of [.84,.72,.6,.48]){
+      value=canvas.toDataURL(webp?'image/webp':'image/jpeg',quality);
+      if(value.length<=800000)break;
+    }
+    if(value.length<=800000)break;
+  }
+  need(validImage(value)&&value.length<=800000,'This image is too detailed to save. Choose a smaller image.');
   return value;
 }
 function imageField(old){
-  return (old&&validImage(old)?`<div style="margin-bottom:8px">${thumb(old)}</div>`:'')+
-    input('Image','photo','',{type:'file',full:true,extra:'accept="image/png,image/jpeg,image/webp,image/gif"'})+
-    (old?tick('Remove saved image','removeImage'):'');
+  return `<div class="image-picker full" data-image-picker><div class="image-preview" role="status">
+    ${validImage(old)?thumb(old,'Current image','thumb-preview'):
+      `<div class="image-preview-empty">${ic('box')}<span>No image selected</span></div>`}</div>
+    ${input('Image','photo','',{type:'file',full:true,extra:'accept="image/png,image/jpeg,image/webp,image/gif"'})}
+    <div class="image-hint">PNG, JPEG, WebP or GIF · The image is optimized when you save.</div>
+    ${old?tick('Remove saved image','removeImage'):''}</div>`;
+}
+function wireImagePreviews(form){
+  form.querySelectorAll('[data-image-picker]').forEach(picker=>{
+    const fileInput=picker.querySelector('input[type="file"]'),preview=picker.querySelector('.image-preview');
+    const remove=picker.querySelector('[name="removeImage"]'),original=preview.innerHTML;
+    const empty=`<div class="image-preview-empty">${ic('box')}<span>No image selected</span></div>`;
+    const update=()=>{
+      const file=fileInput.files[0];
+      if(!file){preview.innerHTML=remove?.checked?empty:original;return;}
+      if(remove)remove.checked=false;
+      if(!/^image\/(?:png|jpeg|webp|gif)$/.test(file.type)||file.size>10*1024*1024){
+        preview.innerHTML=`<div class="image-preview-error">Choose a PNG, JPEG, WebP or GIF under 10 MB.</div>`;return;
+      }
+      const reader=new FileReader();
+      reader.onload=()=>{if(fileInput.files[0]===file&&validImage(reader.result))
+        preview.innerHTML=`<img class="thumb thumb-preview" src="${esc(reader.result)}" alt="Selected image preview"><span class="image-preview-name">${esc(file.name)}</span>`;};
+      reader.onerror=()=>{preview.innerHTML='<div class="image-preview-error">Could not preview this image.</div>';};
+      reader.readAsDataURL(file);
+    };
+    fileInput.addEventListener('change',update);
+    remove?.addEventListener('change',()=>{if(remove.checked)fileInput.value='';update();});
+  });
 }
 function codeCheck(s,table,row){
   need(row.code?.trim()&&row.name?.trim(),'Code and name are required.');
@@ -3455,7 +3507,7 @@ function packingParts(rows,quantities,editable=false,order=1){
       if(!editable&&!count)return [];
       const step=measured(packingUnit(part))?'0.000001':1;
       const image=part.stockImage||PACKING_IMAGES[part.image];
-      return [[image?thumb(image):'—',part.code?cell(part.name,part.code):esc(part.name),esc(part.unit),
+      return [[image?thumb(image,part.name,'thumb-part'):'—',part.code?cell(part.name,part.code):esc(part.name),esc(part.unit),
         editable?`<input class="inp packing-qty" aria-label="${esc('Quantity for '+part.name)}" type="number"
           min="0" step="${step}" name="${packingInput(i)}" value="${esc(count)}" required>`:esc(count),
         `<span data-packing-total="${i}">${qfmt(count*order)}</span>`]];
@@ -3885,7 +3937,8 @@ function masterView(type,id){
   const r=get(state,type,id);
   const locations=COMPANIES.includes(type)?companyLocations(state,type,id,false):[];
   const packing=type==='products'?productPacking(state,r,get(state,'recipes',id)):null;
-  infoModal(label(r),thumb(r.image)+kv([['Status',r.active===false?'Archived':'Active'],['Category',r.category],['Specifications',r.dimensions],
+  infoModal(label(r),(!COMPANIES.includes(type)?`<div class="record-detail-image">${recordPicture(r,'thumb-detail')}</div>`:'')+
+    kv([['Status',r.active===false?'Archived':'Active'],['Category',r.category],['Specifications',r.dimensions],
     ['Type',type==='products'?packingCategory(r.category)?.type:''],['Default order quantity',r.orderQty],['Size',type==='products'?'':r.size],['Color',type==='products'?'':r.color],['Unit',r.unit],['Source',r.source],['Contact',r.contact],['Email',r.email],['Phone',r.phone],['Services / supply',r.details],['Notes',r.notes]])+
     (locations.length?panel('Linked locations',table(['Name','Address','City','Notes','Status','Map'],
       locations.map(l=>[esc(l.name),esc(l.address),esc(l.city),esc(l.notes),chip(l.active===false?'Archived':'Active'),mapAction(l)]))):'')+
@@ -3938,7 +3991,7 @@ function materialPage(){
     const onOrder=state.purchases.filter(p=>p.status==='Ordered').reduce((total,p)=>total+
       p.lines.filter(line=>line.sku===material.id).reduce((sum,line)=>sum+Math.max(0,line.qty-line.received),0),0);
     const health=materialHealth(material,onHand),args=`'materials',${escapeArg(material.id)}`;
-    return [esc(material.code),cell(material.name,material.category),
+    return [esc(material.code),`<div class="record-media">${recordPicture(material)}<div>${cell(material.name,material.category)}</div></div>`,
       `<span class="num">${esc(qfmt(materialOpening(state,material.id)))}</span>`,
       `<span class="material-balance ${health.cell}"><strong class="num">${esc(qfmt(onHand))}</strong> <span>${esc(material.unit)}</span></span>`,
       `<span class="num">${esc(qfmt(material.safety??0))}</span>`,
@@ -3966,7 +4019,9 @@ function masterPage(type){
     searchableTable(company?['Code','Company','Contact','Locations','Status','Actions']:['Code','Item','Category','Stock unit','Quantity on hand','Status','Actions'],
       rows.map(r=>{
         const args=`${escapeArg(type)},${escapeArg(r.id)}`;
-        return [esc(r.code),thumb(r.image)+cell(r.name,[r.size,r.color,r.dimensions||r.details].filter(Boolean).join(' · ')),esc(company?r.contact:r.category),
+        return [esc(r.code),company?cell(r.name,[r.size,r.color,r.dimensions||r.details].filter(Boolean).join(' · ')):
+          `<div class="record-media">${recordPicture(r)}<div>${cell(r.name,[r.size,r.color,r.dimensions||r.details].filter(Boolean).join(' · '))}</div></div>`,
+          esc(company?r.contact:r.category),
           company?String(companyLocations(state,type,r.id).length):esc(r.unit),
           ...(company?[]:[esc(qfmt(balances.get(r.id)??0,r.unit))]),
           chip(r.active===false?'Archived':'Active'),actionGroup(small('View',`masterView(${args})`),small('Edit',`masterEdit(${args})`),
@@ -3980,7 +4035,7 @@ function masterPage(type){
 function variantsView(id){
   const rows=state.variants.filter(v=>v.partId===id);
   infoModal(label(get(state,'parts',id))+' · Variants',table(['SKU','Name','Size','Color','Status','Actions'],rows.map(v=>[
-    esc(v.code),thumb(v.image)+esc(v.name),esc(v.size),esc(v.color),chip(v.active===false?'Archived':'Active'),
+    esc(v.code),`<div class="record-media">${recordPicture(v)}<div>${esc(v.name)}</div></div>`,esc(v.size),esc(v.color),chip(v.active===false?'Archived':'Active'),
     actionGroup(small('View',`closeModal();masterView('variants',${escapeArg(v.id)})`),
       small('Edit',`closeModal();variantEdit(${escapeArg(id)},${escapeArg(v.id)})`),
       small(v.active===false?'Restore':'Archive',`closeModal();masterArchive('variants',${escapeArg(v.id)})`),
