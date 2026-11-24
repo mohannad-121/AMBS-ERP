@@ -73,7 +73,7 @@ function confirmModal(opts){ // {title,message,confirmText,danger,onConfirm}
   back.querySelector('#cfmBtn').addEventListener('click',async()=>{ closeModal(back); if(opts.onConfirm) await opts.onConfirm(); });
 }
 function statusChip(k,label){ const map={ok:'ok',warn:'warn',bad:'bad',info:'info'};
-  return `<span class="chip ${map[k]||'neutral'}"><span class="dot"></span>${esc(label)}</span>`; }
+  return `<span class="chip ${map[k]||'neutral'}"><span class="dot" aria-hidden="true"></span>${esc(label)}</span>`; }
 function download(filename,content,type){ const blob=new Blob([content],{type:type||'application/json'});
   const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=filename;
   document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),1500); }
@@ -3144,7 +3144,9 @@ const table=(columns,rows,empty='No records yet.',searchTerms=[])=>`<div class="
 const textTable=(columns,rows,empty)=>table(columns,rows.map(r=>r.map(esc)),empty);
 const panel=(name,html)=>`<section class="card erp-table"><div class="card-head"><div class="card-title">${esc(name)}</div></div>${html}</section>`;
 const chip=s=>statusChip(['Active','Approved','Complete','Completed','Delivered','Received','Closed'].includes(s)?'ok':
-  ['Review required','Released','Reserved','Partially delivered','Ordered'].includes(s)?'warn':'neutral',s);
+  ['Missing','Cancelled','Archived','Rejected'].includes(s)?'bad':
+  ['Review required','Partially delivered','Partially received','Reserved','Shortage','Low stock'].includes(s)?'warn':
+  ['Released','Ordered','Open','In progress'].includes(s)?'info':'neutral',s);
 const cell=(main,sub='')=>`<strong>${esc(main)}</strong>${sub?`<div class="sub">${esc(sub)}</div>`:''}`;
 const thumb=src=>validImage(src)?`<img class="thumb" src="${esc(src)}" alt="">`:'';
 const kv=rows=>textTable(['Field','Value'],rows.filter(r=>r[1]!==''&&r[1]!=null));
@@ -4650,7 +4652,7 @@ function dashboard(){
   const stats=['customers','suppliers','processors','materials','parts','products'].map(x=>[TITLES[x],current(state,x).length,x,'Active records']);
   stats.push(['Open Production Orders',orders.length,'production','Draft or released'],['Stock Warnings',warnings.length,'reports','Safety stock and reserved shortages']);
   return head('Overview','Dashboard',link('movement','View Stock'))+
-    `<div class="kpis">${stats.map(([title,value,r,sub],i)=>`<button type="button" class="kpi erp-kpi ${['k-red','k-ink','k-yellow','k-ok'][i%4]}"
+    `<div class="kpis">${stats.map(([title,value,r,sub],i)=>`<button type="button" class="kpi erp-kpi ${r==='reports'&&value?'k-red':r==='production'?'k-yellow':['k-ink','k-ok','k-red','k-ink'][i%4]}"
       onclick="App.go(${escapeArg(r)})"><div class="kl">${esc(title)}</div><div class="kv">${value}</div><div class="kf">${esc(sub)}</div></button>`).join('')}</div>`+
     (state.reviews.some(r=>!r.resolved)?note('Legacy data is available under Settings & Data for review.','warn'):'')+
     `<div class="grid cols-2">${panel('Raw material stock by category',materialSummary())}
