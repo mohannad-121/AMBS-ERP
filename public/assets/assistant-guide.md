@@ -124,7 +124,7 @@ Keywords: add customer, new supplier, processor, vendor, client, company, contac
 1. Open **Customers** (`#/customers`), **Suppliers** (`#/suppliers`) or **Processing Companies** (`#/processors`) from the sidebar group **Overview**.
 2. Click **Add Customer**, **Add Supplier** or **Add Processing Company** (top right).
 3. Fill **Code** and **Name** (both required). Codes must be unique within that company type.
-4. Optionally fill **Contact**, **Email**, **Phone** and **Business / Supply details**. Processing companies have **Services (comma separated)** instead. **Notes** is also optional.
+4. Optionally fill **Contact person** (the name of the person to talk to), **Email**, **Phone** and **Business / Supply details**. Processing companies have **Services (comma separated)** instead. **Notes** is also optional.
 5. Under **Company locations**, click **Add Location** to add sites (see "Add company locations / sites").
 6. Click **Save**.
 
