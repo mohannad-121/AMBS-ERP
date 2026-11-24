@@ -90,6 +90,8 @@ function startClock(){ const set=()=>{ const c=$('#clock'); if(!c)return; const 
 const LEGACY=['meta','materials','products','bom','plans','purchaseRequests','receipts','movements','stockChecks','weighDocs'];
 const LIVE=['customers','suppliers','processors','locations','materials','parts','products','variants','recipes','plans','orders','purchases','jobs','events','reviews'];
 const UNITS=['PCS','TUBE','SHEET','SET','M','M²','M³','MM','KG','G','T','L','ROLL','BOX','PACK','PAIR','BUNDLE'];
+const validUnit=value=>typeof value==='string'&&/^[A-Z][A-Z0-9²³ _/-]{0,23}$/.test(value);
+const unitChoices=()=>[...new Set([...UNITS,...['materials','parts','products','variants'].flatMap(type=>(state?.[type]||[]).map(row=>row.unit).filter(validUnit))])];
 const DEFAULTS={company:'AM Building Solutions DWC LLC',address:'',phone:'',email:'',trn:'',logo:'',currentUser:'Store Keeper'};
 const DB={weighDocs:[],materials:[]};
 let SET={...DEFAULTS}, state, legacy={};
@@ -130,7 +132,7 @@ function item(s,id){
 }
 function stockItem(s,id){
   const row=item(s,id);
-  need(row && row.active!==false && UNITS.includes(row.unit) &&
+  need(row && row.active!==false && validUnit(row.unit) &&
     (!row.partId || get(s,'parts',row.partId)?.active!==false) &&
     !(get(s,'parts',id) && s.variants.some(v=>v.partId===id)),
     'Select an active stock SKU. Parts with variants use the specific variant SKU.');
@@ -225,7 +227,7 @@ function evalFormula(input){
 }
 function recipeLine(s,line){
   const material=live(s,'materials',line.sku);
-  need(UNITS.includes(line.unit) && line.unit===material.unit,'The BOM line unit must match the raw material stock unit.');
+  need(validUnit(line.unit) && line.unit===material.unit,'The BOM line unit must match the raw material stock unit.');
   const result=evalFormula(line.formula);
   need(result.ok,result.err);
   need(result.value>0,'Material usage must be greater than zero.');
@@ -1890,10 +1892,12 @@ const PWC={ _keep:false,_id:null,_name:'',_project:'',_notes:'',_by:'',_date:'',
     return ''; },
   /* ---- cost-centre (non-steel) line items ---- */
   costEditor(idx){ const ex=(idx!=null&&this._lines[idx]&&this._lines[idx].kind==='cost')?this._lines[idx]:null;
+    const categories=[...new Set([...COST_CATS,...this._lines.filter(l=>l.kind==='cost').map(l=>l.costCat),ex?.costCat].filter(Boolean))];
+    const units=[...new Set([...COST_UNITS,...this._lines.filter(l=>l.kind==='cost').map(l=>l.unit),ex?.unit].filter(Boolean))];
     openModal(`<div class="modal-head"><div><h3>${ex?'Edit cost item':'Add cost item'}</h3><div class="msub">Non-steel cost — paint, galvanizing, consumables, labour…</div></div><button class="x" onclick="closeModal()">${ic('x')}</button></div>
       <div class="modal-body"><div class="form-grid">
-        <div class="field"><label>Category</label><select class="sel" id="ci_cat">${COST_CATS.map(c=>`<option ${ex&&ex.costCat===c?'selected':''}>${esc(c)}</option>`).join('')}</select></div>
-        <div class="field"><label>Unit</label><select class="sel" id="ci_unit">${COST_UNITS.map(u=>`<option ${ex&&ex.unit===u?'selected':''}>${esc(u)}</option>`).join('')}</select></div>
+        <div class="field"><label>Category</label><input class="inp" id="ci_cat" list="ci_categories" value="${esc(ex?.costCat||'')}" placeholder="Choose or type a category"><datalist id="ci_categories">${categories.map(c=>`<option value="${esc(c)}"></option>`).join('')}</datalist></div>
+        <div class="field"><label>Unit</label><input class="inp" id="ci_unit" list="ci_units" value="${esc(ex?.unit||'')}" placeholder="Choose or type a unit"><datalist id="ci_units">${units.map(u=>`<option value="${esc(u)}"></option>`).join('')}</datalist></div>
         <div class="field full"><label>Description</label><input class="inp" id="ci_desc" value="${ex?esc(ex.desc||''):''}" placeholder="e.g. Two-coat epoxy paint system"></div>
         <div class="field"><label>Quantity</label><input class="inp mono" id="ci_qty" type="number" min="0" step="0.001" value="${ex?ex.qty:1}" oninput="PWC.ciCalc()"></div>
         <div class="field"><label>Unit cost (AED)</label><input class="inp mono" id="ci_uc" type="number" min="0" step="0.01" value="${ex?ex.unitCost:0}" oninput="PWC.ciCalc()"></div>
@@ -1907,7 +1911,7 @@ const PWC={ _keep:false,_id:null,_name:'',_project:'',_notes:'',_by:'',_date:'',
     if(p)p.innerHTML=`Line cost = <b class="num" style="color:var(--red)">${nfmt(q*uc,2)}</b> AED`; },
   costSave(idx){ const costCat=val('ci_cat'); const unit=val('ci_unit'); const desc=val('ci_desc'); const remarks=val('ci_rem');
     const qty=Math.max(0,numval('ci_qty')||0); const unitCost=Math.max(0,numval('ci_uc')||0);
-    if(qty<=0||unitCost<=0){ toast('Enter quantity and unit cost','bad'); return; }
+    if(!costCat||!unit||qty<=0||unitCost<=0){ toast('Enter category, unit, quantity and unit cost','bad'); return; }
     const line={id:uid('cc'),kind:'cost',costCat,unit,desc:desc||costCat,remarks,qty,unitCost,lineCost:qty*unitCost,unitKg:0,lineKg:0};
     if(idx==null||idx===undefined) this._lines.push(line); else this._lines[idx]=line;
     closeModal(); this.refreshLines(); },
@@ -1956,7 +1960,7 @@ const PWC={ _keep:false,_id:null,_name:'',_project:'',_notes:'',_by:'',_date:'',
         <div class="field"><label>Quantity / set</label><input class="inp mono" id="pl_qty" type="number" min="1" step="1" value="${ex?ex.qty:1}" oninput="PWC.plCalc()"></div>
         <div class="field"><label>Material grade</label><input class="inp" id="pl_grade" value="${ex?esc(ex.grade||'S275JR'):'S275JR'}"></div>
         <div class="field"><label>Tonnage rate (AED/Ton)</label><input class="inp mono" id="pl_rate" type="number" min="0" step="0.01" value="${ex?ex.rateTon:0}" oninput="PWC.plCalc()"></div>
-        <div class="field"><label>Stock plate size</label><select class="sel" id="pl_stock"><option value="default" ${curStock==='default'?'selected':''}>Use nesting default</option>${presets.map(s=>`<option value="${s}" ${curStock===s?'selected':''}>${s} mm</option>`).join('')}</select></div>
+        <div class="field"><label>Stock plate size (mm)</label><input class="inp" id="pl_stock" list="pl_stock_sizes" value="${esc(curStock==='default'?'':curStock)}" placeholder="Nesting default or L×W"><datalist id="pl_stock_sizes">${presets.map(s=>`<option value="${s}"></option>`).join('')}</datalist></div>
         <div class="field"><label>Rotation mode</label><select class="sel" id="pl_rot"><option value="auto" ${(!ex||ex.rotationMode==='auto')?'selected':''}>Auto (best)</option><option value="rot90" ${ex&&ex.rotationMode==='rot90'?'selected':''}>90° only</option><option value="lock" ${ex&&ex.rotationMode==='lock'?'selected':''}>Lock orientation</option><option value="grain" ${ex&&ex.rotationMode==='grain'?'selected':''}>Grain locked</option></select></div>
         <div class="field full"><label>Remarks</label><input class="inp" id="pl_rem" value="${ex?esc(ex.remarks||''):''}"></div>
         <div class="field full"><div class="note" id="pl_prev">…</div></div>
@@ -1970,7 +1974,11 @@ const PWC={ _keep:false,_id:null,_name:'',_project:'',_notes:'',_by:'',_date:'',
   plateSave(idx){ const label=val('pl_name'); if(!label){ toast('Enter part name','bad'); return; }
     const l=numval('pl_l'),w=numval('pl_w'),t=numval('pl_t'),qty=Math.max(1,Math.round(numval('pl_qty')||1));
     if(l<=0||w<=0||t<=0){ toast('Enter valid dimensions','bad'); return; }
-    let stockL=null,stockW=null; const st=val('pl_stock'); if(st&&st!=='default'){ const [a,c]=st.split('×').map(Number); stockL=a; stockW=c; }
+    let stockL=null,stockW=null; const st=val('pl_stock'); if(st){
+      const match=st.match(/^(\d+(?:\.\d+)?)\s*[×xX]\s*(\d+(?:\.\d+)?)$/);
+      if(!match||+match[1]<=0||+match[2]<=0){toast('Enter stock plate size as length × width in mm.','bad');return;}
+      stockL=+match[1];stockW=+match[2];
+    }
     const plate={id:(idx!=null&&this._plates[idx]?this._plates[idx].id:uid('pl')),label,l,w,t,qty,grade:val('pl_grade'),rateTon:Math.max(0,numval('pl_rate')||0),stockL,stockW,rotationMode:val('pl_rot')||'auto',remarks:val('pl_rem')};
     if(idx==null||idx===undefined) this._plates.push(plate); else this._plates[idx]=plate;
     closeModal(); this.refreshPlates(); },
@@ -3144,6 +3152,12 @@ function choiceOptions(rows,selected='',placeholder='Select…'){
 function select(title,name,rows,selected='',required=true,placeholder){
   return field(title,`<select class="sel" name="${name}" ${required?'required':''}>${choiceOptions(rows,selected,placeholder)}</select>`);
 }
+function suggestedInput(title,name,value,options,required=false){
+  const id='suggest_'+name.replace(/[^a-z0-9_-]/gi,'_');
+  const choices=[...new Set([...options,value].filter(Boolean))];
+  return input(title,name,value,{required,extra:`list="${id}"`})+
+    `<datalist id="${id}">${choices.map(option=>`<option value="${esc(option)}"></option>`).join('')}</datalist>`;
+}
 function tick(title,name,value=false){
   return `<div class="field"><label><input name="${name}" type="checkbox" ${value?'checked':''}> ${esc(title)}</label></div>`;
 }
@@ -3257,7 +3271,7 @@ function codeCheck(s,table,row){
 }
 function activeCheck(s,table,row,old){
   if(!old)return;
-  if(row.unit && row.unit!==old.unit && UNITS.includes(old.unit)){
+  if(row.unit && row.unit!==old.unit && validUnit(old.unit)){
     const used=s.events.some(e=>e.lines.some(l=>l.sku===old.id))||
       s.recipes.some(r=>r.lines.some(l=>l.sku===old.id || l.partId===old.id || l.variantId===old.id))||
       s.variants.some(v=>v.partId===old.id)||s.purchases.some(p=>p.lines.some(l=>l.sku===old.id))||
@@ -3517,7 +3531,7 @@ function productPacking(s,product,recipe){
   const existing=new Map((recipe?.lines||[]).map(line=>[line.variantId||line.partId,line]));
   const variantParents=new Set(s.variants.map(v=>v.partId));
   const stock=[...s.parts,...s.variants].filter(row=>existing.has(row.id)||
-    (row.active!==false&&UNITS.includes(row.unit)&&
+    (row.active!==false&&validUnit(row.unit)&&
       (row.partId?get(s,'parts',row.partId)?.active!==false:!variantParents.has(row.id))));
   const stockByKey=new Map();
   for(const sku of stock){
@@ -3578,10 +3592,10 @@ function masterEdit(type,id){
   const core=input('Code','code',row.code,{required:true})+input('Name','name',row.name,{required:true})+
     (company?input('Contact','contact',row.contact)+input('Email','email',row.email,{type:'email'})+
       input('Phone','phone',row.phone)+input(type==='processors'?'Services (comma separated)':'Business / Supply details','details',row.details):
-      (product?select('Packing formula template','category',same(Object.keys(PACKING_CATEGORIES)),
-        packingCategory(row.category)?row.category:'',false,'Manual quantities'):
+      (product?suggestedInput('Category / packing formula template','category',row.category,
+        [...Object.keys(PACKING_CATEGORIES),...state.products.map(p=>p.category)]):
         input('Category','category',row.category,{extra:'list="erp-categories"'}))+
-      select('Stock unit','unit',same(UNITS),UNITS.includes(row.unit)?row.unit:'PCS')+
+      suggestedInput('Stock unit','unit',row.unit||'PCS',unitChoices(),true)+
       (product?number('Default order quantity','orderQty',row.orderQty??1,1,1):
         input('Dimensions / specifications','dimensions',row.dimensions,{full:true}))+
       (type==='parts'?select('Part source','source',same(['Manufactured','Purchased','Stocked']),row.source||'Manufactured'):'')+
@@ -3608,7 +3622,8 @@ function masterEdit(type,id){
           valOf(f,packingInput(i)),packingUnit(part),part.name,true));
       }
       for(const name of ['safety','bundle','stockLen','rateKg','ratePc'])if(f.elements[name])data[name]=qty(valOf(f,name),name,true);
-      need(UNITS.includes(data.unit),'Select a recognized unit.');
+      data.unit=unit(data.unit);
+      need(validUnit(data.unit),'Enter a stock unit using letters, numbers, spaces, / or -.');
       data.image=await imageValue(f,old?.image);
     }
     const locations=company?lines().map(l=>readLocation(l,true)):[];
@@ -3816,7 +3831,7 @@ function recipeEdit(type,id){
     (old?.approved===false?note('Legacy recipe. Verify every formula and wastage value before approving it.','warn'):'')+
     note(isPart?'Enter raw material consumption per one part. The line unit follows the material stock unit.':'Enter the part quantities for one complete product.')+
     '<div data-recipe></div><div style="margin-top:12px">'+tick('Approve for operational use','approve',old?.approved??!old)+'</div>',async f=>{
-    const raw=lines().map(l=>isPart?{sku:fieldValue(l,'sku'),unit:fieldValue(l,'unit'),formula:fieldValue(l,'formula'),
+    const raw=lines().map(l=>isPart?{sku:fieldValue(l,'sku'),unit:unit(fieldValue(l,'unit')),formula:fieldValue(l,'formula'),
       wastage:fieldValue(l,'wastage')||0,notes:fieldValue(l,'notes')}:{partId:fieldValue(l,'part'),variantId:fieldValue(l,'variant'),count:fieldValue(l,'count')});
     need(raw.length,'Add at least one BOM line.');
     await commit(s=>{
@@ -3836,7 +3851,7 @@ function recipeEdit(type,id){
   },{text:old?'Save BOM':'Create BOM'});
   const lines=repeat(form,'[data-recipe]',(l,n)=>isPart?`<legend>Raw material line</legend><div class="form-grid">
     ${searchable('Raw Material',n+'_sku',pair(state.materials.filter(x=>x.active!==false||x.id===l.sku)),l.sku)}
-    ${select('Unit',n+'_unit',same(UNITS),l.unit||'',true)}
+    ${suggestedInput('Unit',n+'_unit',l.unit||'',unitChoices(),true)}
     ${input('Consumption formula',n+'_formula',l.formula,{required:true,extra:'placeholder="1/10 + 1/30"'})}
     ${number('Wastage %',n+'_wastage',l.wastage??0)}${input('Line notes',n+'_notes',l.notes,{full:true})}</div><p class="sub" data-result></p>`:
     `<legend>Part line</legend><div class="form-grid">
@@ -4599,7 +4614,7 @@ function validateState(s){
       need(typeof r.code==='string'&&typeof r.name==='string'&&!ids.has(r.id),'Invalid SKU or company in '+t+'.');
       ids.add(r.id);codeCheck(s,t,r);
       if(!COMPANIES.includes(t)){
-        need(UNITS.includes(r.unit)||(r.active===false&&r.legacy&&typeof r.unit==='string'),'Unknown unit on '+r.code+'.');
+        need(validUnit(r.unit)||(r.active===false&&r.legacy&&typeof r.unit==='string'),'Unknown unit on '+r.code+'.');
         if(r.image)need(validImage(r.image),'Invalid image on '+r.code+'.');
       }
     }
