@@ -280,7 +280,7 @@ function reserved(s,sku,location,exclude=''){
   return orders.concat(plans).reduce((n,p)=>n+p.materials.filter(l=>l.sku===sku).reduce((sum,l)=>sum+l.qty,0),0);
 }
 function emptyStateData(settings={}){
-  return {...Object.fromEntries(LIVE.map(k=>[k,[]])),settings:{...DEFAULTS,...settings},schema:3};
+  return {...Object.fromEntries(LIVE.map(k=>[k,[]])),settings:{...DEFAULTS,...settings},deletedWorkbookParts:[],schema:3};
 }
 function oldUnit(value){
   const aliases={PIECE:'PCS',PIECES:'PCS',PC:'PCS',EA:'PCS',METRE:'M',METER:'M',TON:'T',TONNE:'T'};
@@ -3119,6 +3119,7 @@ const qfmt=(n,u='')=>nfmt(Math.abs(n)<EPS?0:n,6)+(u?' '+u:'');
 const stamp=x=>fmtDate(x)+' '+(x?new Date(x).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}):'');
 const button=(text,action,style='',icon='')=>`<button type="button" class="btn ${style}" onclick="${action}">${icon?ic(icon):''}${esc(text)}</button>`;
 const small=(text,action)=>button(text,action,'btn-sm');
+const dangerSmall=(text,action)=>button(text,action,'btn-sm btn-danger');
 const actionGroup=(...actions)=>`<div class="erp-actions">${actions.join('')}</div>`;
 const link=(r,text=TITLES[r])=>button(text,`App.go(${escapeArg(r)})`,'btn-sm');
 const head=(group,title,...actions)=>`<div class="view-head"><div><div class="eyebrow">${esc(group)}</div><h1 class="h1">${esc(title)}</h1></div><div class="head-actions">${actions.join('')}</div></div>`;
@@ -3198,12 +3199,12 @@ function wirePicks(root){
     box.addEventListener('focusout',e=>{if(!box.contains(e.relatedTarget))menu.replaceChildren();});
   });
 }
-function formModal(title,body,save,{text='Save',intro=''}={}){
+function formModal(title,body,save,{text='Save',intro='',danger=false}={}){
   const back=openModal(`<form><div class="modal-head"><div><h3>${esc(title)}</h3>${intro?`<div class="msub">${esc(intro)}</div>`:''}</div>
     <button type="button" class="x" aria-label="Close" onclick="closeModal()">${ic('x')}</button></div>
     <div class="modal-body erp-modal-body"><div class="erp-error" role="alert"></div>${body}</div>
     <div class="modal-foot"><button type="button" class="btn btn-ghost" onclick="closeModal()">Cancel</button>
-    <button class="btn btn-primary" type="submit">${ic('save')}${esc(text)}</button></div></form>`,'lg');
+    <button class="btn ${danger?'btn-danger':'btn-primary'}" type="submit">${ic(danger?'trash':'save')}${esc(text)}</button></div></form>`,'lg');
   back.classList.add('erp-form');
   const form=$('form',back), submit=$('[type=submit]',form), error=$('.erp-error',form);
   form.onsubmit=async e=>{
@@ -3224,7 +3225,10 @@ function infoModal(title,body,footer=''){
     <div class="modal-body erp-modal-body">${body}</div><div class="modal-foot">${footer}<button class="btn btn-ghost" onclick="closeModal()">Close</button></div>`,'lg');
 }
 function approval(title,description,work,text='Confirm'){
-  return formModal(title,note(description),()=>commit(work),{text});
+  return formModal(title,note(description),async()=>{
+    await commit(work);
+    return text.startsWith('Delete')?'Deleted.':undefined;
+  },{text,danger:text.startsWith('Delete')});
 }
 function repeat(form,container,draw,rows,addLabel){
   const box=form.querySelector(container), list=document.createElement('div');
@@ -3486,6 +3490,7 @@ function addWorkbookParts(s){
   let added=0;
   for(const [index,part] of WORKBOOK_PARTS.entries()){
     const record=workbookPartRecord(part,index);
+    if(s.deletedWorkbookParts?.includes(record.id))continue;
     if(item(s,record.id)||[...s.parts,...s.variants].some(row=>matchesWorkbookPart(row,part)))continue;
     let code=record.code, suffix=2;
     while(['parts','materials','products','variants'].some(group=>s[group].some(row=>row.code.toLowerCase()===code.toLowerCase()))){
@@ -3723,6 +3728,48 @@ function masterArchive(type,id){
       add(s[type],next);
     },enable?'Restore':'Archive');
 }
+function hasReference(value,id){
+  if(value===id)return true;
+  if(Array.isArray(value))return value.some(item=>hasReference(item,id));
+  return value&&typeof value==='object'&&Object.values(value).some(item=>hasReference(item,id));
+}
+function recordIsUsed(s,type,id){
+  return LIVE.some(table=>table!==type&&s[table].some(row=>hasReference(row,id)));
+}
+function deleteMaster(type,id){
+  const old=get(state,type,id);
+  if(!old)return toast('This record no longer exists.','warn');
+  approval('Delete '+old.name,'Permanently remove this record. Records used by a BOM, stock movement or another operation cannot be deleted.',s=>{
+    need(sameCloudRecord(get(s,type,id),old),'This record changed. Reopen it before deleting.');
+    need(!recordIsUsed(s,type,id),'This record is used elsewhere. Remove its links first, or archive it.');
+    if(type==='parts'){
+      const removed=WORKBOOK_PARTS.flatMap((part,index)=>matchesWorkbookPart(old,part)?[workbookPartRecord(part,index).id]:[]);
+      s.deletedWorkbookParts=[...new Set([...(s.deletedWorkbookParts||[]),...removed])];
+    }
+    s[type]=s[type].filter(row=>row.id!==id);
+  },'Delete');
+}
+function deleteRecipe(id){
+  const old=get(state,'recipes',id),owner=item(state,id);
+  if(!old)return toast('This BOM no longer exists.','warn');
+  approval('Delete BOM · '+(owner?.name||id),'Permanently remove this BOM. The part or product remains available.',s=>{
+    need(sameCloudRecord(get(s,'recipes',id),old),'This BOM changed. Reopen it before deleting.');
+    s.recipes=s.recipes.filter(row=>row.id!==id);
+  },'Delete BOM');
+}
+function deleteOperation(type,id){
+  const old=get(state,type,id);
+  if(!old)return toast('This record no longer exists.','warn');
+  approval('Delete '+old.no,'Permanently remove this record. Posted stock and delivery history cannot be deleted.',s=>{
+    const row=get(s,type,id);
+    need(sameCloudRecord(row,old),'This record changed. Reopen it before deleting.');
+    need(!recordIsUsed(s,type,id),'This record has linked history and cannot be deleted.');
+    if(type==='orders')need(row.status!=='Completed','Completed production orders cannot be deleted.');
+    if(type==='purchases')need(row.lines.every(line=>line.received===0),'A purchase with receipts cannot be deleted.');
+    if(type==='jobs')need(row.delivered===0,'A job with deliveries cannot be deleted.');
+    s[type]=s[type].filter(item=>item.id!==id);
+  },'Delete');
+}
 function masterView(type,id){
   const r=get(state,type,id);
   const locations=COMPANIES.includes(type)?companyLocations(state,type,id,false):[];
@@ -3782,7 +3829,8 @@ function masterPage(type){
           chip(r.active===false?'Archived':'Active'),actionGroup(small('View',`masterView(${args})`),small('Edit',`masterEdit(${args})`),
             type==='parts'?small('Variants',`variantsView(${escapeArg(r.id)})`):'',
             ['parts','products'].includes(type)?small('BOM',`recipeEdit(${escapeArg(type)},${escapeArg(r.id)})`):'',
-            small(r.active===false?'Restore':'Archive',`masterArchive(${args})`))];
+            small(r.active===false?'Restore':'Archive',`masterArchive(${args})`),
+            dangerSmall('Delete',`deleteMaster(${args})`))];
       }),'Add your first '+title.toLowerCase()+'.',
       isParts?rows.map(r=>[r.code,r.name,r.packingName,r.category,r.unit,r.size,r.color,r.dimensions].filter(Boolean).join(' ')):[]);
 }
@@ -3791,7 +3839,8 @@ function variantsView(id){
   infoModal(label(get(state,'parts',id))+' · Variants',table(['SKU','Name','Size','Color','Status','Actions'],rows.map(v=>[
     esc(v.code),thumb(v.image)+esc(v.name),esc(v.size),esc(v.color),chip(v.active===false?'Archived':'Active'),
     actionGroup(small('Edit',`closeModal();variantEdit(${escapeArg(id)},${escapeArg(v.id)})`),
-      small(v.active===false?'Restore':'Archive',`closeModal();masterArchive('variants',${escapeArg(v.id)})`))
+      small(v.active===false?'Restore':'Archive',`closeModal();masterArchive('variants',${escapeArg(v.id)})`),
+      dangerSmall('Delete',`closeModal();deleteMaster('variants',${escapeArg(v.id)})`))
   ])),button('Add Variant',`closeModal();variantEdit(${escapeArg(id)})`,'btn-primary','plus'));
 }
 function variantEdit(partId,id){
@@ -3840,7 +3889,8 @@ function recipePage(){
       const options=name=>r[name]||[...new Set(variants.map(v=>v[name]).filter(Boolean))].join(', ')||'—';
       return [cell(r.name,r.code),esc(isPart?'Part → Raw Materials':'Product → Parts'),esc(options('size')),esc(options('color')),
         String(recipe?.lines.length||0),chip(recipe?(recipe.approved?'Approved':'Review required'):'Missing'),
-        small(recipe?'Edit BOM':'Create BOM',`recipeEdit(${escapeArg(type)},${escapeArg(r.id)})`)];
+        actionGroup(small(recipe?'Edit BOM':'Create BOM',`recipeEdit(${escapeArg(type)},${escapeArg(r.id)})`),
+          recipe?dangerSmall('Delete BOM',`deleteRecipe(${escapeArg(r.id)})`):'')];
     }));
 }
 function bomVariantOptions(partId,selected=''){
@@ -3997,7 +4047,6 @@ function productEditor(draw,onSave,{title,saveText,description,extra='',details,
 }
 function planEdit(id){
   const draft=get(state,'plans',id);
-  if(draft && draft.status!=='Draft')return toast('Only draft plans are editable.','warn');
   const explode=(s,rows)=>rows.flatMap(r=>r.parts.flatMap(p=>expandPart(s,p.partId,p.qty,p.variantId)));
   productEditor((rows,location)=>{
     const source=explode(state,rows);
@@ -4007,11 +4056,11 @@ function planEdit(id){
   },async(f,read)=>{
     await commit(s=>{
       const old=get(s,'plans',id);
-      need(!id||old?.status==='Draft','Only draft plans are editable.');
+      need(!id||sameCloudRecord(old,draft),'This plan changed. Reopen it before saving.');
       const location=loc(s,valOf(f,'location')).id, products=read(s), source=explode(s,products);
       const name=valOf(f,'name');need(name,'Enter a plan name.');
       add(s.plans,{id:id||key(),no:old?.no||operationNo('PLAN'),name,location,products,
-        parts:products.flatMap(l=>l.parts),materials:aggregate(source),source,status:'Draft',at:old?.at||now()});
+        parts:products.flatMap(l=>l.parts),materials:aggregate(source),source,status:old?.status||'Draft',at:old?.at||now()});
     });
     App.route='production';location.hash='#/production';
     return 'Production plan saved.';
@@ -4046,16 +4095,16 @@ function orderEdit(initialPart='',initialLocation='',id){
     <div data-variant></div>${area('Notes','notes',old?.notes)}</div><div data-preview></div>`,async f=>{
       await commit(s=>{
         const prev=get(s,'orders',id);
-        need(!id||prev?.status==='Draft','Only draft orders can be edited.');
+        need(!id||prev?.status!=='Completed'&&sameCloudRecord(prev,old),'This order changed or has posted stock. Reopen it before saving.');
         const part=live(s,'parts',valOf(f,'part'));
         need(part.source==='Manufactured','Choose a manufactured part.');
         const count=whole(valOf(f,'qty')), variant=valOf(f,'variant'), source=expandPart(s,part.id,count,variant);
         const location=loc(s,valOf(f,'location')).id;
         add(s.orders,{id:id||key(),no:prev?.no||operationNo('MO'),location,partId:part.id,sku:variant||part.id,qty:count,
-          source,materials:aggregate(source),notes:valOf(f,'notes'),status:'Draft',at:prev?.at||now()});
+          source,materials:aggregate(source),notes:valOf(f,'notes'),status:prev?.status||'Draft',at:prev?.at||now()});
       });
-      return 'Draft production order saved.';
-    },{text:'Save Draft'});
+      return old?'Production order updated.':'Draft production order saved.';
+    },{text:old?'Save Order':'Save Draft'});
   const variant=$('[data-variant]',form), preview=$('[data-preview]',form);
   function updateVariant(v=''){variant.innerHTML=variantControl('variant',valOf(form,'part'),v);}
   function update(e){
@@ -4100,15 +4149,19 @@ function productionPage(){
     panel('Production orders',table(['Order','Part / SKU','Qty','Fabrication location','Status','Actions'],state.orders.slice().sort(dateSort).map(o=>[
       esc(o.no),esc(labelOf(state,o.sku)),esc(qfmt(o.qty,item(state,o.sku)?.unit)),esc(locName(state,o.location)),chip(o.status),
       actionGroup(small('View',`orderView(${escapeArg(o.id)})`),
-        o.status==='Draft'?small('Edit',`orderEdit('','',${escapeArg(o.id)})`)+small('Release',`orderTransition(${escapeArg(o.id)},'Released')`):'',
+        o.status!=='Completed'?small('Edit',`orderEdit('','',${escapeArg(o.id)})`):'',
+        o.status==='Draft'?small('Release',`orderTransition(${escapeArg(o.id)},'Released')`):'',
         o.status==='Released'?small('Complete',`orderTransition(${escapeArg(o.id)},'Completed')`):'',
-        ['Draft','Released'].includes(o.status)?small('Cancel',`orderTransition(${escapeArg(o.id)},'Cancelled')`):'')
+        ['Draft','Released'].includes(o.status)?small('Cancel',`orderTransition(${escapeArg(o.id)},'Cancelled')`):'',
+        o.status!=='Completed'?dangerSmall('Delete',`deleteOperation('orders',${escapeArg(o.id)})`):'')
     ])))+
     panel('Production plans',table(['Plan','Project','Location','Status','Actions'],state.plans.slice().sort(dateSort).map(p=>[
       esc(p.no),esc(p.name),esc(locName(state,p.location)),chip(p.status),
       actionGroup(small('View',`planView(${escapeArg(p.id)})`),
-        p.status==='Draft'?small('Edit',`planEdit(${escapeArg(p.id)})`)+small('Reserve',`planTransition(${escapeArg(p.id)},'Reserved')`):'',
-        p.status==='Reserved'?small('Close reservation',`planTransition(${escapeArg(p.id)},'Closed')`):'')
+        small('Edit',`planEdit(${escapeArg(p.id)})`),
+        p.status==='Draft'?small('Reserve',`planTransition(${escapeArg(p.id)},'Reserved')`):'',
+        p.status==='Reserved'?small('Close reservation',`planTransition(${escapeArg(p.id)},'Closed')`):'',
+        dangerSmall('Delete',`deleteOperation('plans',${escapeArg(p.id)})`))
     ])))+legacySection('plans','Legacy production plans');
 }
 
@@ -4200,14 +4253,15 @@ function purchaseEdit(id,initial){
       need(items.length&&new Set(items.map(l=>l.sku)).size===items.length,'Add at least one line and use one line per SKU.');
       await commit(s=>{
         const prev=get(s,'purchases',id);
-        need(!id||prev?.status==='Draft','Only draft requests can be edited.');
+        need(!id||prev?.lines.every(line=>line.received===0)&&sameCloudRecord(prev,old),
+          'This request changed or has receipts. Reopen it before saving.');
         const supplierId=live(s,'suppliers',valOf(f,'supplier')).id, location=loc(s,valOf(f,'location')).id;
         items.forEach(l=>need(get(s,'materials',l.sku)||
           ['Purchased','Stocked'].includes(get(s,'parts',item(s,l.sku)?.partId||l.sku)?.source),
           'Choose a raw material or a purchased or stocked component.'));
         items.forEach(l=>{stockItem(s,l.sku);if(!get(s,'materials',l.sku))componentQty(l.qty,item(s,l.sku).unit,'Purchased component quantity');});
         add(s.purchases,{id:id||key(),no:prev?.no||operationNo('PR'),supplierId,location,notes:valOf(f,'notes'),lines:items,
-          status:'Draft',at:prev?.at||now()});
+          status:prev?.status||'Draft',at:prev?.at||now()});
       });
       return 'Purchase request saved.';
     });
@@ -4268,16 +4322,23 @@ function purchasingPage(){
     panel('Purchase requests',table(['Request','Supplier','Receiving location','Status','Actions'],state.purchases.slice().sort(dateSort).map(p=>[
       esc(p.no),esc(label(get(state,'suppliers',p.supplierId))),esc(locName(state,p.location)),
       chip(p.status==='Ordered'&&p.lines.some(l=>l.received>0)?'Partially received':p.status),
-      actionGroup(small('View',`purchaseView(${escapeArg(p.id)})`),p.status==='Draft'?
-        small('Edit',`purchaseEdit(${escapeArg(p.id)})`)+small('Mark Ordered',`purchaseStatus(${escapeArg(p.id)},'Ordered')`):'',
+      actionGroup(small('View',`purchaseView(${escapeArg(p.id)})`),
+        p.lines.every(line=>line.received===0)?small('Edit',`purchaseEdit(${escapeArg(p.id)})`):'',
+        p.status==='Draft'?small('Mark Ordered',`purchaseStatus(${escapeArg(p.id)},'Ordered')`):'',
         p.status==='Ordered'?small('Record Receipt',`receiptEdit(${escapeArg(p.id)})`):'',
-        ['Draft','Ordered'].includes(p.status)?small('Cancel',`purchaseStatus(${escapeArg(p.id)},'Cancelled')`):'')
+        ['Draft','Ordered'].includes(p.status)?small('Cancel',`purchaseStatus(${escapeArg(p.id)},'Cancelled')`):'',
+        p.lines.every(line=>line.received===0)?dangerSmall('Delete',`deleteOperation('purchases',${escapeArg(p.id)})`):'')
     ])))+panel('Supplier receipts',eventsTable(state.events.filter(e=>e.type==='Supplier receipt')))+
     legacySection('purchaseRequests','Legacy purchase requests')+legacySection('receipts','Legacy supplier receipts');
 }
 
 /* Packing and dispatch */
-function dispatchEdit(){
+function dispatchEdit(id){
+  const old=get(state,'jobs',id);
+  if(old&&old.delivered>0)return toast('Jobs with confirmed deliveries cannot be edited.','warn');
+  const draft=old?{name:old.name,location:old.location,products:[{
+    productId:old.productId,qty:old.qty,parts:old.parts
+  }]}:null;
   const destinations=customer=>pair(companyLocations(state,'customers',customer),l=>l.name+(l.city?' · '+l.city:''));
   productEditor((rows,location,form)=>{
     const product=rows[0], destination=get(state,'locations',valOf(form,'destination'));
@@ -4290,6 +4351,9 @@ function dispatchEdit(){
       ]))));
   },async(f,read)=>{
     await commit(s=>{
+      const prev=get(s,'jobs',id);
+      need(!id||prev?.delivered===0&&sameCloudRecord(prev,old),
+        'This job changed or has deliveries. Reopen it before saving.');
       const customerId=live(s,'customers',valOf(f,'customer')).id, destination=live(s,'locations',valOf(f,'destination'));
       need(destination.ownerType==='customers'&&destination.ownerId===customerId,'Select a delivery site belonging to this customer.');
       const location=loc(s,valOf(f,'location')).id, product=read(s)[0], name=valOf(f,'name');
@@ -4297,17 +4361,18 @@ function dispatchEdit(){
       const finished=valOf(f,'fulfilment')==='Finished stock';
       need(!finished||product.parts.every(p=>!p.variantId&&p.qty===p.standard),
         'Pack from component stock when variants or job-specific quantities are selected.');
-      s.jobs.push({id:key(),no:operationNo('DSP'),...product,name,customerId,destination:destination.id,location,finished,
+      add(s.jobs,{id:id||key(),no:prev?.no||operationNo('DSP'),...product,name,customerId,destination:destination.id,location,finished,
         destinationSnapshot:{name:destination.name,address:destination.address,city:destination.city,lat:destination.lat,lng:destination.lng,url:destination.url},
-        delivered:0,status:'Open',at:now()});
+        delivered:0,status:prev?.status||'Open',at:prev?.at||now()});
     });
-    return 'Dispatch job saved.';
-  },{title:'New Dispatch Job',description:'Select an AMBS custody location, customer site and product configuration.',saveText:'Save Job',dispatch:true,
-    extra:searchable('Customer','customer',pair(current(state,'customers')))+select('Customer delivery site','destination',[])+
-      select('Fulfilment','fulfilment',same(['Pack from parts','Finished stock']),'Pack from parts'),
+    return old?'Dispatch job updated.':'Dispatch job saved.';
+  },{title:old?'Edit Dispatch Job':'New Dispatch Job',description:'Select an AMBS custody location, customer site and product configuration.',saveText:'Save Job',dispatch:true,draft,
+    extra:searchable('Customer','customer',pair(current(state,'customers')),old?.customerId)+select('Customer delivery site','destination',[])+
+      select('Fulfilment','fulfilment',same(['Pack from parts','Finished stock']),old?.finished?'Finished stock':'Pack from parts'),
     after(form){
       const customer=form.elements.customer, destination=form.elements.destination;
       customer.addEventListener('change',()=>{destination.innerHTML=choiceOptions(destinations(customer.value));});
+      destination.innerHTML=choiceOptions(destinations(customer.value),old?.destination);
     }});
 }
 function dispatchRows(s,j,count){
@@ -4371,8 +4436,11 @@ function dispatchPage(){
     searchableTable(['Job','Customer / site','Product','Requested','Delivered','Outstanding','Status','Actions'],state.jobs.slice().sort(dateSort).map(j=>[
       cell(j.no,j.name),cell(get(state,'customers',j.customerId)?.name,j.destinationSnapshot.name),
       esc(labelOf(state,j.productId)),esc(j.qty),esc(j.delivered),esc(j.qty-j.delivered),chip(j.status),
-      actionGroup(small('View',`dispatchView(${escapeArg(j.id)})`),['Open','Partially delivered'].includes(j.status)?
-        small('Record Delivery',`deliveryEdit(${escapeArg(j.id)})`)+small('Cancel',`cancelJob(${escapeArg(j.id)})`):'')
+      actionGroup(small('View',`dispatchView(${escapeArg(j.id)})`),
+        j.delivered===0?small('Edit',`dispatchEdit(${escapeArg(j.id)})`):'',
+        ['Open','Partially delivered'].includes(j.status)?
+        small('Record Delivery',`deliveryEdit(${escapeArg(j.id)})`)+small('Cancel',`cancelJob(${escapeArg(j.id)})`):'',
+        j.delivered===0?dangerSmall('Delete',`deleteOperation('jobs',${escapeArg(j.id)})`):'')
     ]));
 }
 
@@ -4592,14 +4660,24 @@ function custodyArchive(id){
     l.active=restore;
   });
 }
+function deleteLocation(id){
+  const old=get(state,'locations',id);
+  if(!old)return toast('This location no longer exists.','warn');
+  approval('Delete '+old.name,'Permanently remove this location. Locations used by stock or operations cannot be deleted.',s=>{
+    need(sameCloudRecord(get(s,'locations',id),old),'This location changed. Reopen it before deleting.');
+    need(!recordIsUsed(s,'locations',id),'This location is used elsewhere. Remove its links first, or archive it.');
+    s.locations=s.locations.filter(row=>row.id!==id);
+  },'Delete');
+}
 function settingsPage(){
   return head('System','Settings & Data',button('Add Custody Location','locationEdit()','btn-primary','plus'))+
     panel('Company profile',`<div class="card-body">${cell(SET.company,[SET.currentUser,SET.address].filter(Boolean).join(' · '))}
       <div style="margin-top:9px">${small('Edit company profile','profileEdit()')}</div></div>`)+
-    panel('Stock custody locations',table(['Location','Company','Address','City','Status','Actions'],state.locations.filter(l=>l.stock).map(l=>[
+    panel('Locations',table(['Location','Company','Address','City','Status','Actions'],state.locations.map(l=>[
       esc(l.name),esc(l.ownerId?get(state,l.ownerType,l.ownerId)?.name:'AMBS'),esc(l.address),esc(l.city),chip(l.active===false?'Archived':'Active'),
       actionGroup(mapAction(l),l.ownerId?small('Edit company',`masterEdit(${escapeArg(l.ownerType)},${escapeArg(l.ownerId)})`):
-        small('Edit',`locationEdit(${escapeArg(l.id)})`)+small(l.active===false?'Restore':'Archive',`custodyArchive(${escapeArg(l.id)})`))
+        small('Edit',`locationEdit(${escapeArg(l.id)})`)+small(l.active===false?'Restore':'Archive',`custodyArchive(${escapeArg(l.id)})`),
+        dangerSmall('Delete',`deleteLocation(${escapeArg(l.id)})`))
     ])))+
     panel('Back up and restore',`<div class="card-body"><p style="margin-top:0">Export a JSON copy before moving to another computer or browser profile.</p>
       ${actionGroup(button('Export Backup (JSON)','exportBackup()','btn-primary','download'),
@@ -4614,7 +4692,7 @@ function profileEdit(){
       const logo=await imageValue(f,SET.logo), settings={logo};
       for(const n of ['company','currentUser','address','phone','email','trn'])settings[n]=valOf(f,n);
       need(settings.company&&settings.currentUser,'Company and operator name are required.');
-      await commit(s=>{s.settings=settings;});
+      await commit(s=>{s.settings={...s.settings,...settings};});
     });
 }
 function validRows(rows,name){
@@ -4628,6 +4706,8 @@ function validRows(rows,name){
 }
 function validateState(s){
   need(s&&s.schema===3&&s.settings&&typeof s.settings.company==='string'&&typeof s.settings.currentUser==='string','Invalid version 3 state.');
+  need(s.deletedWorkbookParts==null||(Array.isArray(s.deletedWorkbookParts)&&s.deletedWorkbookParts.every(id=>typeof id==='string'&&id.length<=200)),
+    'Invalid deleted workbook parts.');
   for(const name of LIVE)validRows(s[name],name);
   const ids=new Set();
   for(const t of [...COMPANIES,'materials','parts','products','variants']){
@@ -4761,7 +4841,11 @@ async function previewBackup(input){
           if(data){
             prepareWorkbookPartBackupMerge(next,data);
             for(const n of LIVE)next[n]=mergeRows(next[n],data[n],n);
-            if(empty)next.settings={...DEFAULTS,...data.settings};
+            if(empty){
+              next.settings={...DEFAULTS,...data.settings};
+              next.deletedWorkbookParts=[...(data.deletedWorkbookParts||[])];
+              next.parts=next.parts.filter(part=>!next.deletedWorkbookParts.includes(part.id));
+            }
           }else{
             const novel=Object.fromEntries(LEGACY.map(n=>[n,rows[n].filter(r=>!stored[n].some(x=>x.id===r.id))]));
             migrated(next,{...novel,bom:old.bom,movements:old.movements});
