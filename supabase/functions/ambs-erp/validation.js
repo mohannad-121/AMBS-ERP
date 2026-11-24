@@ -99,6 +99,8 @@ function validateState(s){
   for(const v of s.variants)need(get(s,'parts',v.partId)?.unit===v.unit,'Variant has an invalid parent or unit.');
   const site=id=>get(s,'locations',id);
   const sku=id=>item(s,id);
+  const linkedSite=(type,companyId,siteId)=>(!companyId||!!get(s,type,companyId))&&
+    (!siteId||site(siteId)?.ownerType===type&&site(siteId)?.ownerId===companyId);
   const positive=n=>Number.isFinite(n)&&n>0;
   const integral=n=>Number.isSafeInteger(n)&&n>0;
   const component=(n,unit)=>measured(unit)?positive(n):integral(n);
@@ -117,27 +119,55 @@ function validateState(s){
       (!l.variantId||get(s,'variants',l.variantId)?.partId===l.partId)),'Invalid product recipe.');
   }
   const trace=lines=>Array.isArray(lines)&&lines.every(l=>get(s,'materials',l.sku)&&sku(l.partSku)&&positive(l.qty)&&typeof l.formula==='string');
-  for(const p of s.plans)need(site(p.location)&&parts(p.parts)&&stockLines(p.materials)&&trace(p.source)&&
+  for(const p of s.plans)need(site(p.location)&&linkedSite('customers',p.customerId,p.customerSiteId)&&parts(p.parts)&&stockLines(p.materials)&&trace(p.source)&&
     ['Draft','Reserved','Closed'].includes(p.status)&&Array.isArray(p.products)&&p.products.length&&p.products.every(l=>get(s,'products',l.productId)&&integral(l.qty)&&parts(l.parts)),
     'Invalid production plan.');
-  for(const o of s.orders)need(site(o.location)&&get(s,'parts',o.partId)&&
+  for(const o of s.orders)need(site(o.location)&&linkedSite('customers',o.customerId,o.customerSiteId)&&
+    linkedSite('processors',o.processorId,o.processorSiteId)&&get(s,'parts',o.partId)&&
     (o.sku===o.partId||get(s,'variants',o.sku)?.partId===o.partId)&&integral(o.qty)&&stockLines(o.materials)&&trace(o.source)&&
     ['Draft','Released','Completed','Cancelled'].includes(o.status),'Invalid production order.');
-  for(const p of s.purchases)need(site(p.location)&&get(s,'suppliers',p.supplierId)&&stockLines(p.lines)&&p.lines.length&&
+  for(const p of s.purchases)need(site(p.location)&&linkedSite('suppliers',p.supplierId,p.supplierSiteId)&&get(s,'suppliers',p.supplierId)&&stockLines(p.lines)&&p.lines.length&&
      p.lines.every(l=>Number.isFinite(l.received)&&l.received>=0&&l.received<=l.qty+EPS)&&
      ['Draft','Ordered','Received','Cancelled'].includes(p.status),'Invalid purchase request.');
   for(const j of s.jobs)need(site(j.location)&&site(j.destination)?.ownerId===j.customerId&&
     site(j.destination)?.ownerType==='customers'&&get(s,'customers',j.customerId)&&get(s,'products',j.productId)&&
     parts(j.parts)&&j.parts.length&&integral(j.qty)&&Number.isSafeInteger(j.delivered)&&j.delivered>=0&&j.delivered<=j.qty&&
-    typeof j.destinationSnapshot?.name==='string'&&['Open','Partially delivered','Delivered','Cancelled'].includes(j.status),'Invalid dispatch job.');
+    typeof j.destinationSnapshot?.name==='string'&&(j.trackAtDestination==null||typeof j.trackAtDestination==='boolean')&&
+    (!j.trackAtDestination||j.location!==j.destination)&&
+    ['Open','Partially delivered','Delivered','Cancelled'].includes(j.status),'Invalid dispatch job.');
   const sums=new Map(), delivered=new Map(), received=new Map();
   for(const e of s.events){
     need(typeof e.at==='string'&&typeof e.type==='string'&&Array.isArray(e.lines),'Invalid stock event.');
+    if(e.partyType||e.partyId||e.siteId){
+      need(COMPANIES.includes(e.partyType)&&get(s,e.partyType,e.partyId),'Stock event has an invalid related company.');
+      if(e.siteId){const linked=get(s,'locations',e.siteId);
+        need(linked?.ownerType===e.partyType&&linked.ownerId===e.partyId,'Stock event site must belong to its related company.');}
+    }
+    if(e.orderId){
+      const order=get(s,'orders',e.orderId);
+      need(order&&e.id==='production:'+e.orderId,'Invalid production event link.');
+      if(e.partyId)need(e.partyType==='customers'&&e.partyId===order.customerId&&
+        e.siteId===(order.customerSiteId||''),'Production event has an invalid customer or site link.');
+    }
     if(e.jobId){
-      need(get(s,'jobs',e.jobId)&&integral(e.deliveredQty)&&typeof e.reference==='string','Invalid delivery event.');
+      const job=get(s,'jobs',e.jobId);
+      need(job&&integral(e.deliveredQty)&&typeof e.reference==='string','Invalid delivery event.');
+      if(e.partyId)need(e.partyType==='customers'&&e.partyId===get(s,'jobs',e.jobId).customerId&&
+        e.siteId===get(s,'jobs',e.jobId).destination,'Delivery event has an invalid customer or site link.');
+      if(job.trackAtDestination){
+        const totals=new Map();
+        need(e.lines.some(line=>line.location===job.destination&&line.delta>0)&&
+          e.lines.every(line=>line.location===job.location&&line.delta<0||line.location===job.destination&&line.delta>0),
+          'Tracked delivery must transfer stock between source and customer site.');
+        e.lines.forEach(line=>totals.set(line.sku,(totals.get(line.sku)||0)+line.delta));
+        need([...totals.values()].every(total=>Math.abs(total)<EPS),'Tracked delivery quantities must balance.');
+      }
       delivered.set(e.jobId,(delivered.get(e.jobId)||0)+e.deliveredQty);
     }
     if(e.purchaseId)need(get(s,'purchases',e.purchaseId)&&typeof e.reference==='string','Invalid receipt event.');
+    if(e.purchaseId&&e.partyId)need(e.partyType==='suppliers'&&e.partyId===get(s,'purchases',e.purchaseId).supplierId&&
+      e.siteId===(get(s,'purchases',e.purchaseId).supplierSiteId||''),
+      'Receipt event has an invalid supplier link.');
     const sumsEvent=new Map();
     for(const l of e.lines){
       need(sku(l.sku)&&site(l.location)&&Number.isFinite(l.delta),'Stock event has an invalid SKU, location or quantity.');

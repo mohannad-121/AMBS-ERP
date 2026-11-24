@@ -185,6 +185,22 @@ function event(s,id,type,lines,note=''){
   }
   s.events.push({id,type,lines,note,at:now(),by:s.settings.currentUser});
 }
+function stockEventContext(s,lines,rawParty='',selectedSite=''){
+  const explicit=rawParty?JSON.parse(rawParty):null;
+  const owners=[...new Map(lines.map(line=>get(s,'locations',line.location)).filter(l=>l.ownerId)
+    .map(l=>[JSON.stringify([l.ownerType,l.ownerId]),[l.ownerType,l.ownerId]])).values()];
+  if(explicit&&owners.length===1)need(explicit[0]===owners[0][0]&&explicit[1]===owners[0][1],
+    'The selected stock location belongs to a different company.');
+  const [partyType,partyId]=explicit||((owners.length===1)?owners[0]:[]);
+  if(!partyId){need(!selectedSite,'Choose a related company for this site.');return {};}
+  need(COMPANIES.includes(partyType),'Choose a valid related company.');
+  live(s,partyType,partyId);
+  const siteId=selectedSite||lines.map(line=>line.location)
+    .find(locationId=>get(s,'locations',locationId)?.ownerId===partyId)||'';
+  if(siteId){const site=live(s,'locations',siteId);
+    need(site.ownerType===partyType&&site.ownerId===partyId,'Choose a site belonging to the related company.');}
+  return {partyType,partyId,siteId};
+}
 function evalFormula(input){
   try{
     const text=String(input??'').trim();
@@ -3353,6 +3369,19 @@ function locationEdit(id){
 function companyLocations(s,type,id,activeOnly=true){
   return s.locations.filter(l=>l.ownerType===type&&l.ownerId===id&&(!activeOnly||l.active!==false));
 }
+function wireCompanySite(form,type,companyField,siteField,selected=''){
+  const company=form.elements[companyField],site=form.elements[siteField];
+  const refresh=chosen=>{site.innerHTML=choiceOptions(company.value?pair(companyLocations(state,type,company.value),l=>
+    l.name+(l.city?' · '+l.city:'')):[],chosen,'No linked site');};
+  company.addEventListener('change',()=>refresh(''));
+  refresh(selected);
+}
+function checkedCompanySite(s,type,companyId,siteId){
+  need(!siteId||companyId,'Choose a company for the linked site.');
+  if(companyId)live(s,type,companyId);
+  if(siteId){const site=live(s,'locations',siteId);
+    need(site.ownerType===type&&site.ownerId===companyId,'Choose a site belonging to the selected company.');}
+}
 const PACKING_COLORS=['Yellow','Red'];
 const NET_SIZES=['4.5 × 3.1 m','6.5 × 3.1 m','4 × 4.5 m','6.5 × 4.5 m','6.5 × 12 m'];
 function sizeColorFields(row,sizes){
@@ -3770,6 +3799,46 @@ function deleteOperation(type,id){
     s[type]=s[type].filter(item=>item.id!==id);
   },'Delete');
 }
+function connectedPanels(type,row){
+  const company=COMPANIES.includes(type);
+  const sites=company?companyLocations(state,type,row.id,false):[];
+  const siteIds=new Set(sites.map(site=>site.id));
+  const skuIds=new Set(type==='parts'?[row.id,...state.variants.filter(v=>v.partId===row.id).map(v=>v.id)]:[row.id]);
+  const balances=stockRows(state).filter(balance=>company?siteIds.has(balance.location):skuIds.has(balance.sku));
+  const stock=panel(company?'Stock at linked sites':'Stock by location',textTable(
+    ['Item / SKU','Location','Balance'],balances.map(balance=>[
+      labelOf(state,balance.sku),locName(state,balance.location),qfmt(balance.qty,item(state,balance.sku)?.unit)
+    ]),'No current stock balance.'));
+  const operations=[];
+  const append=(name,rows,open)=>rows.forEach(record=>operations.push([
+    name,record.no||record.name,record.status,small('View',`closeModal();${open}(${escapeArg(record.id)})`)
+  ]));
+  append('Production plan',state.plans.filter(p=>p.customerId===row.id||p.products.some(l=>l.productId===row.id)||
+    p.parts.some(l=>l.partId===row.id||skuIds.has(l.sku))||p.materials.some(l=>skuIds.has(l.sku))),'planView');
+  append('Production order',state.orders.filter(o=>o.customerId===row.id||o.processorId===row.id||o.partId===row.id||skuIds.has(o.sku)||
+    o.materials.some(l=>skuIds.has(l.sku))),'orderView');
+  append('Purchase',state.purchases.filter(p=>p.supplierId===row.id||p.lines.some(l=>skuIds.has(l.sku))),'purchaseView');
+  append('Dispatch',state.jobs.filter(j=>j.customerId===row.id||j.productId===row.id||
+    j.parts.some(l=>l.partId===row.id||skuIds.has(l.sku))),'dispatchView');
+  const related=operations.length?panel('Linked operations',table(['Type','Reference','Status','Action'],operations)):'';
+  const movements=state.events.filter(e=>{
+    const job=e.jobId&&get(state,'jobs',e.jobId),purchase=e.purchaseId&&get(state,'purchases',e.purchaseId);
+    const orderId=e.orderId||(e.id.startsWith('production:')?e.id.slice('production:'.length):'');
+    const order=orderId&&get(state,'orders',orderId);
+    return e.partyType===type&&e.partyId===row.id||
+      type==='customers'&&(job?.customerId===row.id||order?.customerId===row.id)||
+      type==='suppliers'&&purchase?.supplierId===row.id||
+      type==='processors'&&order?.processorId===row.id||
+      e.lines.some(line=>company?siteIds.has(line.location):skuIds.has(line.sku));
+  });
+  const history=movements.length?panel('Recent linked stock movements',eventsTable(movements.slice(-15))):'';
+  const bomOwners=type==='materials'?state.recipes.filter(recipe=>recipe.kind==='part'&&recipe.lines.some(line=>line.sku===row.id)):
+    type==='parts'?state.recipes.filter(recipe=>recipe.kind==='product'&&recipe.lines.some(line=>line.partId===row.id)):[];
+  const boms=bomOwners.length?panel('Used in BOMs',table(['Owner','Type','Action'],bomOwners.map(recipe=>[
+    esc(label(item(state,recipe.id))),esc(recipe.kind),small('Open BOM',`closeModal();recipeEdit(${escapeArg(recipe.kind==='part'?'parts':'products')},${escapeArg(recipe.id)})`)
+  ]))):'';
+  return stock+related+boms+history;
+}
 function masterView(type,id){
   const r=get(state,type,id);
   const locations=COMPANIES.includes(type)?companyLocations(state,type,id,false):[];
@@ -3778,7 +3847,7 @@ function masterView(type,id){
     ['Type',type==='products'?packingCategory(r.category)?.type:''],['Default order quantity',r.orderQty],['Size',type==='products'?'':r.size],['Color',type==='products'?'':r.color],['Unit',r.unit],['Source',r.source],['Contact',r.contact],['Email',r.email],['Phone',r.phone],['Services / supply',r.details],['Notes',r.notes]])+
     (locations.length?panel('Linked locations',table(['Name','Address','City','Notes','Status','Map'],
       locations.map(l=>[esc(l.name),esc(l.address),esc(l.city),esc(l.notes),chip(l.active===false?'Archived':'Active'),mapAction(l)]))):'')+
-    (packing?packingParts(packing.rows,packing.quantities,false,r.orderQty??1):''));
+    (packing?packingParts(packing.rows,packing.quantities,false,r.orderQty??1):'')+connectedPanels(type,r));
 
 }
 function searchableTable(columns,rows,empty,searchTerms=[]){
@@ -3815,17 +3884,17 @@ function filterTable(el){
 }
 function masterPage(type){
   const company=COMPANIES.includes(type), title=ENTITY[type], rows=state[type], isParts=type==='parts';
-  const balances=new Map(isParts?aggregate(stockRows(state)).map(({sku,qty})=>[sku,qty]):[]);
+  const balances=new Map(aggregate(stockRows(state)).map(({sku,qty})=>[sku,qty]));
   for(const variant of isParts?state.variants:[]){
     balances.set(variant.partId,(balances.get(variant.partId)??0)+(balances.get(variant.id)??0));
   }
   return head(company?'Overview':'Master Data',TITLES[type],button('Add '+title,`masterEdit(${escapeArg(type)})`,'btn-primary','plus'))+
-    searchableTable(company?['Code','Company','Contact','Locations','Status','Actions']:['Code','Item','Category','Stock unit',...(isParts?['Quantity on hand']:[]),'Status','Actions'],
+    searchableTable(company?['Code','Company','Contact','Locations','Status','Actions']:['Code','Item','Category','Stock unit','Quantity on hand','Status','Actions'],
       rows.map(r=>{
         const args=`${escapeArg(type)},${escapeArg(r.id)}`;
         return [esc(r.code),thumb(r.image)+cell(r.name,[r.size,r.color,r.dimensions||r.details].filter(Boolean).join(' · ')),esc(company?r.contact:r.category),
           company?String(companyLocations(state,type,r.id).length):esc(r.unit),
-          ...(isParts?[esc(qfmt(balances.get(r.id)??0))]:[]),
+          ...(company?[]:[esc(qfmt(balances.get(r.id)??0,r.unit))]),
           chip(r.active===false?'Archived':'Active'),actionGroup(small('View',`masterView(${args})`),small('Edit',`masterEdit(${args})`),
             type==='parts'?small('Variants',`variantsView(${escapeArg(r.id)})`):'',
             ['parts','products'].includes(type)?small('BOM',`recipeEdit(${escapeArg(type)},${escapeArg(r.id)})`):'',
@@ -3838,7 +3907,8 @@ function variantsView(id){
   const rows=state.variants.filter(v=>v.partId===id);
   infoModal(label(get(state,'parts',id))+' · Variants',table(['SKU','Name','Size','Color','Status','Actions'],rows.map(v=>[
     esc(v.code),thumb(v.image)+esc(v.name),esc(v.size),esc(v.color),chip(v.active===false?'Archived':'Active'),
-    actionGroup(small('Edit',`closeModal();variantEdit(${escapeArg(id)},${escapeArg(v.id)})`),
+    actionGroup(small('View',`closeModal();masterView('variants',${escapeArg(v.id)})`),
+      small('Edit',`closeModal();variantEdit(${escapeArg(id)},${escapeArg(v.id)})`),
       small(v.active===false?'Restore':'Archive',`closeModal();masterArchive('variants',${escapeArg(v.id)})`),
       dangerSmall('Delete',`closeModal();deleteMaster('variants',${escapeArg(v.id)})`))
   ])),button('Add Variant',`closeModal();variantEdit(${escapeArg(id)})`,'btn-primary','plus'));
@@ -4059,16 +4129,23 @@ function planEdit(id){
       need(!id||sameCloudRecord(old,draft),'This plan changed. Reopen it before saving.');
       const location=loc(s,valOf(f,'location')).id, products=read(s), source=explode(s,products);
       const name=valOf(f,'name');need(name,'Enter a plan name.');
+      const customerId=valOf(f,'customer'),customerSiteId=valOf(f,'customerSite');
+      checkedCompanySite(s,'customers',customerId,customerSiteId);
       add(s.plans,{id:id||key(),no:old?.no||operationNo('PLAN'),name,location,products,
-        parts:products.flatMap(l=>l.parts),materials:aggregate(source),source,status:old?.status||'Draft',at:old?.at||now()});
+        parts:products.flatMap(l=>l.parts),materials:aggregate(source),source,customerId,customerSiteId,
+        status:old?.status||'Draft',at:old?.at||now()});
     });
     App.route='production';location.hash='#/production';
     return 'Production plan saved.';
-  },{title:draft?'Edit Production Plan':'New Production Plan',saveText:'Save Plan',description:'Review the two-level BOM and raw material availability.',draft});
+  },{title:draft?'Edit Production Plan':'New Production Plan',saveText:'Save Plan',description:'Review the two-level BOM and raw material availability.',draft,
+    extra:searchable('Customer (optional)','customer',pair(current(state,'customers')),draft?.customerId)+
+      select('Customer site (optional)','customerSite',[],'',false,'No linked site'),
+    after:form=>wireCompanySite(form,'customers','customer','customerSite',draft?.customerSiteId)});
 }
 function planView(id){
   const p=get(state,'plans',id);
-  infoModal(p.no+' · '+p.name,kv([['Location',locName(state,p.location)],['Status',p.status]])+
+  infoModal(p.no+' · '+p.name,kv([['Location',locName(state,p.location)],['Customer',get(state,'customers',p.customerId)?.name],
+    ['Customer site',get(state,'locations',p.customerSiteId)?.name],['Status',p.status]])+
     panel('Products',textTable(['Product','Quantity'],p.products.map(x=>[labelOf(state,x.productId),x.qty])))+
     panel('Parts',partsTable(p.parts))+panel('Consolidated raw materials',requireTable(state,p.materials,p.location,p.id))+
     panel('BOM trace',traceTable(p.source)),
@@ -4092,6 +4169,10 @@ function orderEdit(initialPart='',initialLocation='',id){
     ${searchable('Part to manufacture','part',pair(current(state,'parts').filter(p=>p.source==='Manufactured')),old?.partId||initialPart)}
     ${number('Quantity to manufacture','qty',old?.qty??1,1,1)}
     ${select('Fabrication location','location',locOptions(),old?.location||initialLocation)}
+    ${searchable('Customer (optional)','customer',pair(current(state,'customers')),old?.customerId)}
+    ${select('Customer site (optional)','customerSite',[],'',false,'No linked site')}
+    ${searchable('Processing company (optional)','processor',pair(current(state,'processors')),old?.processorId)}
+    ${select('Processing site (optional)','processorSite',[],'',false,'No linked site')}
     <div data-variant></div>${area('Notes','notes',old?.notes)}</div><div data-preview></div>`,async f=>{
       await commit(s=>{
         const prev=get(s,'orders',id);
@@ -4100,12 +4181,19 @@ function orderEdit(initialPart='',initialLocation='',id){
         need(part.source==='Manufactured','Choose a manufactured part.');
         const count=whole(valOf(f,'qty')), variant=valOf(f,'variant'), source=expandPart(s,part.id,count,variant);
         const location=loc(s,valOf(f,'location')).id;
+        const customerId=valOf(f,'customer'),customerSiteId=valOf(f,'customerSite');
+        checkedCompanySite(s,'customers',customerId,customerSiteId);
+        const processorId=valOf(f,'processor'),processorSiteId=valOf(f,'processorSite');
+        checkedCompanySite(s,'processors',processorId,processorSiteId);
         add(s.orders,{id:id||key(),no:prev?.no||operationNo('MO'),location,partId:part.id,sku:variant||part.id,qty:count,
-          source,materials:aggregate(source),notes:valOf(f,'notes'),status:prev?.status||'Draft',at:prev?.at||now()});
+          source,materials:aggregate(source),customerId,customerSiteId,processorId,processorSiteId,notes:valOf(f,'notes'),
+          status:prev?.status||'Draft',at:prev?.at||now()});
       });
       return old?'Production order updated.':'Draft production order saved.';
     },{text:old?'Save Order':'Save Draft'});
   const variant=$('[data-variant]',form), preview=$('[data-preview]',form);
+  wireCompanySite(form,'customers','customer','customerSite',old?.customerSiteId);
+  wireCompanySite(form,'processors','processor','processorSite',old?.processorSiteId);
   function updateVariant(v=''){variant.innerHTML=variantControl('variant',valOf(form,'part'),v);}
   function update(e){
     if(e?.target.name==='part')updateVariant();
@@ -4121,7 +4209,10 @@ function orderEdit(initialPart='',initialLocation='',id){
 }
 function orderView(id){
   const o=get(state,'orders',id);
-  infoModal(o.no+' · '+labelOf(state,o.sku),kv([['Status',o.status],['Quantity',o.qty],['Location',locName(state,o.location)],['Notes',o.notes]])+
+  infoModal(o.no+' · '+labelOf(state,o.sku),kv([['Status',o.status],['Quantity',o.qty],['Location',locName(state,o.location)],
+    ['Customer',get(state,'customers',o.customerId)?.name],['Customer site',get(state,'locations',o.customerSiteId)?.name],
+    ['Processing company',get(state,'processors',o.processorId)?.name],['Processing site',get(state,'locations',o.processorSiteId)?.name],
+    ['Notes',o.notes]])+
     panel('Raw material requirements',requireTable(state,o.materials,o.location,o.id))+panel('BOM trace',traceTable(o.source)),
     button('Download PDF',`recordPDF('orders',${escapeArg(id)})`,'btn-sm','pdf'));
 }
@@ -4138,6 +4229,8 @@ function orderTransition(id,status){
       event(s,'production:'+id,'Production completion',[
         ...o.materials.map(l=>({sku:l.sku,location:o.location,delta:-l.qty})),
         {sku:o.sku,location:o.location,delta:o.qty}],o.no);
+      Object.assign(get(s,'events','production:'+id),{orderId:id,
+        ...(o.customerId?{partyType:'customers',partyId:o.customerId,siteId:o.customerSiteId||''}:{})});
       o.completedAt=now();
     }
     o.status=status;
@@ -4146,8 +4239,10 @@ function orderTransition(id,status){
 function productionPage(){
   return head('Operations','Production',button('New Production Plan','planEdit()','','plan'),
     button('Create Production Order','orderEdit()','btn-primary','plus'))+
-    panel('Production orders',table(['Order','Part / SKU','Qty','Fabrication location','Status','Actions'],state.orders.slice().sort(dateSort).map(o=>[
-      esc(o.no),esc(labelOf(state,o.sku)),esc(qfmt(o.qty,item(state,o.sku)?.unit)),esc(locName(state,o.location)),chip(o.status),
+    panel('Production orders',table(['Order','Part / SKU','Qty','Fabrication location','Customer / site','Processor / site','Status','Actions'],state.orders.slice().sort(dateSort).map(o=>[
+      esc(o.no),esc(labelOf(state,o.sku)),esc(qfmt(o.qty,item(state,o.sku)?.unit)),esc(locName(state,o.location)),
+      esc([get(state,'customers',o.customerId)?.name,get(state,'locations',o.customerSiteId)?.name].filter(Boolean).join(' / ')),
+      esc([get(state,'processors',o.processorId)?.name,get(state,'locations',o.processorSiteId)?.name].filter(Boolean).join(' / ')),chip(o.status),
       actionGroup(small('View',`orderView(${escapeArg(o.id)})`),
         o.status!=='Completed'?small('Edit',`orderEdit('','',${escapeArg(o.id)})`):'',
         o.status==='Draft'?small('Release',`orderTransition(${escapeArg(o.id)},'Released')`):'',
@@ -4155,8 +4250,9 @@ function productionPage(){
         ['Draft','Released'].includes(o.status)?small('Cancel',`orderTransition(${escapeArg(o.id)},'Cancelled')`):'',
         o.status!=='Completed'?dangerSmall('Delete',`deleteOperation('orders',${escapeArg(o.id)})`):'')
     ])))+
-    panel('Production plans',table(['Plan','Project','Location','Status','Actions'],state.plans.slice().sort(dateSort).map(p=>[
-      esc(p.no),esc(p.name),esc(locName(state,p.location)),chip(p.status),
+    panel('Production plans',table(['Plan','Project','Location','Customer / site','Status','Actions'],state.plans.slice().sort(dateSort).map(p=>[
+      esc(p.no),esc(p.name),esc(locName(state,p.location)),
+      esc([get(state,'customers',p.customerId)?.name,get(state,'locations',p.customerSiteId)?.name].filter(Boolean).join(' / ')),chip(p.status),
       actionGroup(small('View',`planView(${escapeArg(p.id)})`),
         small('Edit',`planEdit(${escapeArg(p.id)})`),
         p.status==='Draft'?small('Reserve',`planTransition(${escapeArg(p.id)},'Reserved')`):'',
@@ -4169,9 +4265,15 @@ function productionPage(){
 function inventoryForm(mode){
   const move=mode==='transfer', count=mode==='count', id=key(), opening=state;
   const titles={transfer:'Transfer Stock',count:'Physical Stock Check',adjust:'Record Stock Adjustment'};
+  const parties=COMPANIES.flatMap(type=>current(state,type).map(row=>[
+    JSON.stringify([type,row.id]),ENTITY[type]+' · '+row.name
+  ]));
   const form=formModal(titles[mode],`<div class="form-grid">
     ${searchable('Item / SKU','sku',pair(skus()))}${select(move?'From location':'Custody location','location',locOptions())}
-    ${move?select('To location','to',locOptions()):''}
+    ${move?select('To location','to',locOptions())+`<div class="field full">${note('To hold stock at a customer site, enable stock custody for that site in the Customer record.')}</div>`:''}
+    ${searchable('Related company (optional)','relatedParty',parties)}
+    ${select('Related company site (optional)','relatedSite',[],'',false,'No linked site')}
+    <div class="field full"><div class="hint">Stock locations owned by one company are linked automatically if no company is selected.</div></div>
     ${input(count?'Physical count':move?'Quantity to transfer':'Adjustment (+ or −)','qty','',
       {type:'number',required:true,extra:`step="any" ${count||move?'min="0"':''}`})}
     ${move?area('Reference / notes','notes'):input(count?'Reason / count reference':'Reason for adjustment','notes','',{required:true,full:true})}
@@ -4198,6 +4300,7 @@ function inventoryForm(mode){
           lines.push({sku:row.id,location:to,delta:requested});
         }
         event(s,id,titles[mode],lines,notes);
+        Object.assign(get(s,'events',id),stockEventContext(s,lines,valOf(f,'relatedParty'),valOf(f,'relatedSite')));
         if(count)Object.assign(get(s,'events',id),{physicalCount:requested,systemCount:before});
       });
       return 'Stock event recorded.';
@@ -4207,13 +4310,28 @@ function inventoryForm(mode){
     const target=$('[data-balance]',form);
     if(!row||!l){target.innerHTML='';return;}
     const balance=availability(state,sku,l);
-    const insufficient=move&&Number(valOf(form,'qty'))>balance+EPS;
+    const raw=valOf(form,'qty'),entered=Number(raw);
+    const insufficient=raw!==''&&Number.isFinite(entered)&&
+      (move?entered>balance+EPS:!count&&balance+entered<-EPS);
     const partId=row.partId||row.id, part=get(state,'parts',partId);
-    const manufacture=insufficient&&part?.source==='Manufactured';
-    const detail=insufficient?' · Requested quantity exceeds source stock. '+(manufacture?'Check whether production has been completed.':'Review the source balance.'):'';
-    target.innerHTML=note('Available '+qfmt(balance,row.unit)+' at '+locName(state,l)+detail,insufficient?'warn':'info')+
+    const manufacture=move&&insufficient&&part?.source==='Manufactured';
+    const detail=insufficient?(move?' · Requested quantity exceeds source stock. '+
+      (manufacture?'Check whether production has been completed.':'Review the source balance.'):
+      ' · This adjustment would make the balance negative.') : '';
+    const after=raw!==''&&Number.isFinite(entered)?count?entered:move?balance-entered:balance+entered:null;
+    const destination=move?valOf(form,'to'):'';
+    const destinationText=destination&&after!=null?' · '+locName(state,destination)+' after: '+
+      qfmt(availability(state,sku,destination)+entered,row.unit):'';
+    target.innerHTML=note('Available '+qfmt(balance,row.unit)+' at '+locName(state,l)+
+      (after==null?'':' · after: '+qfmt(after,row.unit))+destinationText+detail,insufficient?'warn':'info')+
       (manufacture?small('Create Production Order',`closeModal();orderEdit(${escapeArg(partId)},${escapeArg(l)})`):'');
   }
+  const relatedParty=form.elements.relatedParty,relatedSite=form.elements.relatedSite;
+  relatedParty.addEventListener('change',()=>{
+    const [type,id]=relatedParty.value?JSON.parse(relatedParty.value):[];
+    relatedSite.innerHTML=choiceOptions(id?pair(companyLocations(state,type,id),l=>l.name+(l.city?' · '+l.city:'')):[],
+      '','No linked site');
+  });
   form.addEventListener('input',update);form.addEventListener('change',update);
 }
 function balanceData(s=state){
@@ -4221,18 +4339,46 @@ function balanceData(s=state){
     labelOf(s,r.sku),locName(s,r.location),qfmt(r.qty,item(s,r.sku)?.unit)
   ]);
 }
+function eventLinks(s,e){
+  const job=e.jobId&&get(s,'jobs',e.jobId),purchase=e.purchaseId&&get(s,'purchases',e.purchaseId);
+  const orderId=e.orderId||(e.id.startsWith('production:')?e.id.slice('production:'.length):'');
+  const order=orderId&&get(s,'orders',orderId);
+  const partyType=e.partyType||(job?'customers':purchase?'suppliers':order?.customerId?'customers':'');
+  const partyId=e.partyId||job?.customerId||purchase?.supplierId||order?.customerId;
+  const siteId=e.siteId||e.destination||job?.destination||purchase?.supplierSiteId||order?.customerSiteId;
+  return {company:partyId?get(s,partyType,partyId)?.name||'':'',site:siteId?get(s,'locations',siteId)?.name||'':'',
+    processor:order?.processorId?get(s,'processors',order.processorId)?.name||'':'',
+    processingSite:order?.processorSiteId?get(s,'locations',order.processorSiteId)?.name||'':'',
+    document:job?.no||purchase?.no||order?.no||'',job,purchase,order};
+}
 function eventView(id){
   const e=get(state,'events',id);
-  infoModal(e.type,kv([['Recorded',stamp(e.at)],['By',e.by],['Reference / reason',e.note],['System count',e.systemCount],['Physical count',e.physicalCount]])+
-    textTable(['Item / SKU','Location','Stock change'],e.lines.map(l=>[labelOf(state,l.sku),locName(state,l.location),qfmt(l.delta,item(state,l.sku)?.unit)])),
-    button('Download PDF',`recordPDF('events',${escapeArg(id)})`,'btn-sm','pdf'));
+  const linked=eventLinks(state,e);
+  infoModal(e.type,kv([['Recorded',stamp(e.at)],['By',e.by],['Reference / reason',e.note],
+    ['Related company',linked.company],['Related site',linked.site],
+    ['Processing company',linked.processor],['Processing site',linked.processingSite],['Related document',linked.document],
+    ['System count',e.systemCount],['Physical count',e.physicalCount]])+
+    textTable(['Item / SKU','Location','Stock change','Current balance'],e.lines.map(l=>[
+      labelOf(state,l.sku),locName(state,l.location),qfmt(l.delta,item(state,l.sku)?.unit),
+      qfmt(availability(state,l.sku,l.location),item(state,l.sku)?.unit)
+    ])),
+    actionGroup(linked.job?small('Open dispatch',`closeModal();dispatchView(${escapeArg(linked.job.id)})`):'',
+      linked.purchase?small('Open purchase',`closeModal();purchaseView(${escapeArg(linked.purchase.id)})`):'',
+      linked.order?small('Open order',`closeModal();orderView(${escapeArg(linked.order.id)})`):'',
+      button('Download PDF',`recordPDF('events',${escapeArg(id)})`,'btn-sm','pdf')));
 }
 function eventsTable(events=state.events){
-  return table(['Date','Event','Items / SKUs','Location','Reference','Actions'],events.slice().sort(dateSort).map(e=>[
+  return table(['Date','Event','Items / SKUs','Location','Change','Related company / site','Reference','Actions'],events.slice().sort(dateSort).map(e=>{
+    const linked=eventLinks(state,e);
+    return [
     esc(stamp(e.at)),esc(e.type),esc([...new Set(e.lines.map(l=>labelOf(state,l.sku)))].join(', ')),
     esc(e.lines.length===2&&e.type==='Transfer Stock'?e.lines.map(l=>locName(state,l.location)).join(' → '):
-      [...new Set(e.lines.map(l=>locName(state,l.location)))].join(', ')),esc(e.note),small('View',`eventView(${escapeArg(e.id)})`)
-  ]));
+      [...new Set(e.lines.map(l=>locName(state,l.location)))].join(', ')),
+      esc(e.lines.map(l=>(l.delta>0?'+':'')+qfmt(l.delta,item(state,l.sku)?.unit)).join(', ')),
+      esc([linked.company,linked.site,linked.processor,linked.processingSite].filter(Boolean).join(' / ')),
+      esc(e.note),small('View',`eventView(${escapeArg(e.id)})`)
+    ];
+  }));
 }
 function inventoryPage(){
   return head('Operations',TITLES.movement,button('Transfer Stock',"inventoryForm('transfer')",'btn-primary','swap'),
@@ -4247,6 +4393,7 @@ function purchaseEdit(id,initial){
   const old=get(state,'purchases',id);
   const form=formModal(old?'Edit Purchase Request':'New Purchase Request',`<div class="form-grid">
     ${searchable('Supplier','supplier',pair(current(state,'suppliers')),old?.supplierId)}
+    ${select('Supplier site (optional)','supplierSite',[],'',false,'No linked site')}
     ${select('Receiving custody location','location',locOptions(),old?.location||'')}
     ${area('Reference / notes','notes',old?.notes)}</div><div data-purchase></div>`,async f=>{
       const items=lines().map(l=>({sku:fieldValue(l,'sku'),qty:qty(fieldValue(l,'qty')),received:0}));
@@ -4256,17 +4403,20 @@ function purchaseEdit(id,initial){
         need(!id||prev?.lines.every(line=>line.received===0)&&sameCloudRecord(prev,old),
           'This request changed or has receipts. Reopen it before saving.');
         const supplierId=live(s,'suppliers',valOf(f,'supplier')).id, location=loc(s,valOf(f,'location')).id;
+        const supplierSiteId=valOf(f,'supplierSite');
+        checkedCompanySite(s,'suppliers',supplierId,supplierSiteId);
         items.forEach(l=>need(get(s,'materials',l.sku)||
           ['Purchased','Stocked'].includes(get(s,'parts',item(s,l.sku)?.partId||l.sku)?.source),
           'Choose a raw material or a purchased or stocked component.'));
         items.forEach(l=>{stockItem(s,l.sku);if(!get(s,'materials',l.sku))componentQty(l.qty,item(s,l.sku).unit,'Purchased component quantity');});
-        add(s.purchases,{id:id||key(),no:prev?.no||operationNo('PR'),supplierId,location,notes:valOf(f,'notes'),lines:items,
+        add(s.purchases,{id:id||key(),no:prev?.no||operationNo('PR'),supplierId,supplierSiteId,location,notes:valOf(f,'notes'),lines:items,
           status:prev?.status||'Draft',at:prev?.at||now()});
       });
       return 'Purchase request saved.';
     });
   const options=skus().filter(x=>get(state,'materials',x.id)||
     ['Purchased','Stocked'].includes(get(state,'parts',x.partId||x.id)?.source));
+  wireCompanySite(form,'suppliers','supplier','supplierSite',old?.supplierSiteId);
   const lines=repeat(form,'[data-purchase]',(l,n)=>`<legend>Purchase line</legend><div class="form-grid">
     ${searchable('Raw Material or purchased SKU',n+'_sku',pair(options),l.sku)}${number('Ordered quantity',n+'_qty',l.qty)}</div>`,
     old?.lines||[initial||{}],'Add Line');
@@ -4300,7 +4450,8 @@ function receiptEdit(id){
       const ref=valOf(f,'ref');need(ref,'Enter a receipt reference.');
       need(!s.events.some(e=>e.purchaseId===id&&e.reference.toLowerCase()===ref.toLowerCase()),'This purchase already has a receipt with that reference.');
       event(s,eventId,'Supplier receipt',lines,r.no+' · '+ref);
-      Object.assign(get(s,'events',eventId),{purchaseId:id,reference:ref});
+      Object.assign(get(s,'events',eventId),{purchaseId:id,reference:ref,partyType:'suppliers',partyId:r.supplierId,
+        siteId:r.supplierSiteId||''});
       r.lines.forEach((l,i)=>l.received+=deltas[i]);
       if(r.lines.every(l=>l.qty-l.received<=EPS))r.status='Received';
     });
@@ -4310,6 +4461,7 @@ function receiptEdit(id){
 function purchaseView(id){
   const p=get(state,'purchases',id);
   infoModal(p.no,kv([['Status',p.status],['Supplier',label(get(state,'suppliers',p.supplierId))],
+    ['Supplier site',get(state,'locations',p.supplierSiteId)?.name],
     ['Receiving location',locName(state,p.location)],['Notes',p.notes]])+
     textTable(['Material / SKU','Ordered','Received','Outstanding'],p.lines.map(l=>{
       const unit=item(state,l.sku)?.unit;
@@ -4319,8 +4471,8 @@ function purchaseView(id){
 }
 function purchasingPage(){
   return head('Operations','Purchasing',button('New Purchase Request','purchaseEdit()','btn-primary','plus'))+
-    panel('Purchase requests',table(['Request','Supplier','Receiving location','Status','Actions'],state.purchases.slice().sort(dateSort).map(p=>[
-      esc(p.no),esc(label(get(state,'suppliers',p.supplierId))),esc(locName(state,p.location)),
+    panel('Purchase requests',table(['Request','Supplier','Supplier site','Receiving location','Status','Actions'],state.purchases.slice().sort(dateSort).map(p=>[
+      esc(p.no),esc(label(get(state,'suppliers',p.supplierId))),esc(get(state,'locations',p.supplierSiteId)?.name),esc(locName(state,p.location)),
       chip(p.status==='Ordered'&&p.lines.some(l=>l.received>0)?'Partially received':p.status),
       actionGroup(small('View',`purchaseView(${escapeArg(p.id)})`),
         p.lines.every(line=>line.received===0)?small('Edit',`purchaseEdit(${escapeArg(p.id)})`):'',
@@ -4359,16 +4511,22 @@ function dispatchEdit(id){
       const location=loc(s,valOf(f,'location')).id, product=read(s)[0], name=valOf(f,'name');
       need(name,'Enter a dispatch reference.');
       const finished=valOf(f,'fulfilment')==='Finished stock';
+      const trackAtDestination=checked(f,'trackAtDestination');
+      if(trackAtDestination)need(destination.stock,'Enable stock custody on this customer site before tracking delivered stock there.');
+      need(!trackAtDestination||destination.id!==location,'Choose different source and customer-site custody locations.');
       need(!finished||product.parts.every(p=>!p.variantId&&p.qty===p.standard),
         'Pack from component stock when variants or job-specific quantities are selected.');
       add(s.jobs,{id:id||key(),no:prev?.no||operationNo('DSP'),...product,name,customerId,destination:destination.id,location,finished,
+        trackAtDestination,
         destinationSnapshot:{name:destination.name,address:destination.address,city:destination.city,lat:destination.lat,lng:destination.lng,url:destination.url},
         delivered:0,status:prev?.status||'Open',at:prev?.at||now()});
     });
     return old?'Dispatch job updated.':'Dispatch job saved.';
   },{title:old?'Edit Dispatch Job':'New Dispatch Job',description:'Select an AMBS custody location, customer site and product configuration.',saveText:'Save Job',dispatch:true,draft,
     extra:searchable('Customer','customer',pair(current(state,'customers')),old?.customerId)+select('Customer delivery site','destination',[])+
-      select('Fulfilment','fulfilment',same(['Pack from parts','Finished stock']),old?.finished?'Finished stock':'Pack from parts'),
+      select('Fulfilment','fulfilment',same(['Pack from parts','Finished stock']),old?.finished?'Finished stock':'Pack from parts')+
+      tick('Keep delivered stock tracked at customer site','trackAtDestination',old?.trackAtDestination)+
+      `<div class="field full"><div class="hint">Requires the customer site to be enabled as a stock custody location.</div></div>`,
     after(form){
       const customer=form.elements.customer, destination=form.elements.destination;
       customer.addEventListener('change',()=>{destination.innerHTML=choiceOptions(destinations(customer.value));});
@@ -4391,6 +4549,7 @@ function dispatchView(id){
   infoModal(j.no+' · '+j.name,kv([['Product',labelOf(state,j.productId)],['Customer',label(get(state,'customers',j.customerId))],
     ['Delivery site',[destination.name,destination.address,destination.city].filter(Boolean).join(' · ')],
     ['Custody location',locName(state,j.location)],['Fulfilment',j.finished?'Finished stock':'Pack from parts'],
+    ['Track at customer site',j.trackAtDestination?'Yes':'No'],
     ['Ordered',j.qty],['Delivered',j.delivered],['Outstanding',j.qty-j.delivered],['Status',j.status]])+
     mapAction(destination)+panel('Saved packing configuration',partsTable(j.parts))+
     panel('Delivery history',table(['Delivery date','Product quantity','Reference','Actions'],history.map(e=>[
@@ -4400,7 +4559,9 @@ function dispatchView(id){
 function deliveryEdit(id){
   const j=get(state,'jobs',id), eventId=key(), remaining=j.qty-j.delivered;
   const form=formModal('Confirm Delivery · '+j.no,
-    note(j.finished?'Confirmed delivery deducts complete products from finished stock.':'Confirmed delivery deducts these exact part and variant SKUs. Adjusted quantities are apportioned cumulatively across partial deliveries.')+
+    note(j.trackAtDestination?'Confirmed delivery moves these SKUs from source custody into the customer-site stock balance.':
+      j.finished?'Confirmed delivery deducts complete products from finished stock.':
+      'Confirmed delivery deducts these exact part and variant SKUs. Adjusted quantities are apportioned cumulatively across partial deliveries.')+
     `<div class="form-grid">${number('Quantity delivered (outstanding '+remaining+')','qty',remaining,1,1)}
     ${input('Delivery note / reference','ref','',{required:true})}</div><div data-delivery></div>`,async f=>{
       await commit(s=>{
@@ -4409,9 +4570,15 @@ function deliveryEdit(id){
         need(job.delivered===j.delivered,'This delivery changed in another tab. Reopen it to review current quantities.');
         need(count<=job.qty-job.delivered,'Delivery exceeds the outstanding quantity.');
         need(ref&&!s.events.some(e=>e.jobId===id&&e.reference.toLowerCase()===ref.toLowerCase()),'Enter a new delivery reference.');
-        const lines=dispatchRows(s,job,count).map(l=>({sku:l.sku,location:job.location,delta:-l.qty}));
+        const quantities=dispatchRows(s,job,count);
+        if(job.trackAtDestination)loc(s,job.destination);
+        const lines=quantities.flatMap(l=>[
+          {sku:l.sku,location:job.location,delta:-l.qty},
+          ...(job.trackAtDestination?[{sku:l.sku,location:job.destination,delta:l.qty}]:[])
+        ]);
         event(s,eventId,'Customer delivery',lines,job.no+' · '+ref);
-        Object.assign(get(s,'events',eventId),{jobId:id,deliveredQty:count,reference:ref,destination:job.destination});
+        Object.assign(get(s,'events',eventId),{jobId:id,deliveredQty:count,reference:ref,destination:job.destination,
+          partyType:'customers',partyId:job.customerId,siteId:job.destination});
         job.delivered+=count; job.status=job.delivered===job.qty?'Delivered':'Partially delivered';
       });
       return 'Delivery confirmed.';
@@ -4419,8 +4586,9 @@ function deliveryEdit(id){
   function update(){
     const n=Number(valOf(form,'qty'));
     $('[data-delivery]',form).innerHTML=n>0&&n<=remaining&&Number.isSafeInteger(n)?panel('Stock posting preview',
-      table(['Exact SKU','To deduct','Available'],dispatchRows(state,j,n).map(l=>[
-        esc(labelOf(state,l.sku)),esc(qfmt(l.qty,item(state,l.sku)?.unit)),esc(qfmt(availability(state,l.sku,j.location),item(state,l.sku)?.unit))
+      table(['Exact SKU','To deduct','Available at source',...(j.trackAtDestination?['Customer site after']:[])],dispatchRows(state,j,n).map(l=>[
+        esc(labelOf(state,l.sku)),esc(qfmt(l.qty,item(state,l.sku)?.unit)),esc(qfmt(availability(state,l.sku,j.location),item(state,l.sku)?.unit)),
+        ...(j.trackAtDestination?[esc(qfmt(availability(state,l.sku,j.destination)+l.qty,item(state,l.sku)?.unit))]:[])
       ]))):note('Enter a whole quantity within the outstanding balance.','warn');
   }
   form.addEventListener('input',update);update();
@@ -4528,6 +4696,10 @@ function recordPDF(type,id){
     columns=['Part / SKU','Raw Material','Formula','Wastage %','Required'];
     lines=row.source.map(l=>[labelOf(state,l.partSku),labelOf(state,l.sku),l.formula,l.wastage,qfmt(l.qty,l.unit)]);
     lines.unshift([row.status,locName(state,row.location),'','','']);
+    if(row.customerId)lines.splice(1,0,['Customer',get(state,'customers',row.customerId)?.name,
+      get(state,'locations',row.customerSiteId)?.name||'','','']);
+    if(row.processorId)lines.splice(1,0,['Processing company',get(state,'processors',row.processorId)?.name,
+      get(state,'locations',row.processorSiteId)?.name||'','','']);
     if(type==='orders')lines.splice(1,0,[labelOf(state,row.sku),'Manufacture','','',qfmt(row.qty,item(state,row.sku)?.unit)]);
     if(type==='plans')lines.splice(1,0,...row.products.map(l=>[labelOf(state,l.productId),'Planned product','','',l.qty]),
       ...row.materials.map(l=>['Consolidated demand',labelOf(state,l.sku),'','',qfmt(l.qty,item(state,l.sku)?.unit)]));
@@ -4535,15 +4707,22 @@ function recordPDF(type,id){
     columns=['Item / SKU','Location','Stock change'];
     lines=row.lines.map(l=>[labelOf(state,l.sku),locName(state,l.location),qfmt(l.delta,item(state,l.sku)?.unit)]);
     lines.unshift([row.note,stamp(row.at),row.by]);
+    const related=eventLinks(state,row);
+    if(related.company||related.site||related.document)lines.unshift([
+      related.company,related.site,related.document
+    ]);
+    if(related.processor)lines.unshift([related.processor,related.processingSite,'Processing company']);
   }else if(type==='purchases'){
     columns=['Material / SKU','Ordered','Received','Outstanding'];
     lines=row.lines.map(l=>[labelOf(state,l.sku),l.qty,l.received,l.qty-l.received]);
     lines.unshift([label(get(state,'suppliers',row.supplierId)),locName(state,row.location),row.status,'']);
+    if(row.supplierSiteId)lines.splice(1,0,['Supplier site',get(state,'locations',row.supplierSiteId)?.name,'','']);
   }else{
     columns=['Part SKU','Standard','Adjusted','Delivery'];
     lines=row.parts.map(l=>[labelOf(state,l.sku),l.standard,l.qty,'']);
     lines.unshift([labelOf(state,row.productId),row.qty,row.delivered,row.status],
       [get(state,'customers',row.customerId)?.name,row.destinationSnapshot.name,row.destinationSnapshot.address,row.destinationSnapshot.city]);
+    lines.splice(2,0,['Stock tracking',row.trackAtDestination?'Customer site custody':'Delivered out','','']);
     lines.push(...state.events.filter(e=>e.jobId===id).map(e=>[e.reference,'','',e.deliveredQty]));
   }
   pdf(title.trim(),columns,lines);
@@ -4562,9 +4741,13 @@ function reportPage(){
     panel('Movement ledger',eventsTable());
 }
 function ledgerCSV(){
-  csv(['Date','Event','SKU','Location','Quantity change','Unit','Reference','By'],state.events.flatMap(e=>e.lines.map(l=>[
-    e.at,e.type,labelOf(state,l.sku),locName(state,l.location),l.delta,item(state,l.sku)?.unit,e.note,e.by
-  ])),'ledger');
+  csv(['Date','Event','SKU','Location','Quantity change','Unit','Related company','Related site','Processor','Processing site','Document','Reference','By'],state.events.flatMap(e=>{
+    const linked=eventLinks(state,e);
+    return e.lines.map(l=>[
+    e.at,e.type,labelOf(state,l.sku),locName(state,l.location),l.delta,item(state,l.sku)?.unit,
+    linked.company,linked.site,linked.processor,linked.processingSite,linked.document,e.note,e.by
+    ]);
+  }),'ledger');
 }
 
 /* Legacy review and portable backup */
@@ -4669,13 +4852,37 @@ function deleteLocation(id){
     s.locations=s.locations.filter(row=>row.id!==id);
   },'Delete');
 }
+function locationView(id){
+  const location=get(state,'locations',id),owner=location.ownerId&&get(state,location.ownerType,location.ownerId);
+  const balances=stockRows(state).filter(row=>row.location===id);
+  const movements=state.events.filter(e=>e.siteId===id||e.destination===id||
+    e.jobId&&get(state,'jobs',e.jobId)?.destination===id||
+    e.purchaseId&&get(state,'purchases',e.purchaseId)?.supplierSiteId===id||
+    e.lines.some(line=>line.location===id));
+  const operations=[
+    ...state.plans.filter(row=>row.location===id||row.customerSiteId===id).map(row=>['Production plan',row.no,row.status,`planView(${escapeArg(row.id)})`]),
+    ...state.orders.filter(row=>row.location===id||row.customerSiteId===id||row.processorSiteId===id).map(row=>['Production order',row.no,row.status,`orderView(${escapeArg(row.id)})`]),
+    ...state.purchases.filter(row=>row.location===id||row.supplierSiteId===id).map(row=>['Purchase',row.no,row.status,`purchaseView(${escapeArg(row.id)})`]),
+    ...state.jobs.filter(row=>row.location===id||row.destination===id).map(row=>['Dispatch',row.no,row.status,`dispatchView(${escapeArg(row.id)})`])
+  ];
+  infoModal(location.name,kv([['Company',owner?.name||SET.company],['City',location.city],['Address',location.address],
+    ['Stock custody',location.stock?'Yes':'No'],['Status',location.active===false?'Archived':'Active']])+
+    panel('Current stock',textTable(['Item / SKU','Balance'],balances.map(row=>[
+      labelOf(state,row.sku),qfmt(row.qty,item(state,row.sku)?.unit)
+    ]),'No current stock balance.'))+
+    (operations.length?panel('Linked operations',table(['Type','Reference','Status','Action'],operations.map(([type,no,status,action])=>[
+      esc(type),esc(no),chip(status),small('View',`closeModal();${action}`)
+    ]))):'')+
+    (movements.length?panel('Recent stock movements',eventsTable(movements.slice(-15))):''),
+    actionGroup(owner?small('View company',`closeModal();masterView(${escapeArg(location.ownerType)},${escapeArg(owner.id)})`):'',mapAction(location)));
+}
 function settingsPage(){
   return head('System','Settings & Data',button('Add Custody Location','locationEdit()','btn-primary','plus'))+
     panel('Company profile',`<div class="card-body">${cell(SET.company,[SET.currentUser,SET.address].filter(Boolean).join(' · '))}
       <div style="margin-top:9px">${small('Edit company profile','profileEdit()')}</div></div>`)+
     panel('Locations',table(['Location','Company','Address','City','Status','Actions'],state.locations.map(l=>[
       esc(l.name),esc(l.ownerId?get(state,l.ownerType,l.ownerId)?.name:'AMBS'),esc(l.address),esc(l.city),chip(l.active===false?'Archived':'Active'),
-      actionGroup(mapAction(l),l.ownerId?small('Edit company',`masterEdit(${escapeArg(l.ownerType)},${escapeArg(l.ownerId)})`):
+      actionGroup(small('View',`locationView(${escapeArg(l.id)})`),mapAction(l),l.ownerId?small('Edit company',`masterEdit(${escapeArg(l.ownerType)},${escapeArg(l.ownerId)})`):
         small('Edit',`locationEdit(${escapeArg(l.id)})`)+small(l.active===false?'Restore':'Archive',`custodyArchive(${escapeArg(l.id)})`),
         dangerSmall('Delete',`deleteLocation(${escapeArg(l.id)})`))
     ])))+
@@ -4727,6 +4934,8 @@ function validateState(s){
   for(const v of s.variants)need(get(s,'parts',v.partId)?.unit===v.unit,'Variant has an invalid parent or unit.');
   const site=id=>get(s,'locations',id);
   const sku=id=>item(s,id);
+  const linkedSite=(type,companyId,siteId)=>(!companyId||!!get(s,type,companyId))&&
+    (!siteId||site(siteId)?.ownerType===type&&site(siteId)?.ownerId===companyId);
   const positive=n=>Number.isFinite(n)&&n>0;
   const integral=n=>Number.isSafeInteger(n)&&n>0;
   const component=(n,unit)=>measured(unit)?positive(n):integral(n);
@@ -4745,27 +4954,55 @@ function validateState(s){
       (!l.variantId||get(s,'variants',l.variantId)?.partId===l.partId)),'Invalid product recipe.');
   }
   const trace=lines=>Array.isArray(lines)&&lines.every(l=>get(s,'materials',l.sku)&&sku(l.partSku)&&positive(l.qty)&&typeof l.formula==='string');
-  for(const p of s.plans)need(site(p.location)&&parts(p.parts)&&stockLines(p.materials)&&trace(p.source)&&
+  for(const p of s.plans)need(site(p.location)&&linkedSite('customers',p.customerId,p.customerSiteId)&&parts(p.parts)&&stockLines(p.materials)&&trace(p.source)&&
     ['Draft','Reserved','Closed'].includes(p.status)&&Array.isArray(p.products)&&p.products.length&&p.products.every(l=>get(s,'products',l.productId)&&integral(l.qty)&&parts(l.parts)),
     'Invalid production plan.');
-  for(const o of s.orders)need(site(o.location)&&get(s,'parts',o.partId)&&
+  for(const o of s.orders)need(site(o.location)&&linkedSite('customers',o.customerId,o.customerSiteId)&&
+    linkedSite('processors',o.processorId,o.processorSiteId)&&get(s,'parts',o.partId)&&
     (o.sku===o.partId||get(s,'variants',o.sku)?.partId===o.partId)&&integral(o.qty)&&stockLines(o.materials)&&trace(o.source)&&
     ['Draft','Released','Completed','Cancelled'].includes(o.status),'Invalid production order.');
-  for(const p of s.purchases)need(site(p.location)&&get(s,'suppliers',p.supplierId)&&stockLines(p.lines)&&p.lines.length&&
+  for(const p of s.purchases)need(site(p.location)&&linkedSite('suppliers',p.supplierId,p.supplierSiteId)&&get(s,'suppliers',p.supplierId)&&stockLines(p.lines)&&p.lines.length&&
      p.lines.every(l=>Number.isFinite(l.received)&&l.received>=0&&l.received<=l.qty+EPS)&&
      ['Draft','Ordered','Received','Cancelled'].includes(p.status),'Invalid purchase request.');
   for(const j of s.jobs)need(site(j.location)&&site(j.destination)?.ownerId===j.customerId&&
     site(j.destination)?.ownerType==='customers'&&get(s,'customers',j.customerId)&&get(s,'products',j.productId)&&
     parts(j.parts)&&j.parts.length&&integral(j.qty)&&Number.isSafeInteger(j.delivered)&&j.delivered>=0&&j.delivered<=j.qty&&
-    typeof j.destinationSnapshot?.name==='string'&&['Open','Partially delivered','Delivered','Cancelled'].includes(j.status),'Invalid dispatch job.');
+    typeof j.destinationSnapshot?.name==='string'&&(j.trackAtDestination==null||typeof j.trackAtDestination==='boolean')&&
+    (!j.trackAtDestination||j.location!==j.destination)&&
+    ['Open','Partially delivered','Delivered','Cancelled'].includes(j.status),'Invalid dispatch job.');
   const sums=new Map(), delivered=new Map(), received=new Map();
   for(const e of s.events){
     need(typeof e.at==='string'&&typeof e.type==='string'&&Array.isArray(e.lines),'Invalid stock event.');
+    if(e.partyType||e.partyId||e.siteId){
+      need(COMPANIES.includes(e.partyType)&&get(s,e.partyType,e.partyId),'Stock event has an invalid related company.');
+      if(e.siteId){const linked=get(s,'locations',e.siteId);
+        need(linked?.ownerType===e.partyType&&linked.ownerId===e.partyId,'Stock event site must belong to its related company.');}
+    }
+    if(e.orderId){
+      const order=get(s,'orders',e.orderId);
+      need(order&&e.id==='production:'+e.orderId,'Invalid production event link.');
+      if(e.partyId)need(e.partyType==='customers'&&e.partyId===order.customerId&&
+        e.siteId===(order.customerSiteId||''),'Production event has an invalid customer or site link.');
+    }
     if(e.jobId){
-      need(get(s,'jobs',e.jobId)&&integral(e.deliveredQty)&&typeof e.reference==='string','Invalid delivery event.');
+      const job=get(s,'jobs',e.jobId);
+      need(job&&integral(e.deliveredQty)&&typeof e.reference==='string','Invalid delivery event.');
+      if(e.partyId)need(e.partyType==='customers'&&e.partyId===get(s,'jobs',e.jobId).customerId&&
+        e.siteId===get(s,'jobs',e.jobId).destination,'Delivery event has an invalid customer or site link.');
+      if(job.trackAtDestination){
+        const totals=new Map();
+        need(e.lines.some(line=>line.location===job.destination&&line.delta>0)&&
+          e.lines.every(line=>line.location===job.location&&line.delta<0||line.location===job.destination&&line.delta>0),
+          'Tracked delivery must transfer stock between source and customer site.');
+        e.lines.forEach(line=>totals.set(line.sku,(totals.get(line.sku)||0)+line.delta));
+        need([...totals.values()].every(total=>Math.abs(total)<EPS),'Tracked delivery quantities must balance.');
+      }
       delivered.set(e.jobId,(delivered.get(e.jobId)||0)+e.deliveredQty);
     }
     if(e.purchaseId)need(get(s,'purchases',e.purchaseId)&&typeof e.reference==='string','Invalid receipt event.');
+    if(e.purchaseId&&e.partyId)need(e.partyType==='suppliers'&&e.partyId===get(s,'purchases',e.purchaseId).supplierId&&
+      e.siteId===(get(s,'purchases',e.purchaseId).supplierSiteId||''),
+      'Receipt event has an invalid supplier link.');
     const sumsEvent=new Map();
     for(const l of e.lines){
       need(sku(l.sku)&&site(l.location)&&Number.isFinite(l.delta),'Stock event has an invalid SKU, location or quantity.');
