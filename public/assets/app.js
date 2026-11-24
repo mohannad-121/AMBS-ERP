@@ -3736,7 +3736,7 @@ function masterEdit(type,id){
   const product=type==='products', previousRecipe=product?get(state,'recipes',id):null;
   const packing=product?productPacking(state,old,previousRecipe):null;
   const core=type==='materials'?materialFields(row,old):input('Code','code',row.code,{required:true})+input('Name','name',row.name,{required:true})+
-    (company?input('Contact','contact',row.contact)+input('Email','email',row.email,{type:'email'})+
+    (company?input('Contact person','contact',row.contact,{extra:'placeholder="Name of the person to talk to"'})+input('Email','email',row.email,{type:'email'})+
       input('Phone','phone',row.phone)+input(type==='processors'?'Services (comma separated)':'Business / Supply details','details',row.details):
       (product?suggestedInput('Category / packing formula template','category',row.category,
         [...Object.keys(PACKING_CATEGORIES),...state.products.map(p=>p.category)]):
@@ -3946,7 +3946,7 @@ function masterView(type,id){
   const packing=type==='products'?productPacking(state,r,get(state,'recipes',id)):null;
   infoModal(label(r),(!COMPANIES.includes(type)?`<div class="record-detail-image">${recordPicture(r,'thumb-detail')}</div>`:'')+
     kv([['Status',r.active===false?'Archived':'Active'],['Category',r.category],['Specifications',r.dimensions],
-    ['Type',type==='products'?packingCategory(r.category)?.type:''],['Default order quantity',r.orderQty],['Size',type==='products'?'':r.size],['Color',type==='products'?'':r.color],['Unit',r.unit],['Source',r.source],['Contact',r.contact],['Email',r.email],['Phone',r.phone],['Services / supply',r.details],['Notes',r.notes]])+
+    ['Type',type==='products'?packingCategory(r.category)?.type:''],['Default order quantity',r.orderQty],['Size',type==='products'?'':r.size],['Color',type==='products'?'':r.color],['Unit',r.unit],['Source',r.source],['Contact person',r.contact],['Email',r.email],['Phone',r.phone],['Services / supply',r.details],['Notes',r.notes]])+
     (locations.length?panel('Linked locations',table(['Name','Address','City','Notes','Status','Map'],
       locations.map(l=>[esc(l.name),esc(l.address),esc(l.city),esc(l.notes),chip(l.active===false?'Archived':'Active'),mapAction(l)]))):'')+
     (packing?packingParts(packing.rows,packing.quantities,false,r.orderQty??1):'')+connectedPanels(type,r));
@@ -4023,7 +4023,7 @@ function masterPage(type){
     balances.set(variant.partId,(balances.get(variant.partId)??0)+(balances.get(variant.id)??0));
   }
   return head(company?'Overview':'Master Data',TITLES[type],button('Add '+title,`masterEdit(${escapeArg(type)})`,'btn-primary','plus'))+
-    searchableTable(company?['Code','Company','Contact','Locations','Status','Actions']:['Code','Item','Category','Stock unit','Quantity on hand','Status','Actions'],
+    searchableTable(company?['Code','Company','Contact person','Locations','Status','Actions']:['Code','Item','Category','Stock unit','Quantity on hand','Status','Actions'],
       rows.map(r=>{
         const args=`${escapeArg(type)},${escapeArg(r.id)}`;
         return [esc(r.code),company?cell(r.name,[r.size,r.color,r.dimensions||r.details].filter(Boolean).join(' · ')):
