@@ -119,16 +119,34 @@ Keywords: search, filter, find record, picker, dropdown, typo, بحث
 - **"No matching records"** means nothing active matches. Archived records don't appear in pickers.
 
 ## Add a customer, supplier or processing company 🏢
-Keywords: add customer, new supplier, processor, vendor, client, company, contact, عميل, مورد, شركة
+Keywords: add customer, new supplier, processor, vendor, client, company, contact, TRN, VAT, tags, payment terms, credit limit, logo, عميل, مورد, شركة, زبون
 
 1. Open **Customers** (`#/customers`), **Suppliers** (`#/suppliers`) or **Processing Companies** (`#/processors`) from the sidebar group **Overview**.
-2. Click **Add Customer**, **Add Supplier** or **Add Processing Company** (top right).
-3. Fill **Code** and **Name** (both required). Codes must be unique within that company type.
-4. Optionally fill **Contact person** (the name of the person to talk to), **Email**, **Phone** and **Business / Supply details**. Processing companies have **Services (comma separated)** instead. **Notes** is also optional.
-5. Under **Company locations**, click **Add Location** to add sites (see "Add company locations / sites").
-6. Click **Save**.
+2. Click **Add Customer**, **Add Supplier** or **Add Processing Company** (top right). The form has tabs:
+   - **General**: **Code** and **Name** (required; codes must be unique per company type), **TRN / VAT number (optional)**, **Tags (comma separated)** such as "VIP, Contractor", **Email**, **Phone**, **Website**, **Business / Supply details** (processing companies: **Services (comma separated)**), **Address**, **City / emirate**, **Country** and a **Logo**.
+   - **Contacts**: click **Add Contact** for each person (**Name**, **Job title**, **Phone**, **Email**). The first contact is shown as the main contact person in lists.
+   - **Locations**: click **Add Location** to add sites (see "Add company locations (sites)").
+   - **Sales & payment** (customers), **Purchasing & payment** (suppliers) or **Terms** (processing companies): **Payment terms** (e.g. 30 days), **Credit limit (AED, optional)** for customers or **Typical lead time (days, optional)** for suppliers and processors, and an **Account manager / salesperson** or **Buyer / account manager**.
+   - **Notes**.
+3. Click **Save**. If a required field on another tab is empty, the form jumps to that tab.
 
-Each list shows Code, Company, Contact, number of Locations, Status and the actions **View**, **Edit**, **Archive**/**Restore** and **Delete**. Customers are used in plans, orders and dispatch. Suppliers are used in purchase requests. Processing companies can be linked to production orders, for example for outside coating or machining.
+The list shows the logo (or initials), name, tags, main contact person, phone, number of locations and how many open orders the company has.
+
+## Customer, supplier and processor page (smart buttons)
+Keywords: customer page, customer profile, customer details, smart buttons, customer history, supplier page, open orders of customer, credit limit warning, صفحة العميل, ملف العميل
+
+Click **View** on a company to open its page:
+
+- **Header**: logo, name, code, type, status and tags.
+- **Smart buttons** with live numbers. Click one to jump to its section:
+  - Customers: **Sales orders**, **Ordered value**, **Deliveries**, **Dispatch jobs**
+  - Suppliers: **Purchases**, **Receipts**, **Items supplied**
+  - Processing companies: **Production orders**
+  - All: **Stock at sites**, **Contacts**, **Locations**
+- **Details**: TRN, email and phone (click to email or call), website, address, payment terms, credit limit or lead time, account manager.
+- Sections listing the company's contacts, locations, sales orders, dispatch jobs, purchases, production orders, stock held at its sites and recent stock movements, each with **View** buttons.
+
+If a customer's open sales orders are worth more than its **Credit limit**, the page shows a warning and an **Over limit** badge. The limit is a reminder only; it doesn't block orders. Click **Edit** at the bottom to change the company.
 
 ## Add company locations (sites) 📍
 Keywords: site, location, address, project site, delivery site, Google Maps, latitude, longitude, موقع, عنوان
@@ -332,7 +350,7 @@ Product **View** shows the template **Type** (STD, MAXI or VERTICAL NET). Templa
 ## Add or change a picture (image) 🖼️
 Keywords: image, picture, photo, upload, logo, change image, remove image, صورة, رفع صورة
 
-Raw materials, parts, products, variants and the company logo can have a picture. Companies and locations cannot.
+Raw materials, parts, products, variants, customers, suppliers, processing companies (as a logo) and the company profile logo can have a picture. Locations cannot.
 
 1. Open the record's **Edit** form (or **Add …**).
 2. In **Image**, choose a file. A preview appears.
@@ -1105,5 +1123,5 @@ The current version does **not** support:
 - Managing users, roles or invitations inside the app. Members are set up by the administrator.
 - Per-user names on movements. **By** is the shared **Operator name** from the Company profile.
 - Date-range filters on reports. Export the CSV and filter it in Excel.
-- Pictures on companies or locations.
+- Pictures on locations. (Companies can have a logo.)
 - Syncing a browser workspace between computers. Use **Export Backup (JSON)** and **Import Backup**.

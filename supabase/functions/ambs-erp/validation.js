@@ -91,6 +91,13 @@ function validateState(s){
       if(!COMPANIES.includes(t)){
         need(validUnit(r.unit)||(r.active===false&&r.legacy&&typeof r.unit==='string'),'Unknown unit on '+r.code+'.');
         if(r.image)need(validImage(r.image),'Invalid image on '+r.code+'.');
+      }else{
+        if(r.image)need(validImage(r.image),'Invalid logo on '+r.code+'.');
+        need(r.contacts==null||Array.isArray(r.contacts)&&r.contacts.length<=50&&
+          r.contacts.every(c=>c&&typeof c==='object'&&typeof c.name==='string'&&c.name.trim()),'Invalid contact people on '+r.code+'.');
+        need(r.tags==null||Array.isArray(r.tags)&&r.tags.every(x=>typeof x==='string'),'Invalid tags on '+r.code+'.');
+        need(r.creditLimit==null||Number.isFinite(r.creditLimit)&&r.creditLimit>=0,'Invalid credit limit on '+r.code+'.');
+        need(r.leadTime==null||Number.isSafeInteger(r.leadTime)&&r.leadTime>=0,'Invalid lead time on '+r.code+'.');
       }
     }
   }

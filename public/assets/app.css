@@ -597,6 +597,46 @@ body[data-page] .head-actions .btn-primary:hover{background:linear-gradient(180d
 .nav a[href="#/sales"]{--ic:#e879f9}
 body[data-page="sales"]{--pc:#e879f9}
 
+/* Company profiles (customers, suppliers, processing companies) */
+.co-tabs{display:flex;gap:4px;flex-wrap:wrap;padding:5px;margin:-4px 0 18px;border-radius:14px;background:#eef1f5}
+.co-tab{padding:9px 16px;border:0;border-radius:10px;background:transparent;color:var(--muted);font:600 13px var(--sans);cursor:pointer;transition:background .15s,color .15s}
+.co-tab:hover{color:var(--ink);background:rgba(255,255,255,.6)}
+.co-tab.on{color:var(--ink);background:#fff;box-shadow:0 4px 12px -4px rgba(15,23,42,.18)}
+.co-tab:focus-visible{outline:3px solid rgba(208,10,8,.45);outline-offset:2px}
+.co-panel[hidden]{display:none}
+.co-avatar{flex:0 0 auto;display:grid;place-items:center;border-radius:12px;object-fit:contain;background:#fff;border:1px solid var(--line)}
+.co-initials{color:#fff;font-weight:800;letter-spacing:.3px;border:0;background:linear-gradient(145deg,#475569,#1e293b)}
+.co-avatar-sm{width:44px;height:44px;font-size:14px}
+.co-avatar-lg{width:76px;height:76px;font-size:24px;border-radius:18px}
+.co-media{min-width:220px;gap:12px}
+.co-tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:5px}
+.co-tag{padding:2px 8px;border-radius:999px;background:#eef2ff;color:#3730a3;font-size:11px;font-weight:650}
+.co-count{display:inline-grid;place-items:center;min-width:26px;height:26px;padding:0 8px;border-radius:999px;background:var(--info-bg);color:#1d4fa3;font-weight:700;font-size:12px}
+.co-hero{display:flex;align-items:center;gap:16px;margin-bottom:16px}
+.co-hero-main{min-width:0}
+.co-hero-name{font-size:22px;font-weight:800;letter-spacing:-.5px;color:var(--ink)}
+.co-hero-sub{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:4px;color:var(--muted);font-size:13px}
+.co-smart-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:16px}
+.co-smart{display:flex;align-items:center;gap:10px;padding:12px;border:1px solid var(--line);border-radius:14px;background:#fff;cursor:pointer;text-align:left;
+  font:inherit;color:inherit;transition:border-color .15s,box-shadow .15s,transform .15s}
+.co-smart:hover{border-color:#cbd3de;box-shadow:var(--sh-sm);transform:translateY(-2px)}
+.co-smart:focus-visible{outline:3px solid rgba(208,10,8,.45);outline-offset:2px}
+.co-smart svg{width:34px;height:34px;padding:8px;flex:0 0 auto;border-radius:10px;color:var(--red);background:var(--red-soft)}
+.co-smart span{display:flex;flex-direction:column;min-width:0;line-height:1.25}
+.co-smart b{font-family:var(--mono);font-size:18px;color:var(--ink)}
+.co-smart small{font-size:12px;font-weight:650;color:var(--ink-2)}
+.co-smart em{font-style:normal;font-size:11px;color:var(--muted-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.co-details{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:1px;margin-bottom:16px;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--line)}
+.co-details>div{padding:10px 14px;background:#fff;min-width:0}
+.co-details>div>span{display:block;font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted-2);margin-bottom:3px}
+.co-details>div>div{font-size:13.5px;color:var(--ink);overflow-wrap:anywhere}
+.co-link{color:#1d4fa3;font-weight:600;text-decoration:none}
+.co-link:hover{text-decoration:underline}
+.co-section{scroll-margin-top:12px}
+body[data-page="customers"] .co-smart svg{color:#059669;background:#ecfdf5}
+body[data-page="suppliers"] .co-smart svg{color:#b45309;background:#fffbeb}
+body[data-page="processors"] .co-smart svg{color:#7c3aed;background:#f5f3ff}
+
 /* Sales orders */
 .sales-progress{width:90px;height:7px;border-radius:999px;background:#eef1f5;overflow:hidden}
 .sales-progress span{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#c026d3,#e879f9)}

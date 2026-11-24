@@ -3738,7 +3738,168 @@ function materialFields(row,old){
     `<div class="field full material-help">Opening stock is posted once to the selected location. Later changes go through Inventory &amp; Stock Movements. Bundle quantities round purchase suggestions.</div>`+
     imageField(row.image)+tick('Active (available for planning and movements)','active',row.active!==false);
 }
+/* Companies (customers, suppliers, processing companies): tabbed profile form and overview page. */
+const PAYMENT_TERMS=['Advance payment','Cash on delivery','Immediate payment','7 days','15 days','30 days','45 days','60 days','90 days'];
+const COMPANY_KIND={customers:'Customer',suppliers:'Supplier',processors:'Processing company'};
+const companyContacts=r=>Array.isArray(r?.contacts)&&r.contacts.length?r.contacts:(r?.contact?[{name:r.contact,job:'',phone:'',email:''}]:[]);
+const initials=name=>String(name||'?').trim().split(/\s+/).slice(0,2).map(w=>w[0]).join('').toUpperCase()||'?';
+function companyAvatar(r,size='co-avatar-sm'){
+  return validImage(r.image)?`<img class="thumb co-avatar ${size}" src="${esc(r.image)}" alt="${esc(r.name)}" loading="lazy">`:
+    `<span class="co-avatar co-initials ${size}" aria-hidden="true">${esc(initials(r.name))}</span>`;
+}
+const tagChips=tags=>(tags||[]).length?`<div class="co-tags">${tags.map(t=>`<span class="co-tag">${esc(t)}</span>`).join('')}</div>`:'';
+function formTabs(tabs){
+  return `<div class="co-tabs" role="tablist">${tabs.map(([k,l],i)=>`<button type="button" role="tab" class="co-tab${i?'':' on'}" data-tab="${k}" aria-selected="${!i}">${esc(l)}</button>`).join('')}</div>`+
+    tabs.map(([k,,html],i)=>`<div class="co-panel" data-panel="${k}" role="tabpanel"${i?' hidden':''}>${html}</div>`).join('');
+}
+function wireFormTabs(form){
+  const show=k=>{
+    form.querySelectorAll('.co-tab').forEach(t=>{const on=t.dataset.tab===k;t.classList.toggle('on',on);t.setAttribute('aria-selected',String(on));});
+    form.querySelectorAll('.co-panel').forEach(p=>{p.hidden=p.dataset.panel!==k;});
+  };
+  form.querySelectorAll('.co-tab').forEach(t=>t.addEventListener('click',()=>show(t.dataset.tab)));
+  // A required field on a hidden tab: jump to that tab so the browser can point at it.
+  form.addEventListener('invalid',e=>{const p=e.target.closest('.co-panel');if(p?.hidden)show(p.dataset.panel);},true);
+}
+function companyEdit(type,id){
+  const old=get(state,type,id), row=old||{}, title=ENTITY[type];
+  const general=`<div class="form-grid">
+    ${input('Code','code',row.code,{required:true})}${input('Name','name',row.name,{required:true})}
+    ${input('TRN / VAT number (optional)','trn',row.trn,{extra:'maxlength="30" placeholder="e.g. 100123456700003"'})}
+    ${input('Tags (comma separated)','tags',(row.tags||[]).join(', '),{extra:'placeholder="e.g. VIP, Contractor, Dubai"'})}
+    ${input('Email','email',row.email,{type:'email'})}${input('Phone','phone',row.phone)}
+    ${input('Website','website',row.website,{type:'url',extra:'placeholder="https://"'})}
+    ${input(type==='processors'?'Services (comma separated)':'Business / Supply details','details',row.details)}
+    ${input('Address','address',row.address,{full:true})}
+    ${input('City / emirate','city',row.city)}${input('Country','country',row.country??'United Arab Emirates')}
+    ${imageField(row.image).replace('>Image</label>','>Logo</label>')}</div>`;
+  const commercial=`<div class="form-grid">
+    ${suggestedInput('Payment terms','paymentTerms',row.paymentTerms||'',PAYMENT_TERMS)}
+    ${type==='customers'?input('Credit limit (AED, optional)','creditLimit',row.creditLimit??'',{type:'number',extra:'min="0" step="0.01"'}):
+      input('Typical lead time (days, optional)','leadTime',row.leadTime??'',{type:'number',extra:'min="0" step="1"'})}
+    ${input(type==='customers'?'Account manager / salesperson':'Buyer / account manager','manager',row.manager)}</div>
+    ${type==='customers'?note('The credit limit is a reminder only: the customer page warns you when open sales orders go above it.'):''}`;
+  const form=formModal((old?'Edit ':'Add ')+title,formTabs([
+    ['general','General',general],
+    ['contacts','Contacts',note('Add the people you deal with at this company. The first one is shown as the main contact person in lists.')+'<div data-contacts></div>'],
+    ['locations','Locations','<div data-locations></div>'],
+    ['terms',type==='customers'?'Sales & payment':type==='suppliers'?'Purchasing & payment':'Terms',commercial],
+    ['notes','Notes',area('Notes','notes',row.notes)]
+  ]),async f=>{
+    const tags=[...new Set(valOf(f,'tags').split(',').map(t=>t.trim()).filter(Boolean))].slice(0,12);
+    const people=contactLines().map(l=>({name:fieldValue(l,'cname'),job:fieldValue(l,'job'),phone:fieldValue(l,'cphone'),email:fieldValue(l,'cemail')}));
+    need(people.every(p=>p.name),'Enter a name for every contact person (Contacts tab).');
+    const website=valOf(f,'website');
+    need(!website||/^https?:\/\/\S+$/i.test(website),'Enter a website that starts with https://');
+    const data={...old,id:id||key(),code:valOf(f,'code'),name:valOf(f,'name'),trn:valOf(f,'trn'),tags,email:valOf(f,'email'),phone:valOf(f,'phone'),
+      website,details:valOf(f,'details'),address:valOf(f,'address'),city:valOf(f,'city'),country:valOf(f,'country'),
+      contacts:people,contact:people[0]?.name||'',paymentTerms:valOf(f,'paymentTerms'),manager:valOf(f,'manager'),
+      notes:valOf(f,'notes'),active:old?.active!==false};
+    if(type==='customers'){const v=valOf(f,'creditLimit');data.creditLimit=v===''?null:qty(v,'Credit limit',true);}
+    else{const v=valOf(f,'leadTime');data.leadTime=v===''?null:whole(v,'Lead time',true);}
+    data.image=await imageValue(f,old?.image);
+    const locations=locationLines().map(l=>readLocation(l,true));
+    await commit(s=>{
+      const existing=get(s,type,data.id);
+      need(!old||sameCloudRecord(old,existing),'This record changed. Reopen it before saving.');
+      if(old)need(sameCloudRecord(companyLocations(s,type,id),companyLocations(state,type,id)),
+        'This company’s locations changed. Reopen it before saving.');
+      codeCheck(s,type,data); activeCheck(s,type,data,existing);
+      add(s[type],{...data,at:now()});
+      const previous=companyLocations(s,type,data.id);
+      for(const l of previous.filter(p=>!locations.some(x=>x.id===p.id))){
+        need(!locationUsed(s,l.id),'This location is used by stock or an open operation.');
+        l.active=false;
+      }
+      const names=new Set();
+      for(const l of locations){
+        const prior=get(s,'locations',l.id);
+        need(!prior||prior.ownerId===data.id,'Invalid location owner.');
+        need(!names.has(l.name.toLowerCase()),'Use distinct names for this company’s locations.');
+        need(!prior?.stock||l.stock||!locationUsed(s,l.id),'This location is used by stock or an open operation.');
+        names.add(l.name.toLowerCase());
+        add(s.locations,{...l,ownerType:type,ownerId:data.id});
+      }
+    });
+  });
+  wireFormTabs(form);
+  const contactLines=repeat(form,'[data-contacts]',(c,n)=>`<legend>${esc(c.name||'Contact person')}</legend><div class="form-grid">
+    ${input('Name',n+'_cname',c.name,{required:true})}${input('Job title',n+'_job',c.job)}
+    ${input('Phone',n+'_cphone',c.phone)}${input('Email',n+'_cemail',c.email,{type:'email'})}</div>`,companyContacts(row),'Add Contact');
+  const locationLines=repeat(form,'[data-locations]',(l,n)=>locationFields(l,n,true),companyLocations(state,type,id),'Add Location');
+}
+function companyView(type,id){
+  const r=get(state,type,id), sites=companyLocations(state,type,id,false), siteIds=new Set(sites.map(l=>l.id));
+  const contacts=companyContacts(r), stock=stockRows(state).filter(b=>siteIds.has(b.location));
+  const sales=type==='customers'?state.sales.filter(o=>o.customerId===id).sort(dateSort):[];
+  const jobs=type==='customers'?state.jobs.filter(j=>j.customerId===id).sort(dateSort):[];
+  const purchases=type==='suppliers'?state.purchases.filter(p=>p.supplierId===id).sort(dateSort):[];
+  const orders=state.orders.filter(o=>type==='customers'?o.customerId===id:type==='processors'?o.processorId===id:false).sort(dateSort);
+  const events=state.events.filter(e=>e.partyType===type&&e.partyId===id||e.lines.some(l=>siteIds.has(l.location))).sort(dateSort);
+  const openSales=sales.filter(o=>SALES_OPEN.includes(o.status));
+  const openValue=openSales.reduce((n,o)=>n+o.lines.reduce((m,l)=>m+(l.price||0)*Math.max(0,l.qty-l.delivered),0),0);
+  const orderedValue=sales.filter(o=>o.status!=='Cancelled').reduce((n,o)=>n+salesTotal(o),0);
+  const openPurchases=purchases.filter(p=>['Draft','Ordered'].includes(p.status));
+  const openOrders=orders.filter(o=>['Draft','Released'].includes(o.status));
+  const go=target=>`document.getElementById('${target}')?.scrollIntoView({behavior:'smooth',block:'start'})`;
+  const smart=({customers:[
+      ['invoice','Sales orders',sales.length,openSales.length+' open','co-sales'],
+      ['chart','Ordered value',orderedValue?nfmt(orderedValue,0):'—',orderedValue?'AED, excl. cancelled':'Add prices to orders','co-sales'],
+      ['truck','Deliveries',events.filter(e=>e.salesId||e.jobId).length,'Sales & dispatch','co-moves'],
+      ['box','Dispatch jobs',jobs.length,jobs.filter(j=>['Open','Partially delivered'].includes(j.status)).length+' open','co-jobs']],
+    suppliers:[
+      ['cart','Purchases',purchases.length,openPurchases.length+' open','co-purchases'],
+      ['download','Receipts',events.filter(e=>e.purchaseId).length,'Goods received','co-moves'],
+      ['stack','Items supplied',new Set(purchases.flatMap(p=>p.lines.map(l=>l.sku))).size,'Distinct SKUs','co-purchases']],
+    processors:[
+      ['wrench','Production orders',orders.length,openOrders.length+' open','co-orders']]
+    }[type]).concat([
+      ['layers','Stock at sites',stock.length,stock.length?'Item balances':'Nothing held','co-stock'],
+      ['users','Contacts',contacts.length,contacts[0]?.name||'None yet','co-contacts'],
+      ['dashboard','Locations',sites.filter(l=>l.active!==false).length,sites.some(l=>l.stock)?'Some hold stock':'Delivery / pickup sites','co-locations']]);
+  const over=type==='customers'&&r.creditLimit>0&&openValue>r.creditLimit;
+  const link=(href,text)=>text?`<a href="${esc(href)}" class="co-link"${href.startsWith('http')?' target="_blank" rel="noopener noreferrer"':''}>${esc(text)}</a>`:'—';
+  const details=[
+    ['TRN / VAT',esc(r.trn||'—')],['Email',r.email?link('mailto:'+r.email,r.email):'—'],['Phone',r.phone?link('tel:'+r.phone.replace(/[^\d+]/g,''),r.phone):'—'],
+    ['Website',r.website&&/^https?:\/\//i.test(r.website)?link(r.website,r.website.replace(/^https?:\/\//i,'')):'—'],
+    ['Address',esc([r.address,r.city,r.country].filter(Boolean).join(', ')||'—')],
+    [type==='processors'?'Services':'Business / supply',esc(r.details||'—')],
+    ['Payment terms',esc(r.paymentTerms||'—')],
+    ...(type==='customers'?[['Credit limit',r.creditLimit>0?esc(nfmt(r.creditLimit,2)+' AED · open orders '+nfmt(openValue,2)+' AED')+(over?' '+statusChip('bad','Over limit'):''):'—']]:
+      [['Lead time',r.leadTime!=null?esc(r.leadTime+' days'):'—']]),
+    [type==='customers'?'Account manager':'Buyer / manager',esc(r.manager||'—')]];
+  const section=(anchor,html)=>html?`<div id="${anchor}" class="co-section">${html}</div>`:'';
+  infoModal(r.name,`<div class="co-hero">${companyAvatar(r,'co-avatar-lg')}<div class="co-hero-main">
+      <div class="co-hero-name">${esc(r.name)}</div>
+      <div class="co-hero-sub">${esc(r.code)} · ${esc(COMPANY_KIND[type])} ${chip(r.active===false?'Archived':'Active')}</div>${tagChips(r.tags)}</div></div>`+
+    (over?note('Open sales orders ('+nfmt(openValue,2)+' AED) are above this customer’s credit limit ('+nfmt(r.creditLimit,2)+' AED).','warn'):'')+
+    `<div class="co-smart-row">${smart.map(([icon,labelText,value,sub,target])=>`<button type="button" class="co-smart" onclick="${go(target)}">
+      ${ic(icon)}<span><b>${esc(value)}</b><small>${esc(labelText)}</small><em>${esc(sub)}</em></span></button>`).join('')}</div>`+
+    `<div class="co-details">${details.map(([k,v])=>`<div><span>${esc(k)}</span><div>${v}</div></div>`).join('')}</div>`+
+    (r.notes?note(r.notes):'')+
+    section('co-contacts',panel('Contacts',table(['Name','Job title','Phone','Email'],contacts.map(c=>[
+      `<strong>${esc(c.name)}</strong>`,esc(c.job||'—'),c.phone?link('tel:'+c.phone.replace(/[^\d+]/g,''),c.phone):'—',c.email?link('mailto:'+c.email,c.email):'—']),
+      'No contact people yet. Click Edit → Contacts to add them.')))+
+    section('co-locations',panel('Locations',table(['Name','Address','City','Holds AMBS stock','Status','Map'],sites.map(l=>[
+      esc(l.name),esc(l.address),esc(l.city),l.stock?statusChip('ok','Yes'):'No',chip(l.active===false?'Archived':'Active'),mapAction(l)]),
+      'No locations yet. Click Edit → Locations to add sites.')))+
+    (type==='customers'?section('co-sales',panel('Sales orders',table(['Order','Order date','Requested','Delivered','Value (AED)','Status','Action'],sales.map(o=>[
+      cell(o.no,o.reference),esc(fmtDate(o.date)),esc(o.due?fmtDate(o.due):'—'),esc(salesProgress(o)+'%'),esc(salesTotal(o)?nfmt(salesTotal(o),2):'—'),chip(o.status),
+      small('View',`closeModal();salesView(${escapeArg(o.id)})`)]),'No sales orders yet.'))):'')+
+    (type==='customers'&&jobs.length?section('co-jobs',panel('Dispatch jobs',table(['Job','Product','Delivered','Status','Action'],jobs.map(j=>[
+      cell(j.no,j.name),esc(labelOf(state,j.productId)),esc(j.delivered+' / '+j.qty),chip(j.status),small('View',`closeModal();dispatchView(${escapeArg(j.id)})`)])))):'')+
+    (type==='suppliers'?section('co-purchases',panel('Purchases',table(['Request','Receiving location','Lines','Status','Action'],purchases.map(p=>[
+      esc(p.no),esc(locName(state,p.location)),esc(p.lines.length),chip(p.status==='Ordered'&&p.lines.some(l=>l.received>0)?'Partially received':p.status),
+      small('View',`closeModal();purchaseView(${escapeArg(p.id)})`)]),'No purchase requests yet.'))):'')+
+    (orders.length?section('co-orders',panel('Production orders',table(['Order','Part / SKU','Qty','Status','Action'],orders.map(o=>[
+      esc(o.no),esc(labelOf(state,o.sku)),esc(o.qty),chip(o.status),small('View',`closeModal();orderView(${escapeArg(o.id)})`)])))):'')+
+    section('co-stock',panel('Stock at this company’s sites',textTable(['Item / SKU','Location','Balance'],stock.map(b=>[
+      labelOf(state,b.sku),locName(state,b.location),qfmt(b.qty,item(state,b.sku)?.unit)]),'No stock is held at this company’s sites.')))+
+    section('co-moves',panel('Recent stock movements',events.length?eventsTable(events.slice(0,15)):table(['Movement'],[],'No stock movements linked to this company yet.'))),
+    small('Edit',`closeModal();masterEdit(${escapeArg(type)},${escapeArg(id)})`));
+}
 function masterEdit(type,id){
+  if(COMPANIES.includes(type))return companyEdit(type,id);
   const old=get(state,type,id), company=COMPANIES.includes(type), title=ENTITY[type], row=old||{};
   const product=type==='products', previousRecipe=product?get(state,'recipes',id):null;
   const packing=product?productPacking(state,old,previousRecipe):null;
@@ -3927,6 +4088,7 @@ function connectedPanels(type,row){
   append('Production order',state.orders.filter(o=>o.customerId===row.id||o.processorId===row.id||o.partId===row.id||skuIds.has(o.sku)||
     o.materials.some(l=>skuIds.has(l.sku))),'orderView');
   append('Purchase',state.purchases.filter(p=>p.supplierId===row.id||p.lines.some(l=>skuIds.has(l.sku))),'purchaseView');
+  append('Sales order',state.sales.filter(o=>o.customerId===row.id||o.lines.some(l=>skuIds.has(l.sku))),'salesView');
   append('Dispatch',state.jobs.filter(j=>j.customerId===row.id||j.productId===row.id||
     j.parts.some(l=>l.partId===row.id||skuIds.has(l.sku))),'dispatchView');
   const related=operations.length?panel('Linked operations',table(['Type','Reference','Status','Action'],operations)):'';
@@ -3949,6 +4111,7 @@ function connectedPanels(type,row){
   return stock+related+boms+history;
 }
 function masterView(type,id){
+  if(COMPANIES.includes(type))return companyView(type,id);
   const r=get(state,type,id);
   const locations=COMPANIES.includes(type)?companyLocations(state,type,id,false):[];
   const packing=type==='products'?productPacking(state,r,get(state,'recipes',id)):null;
@@ -4023,8 +4186,30 @@ function materialPage(){
     searchableTable(['Code','Material','Opening','On hand','Safety','Bundle','On order','Avail. after','Status','State','Actions'],
       values,'Add your first raw material.',[],{className:'material-table',placeholder:'Search code, name, category…',noun:'materials'});
 }
+function companyPage(type){
+  const title=ENTITY[type];
+  const openLabel={customers:'Open sales',suppliers:'Open purchases',processors:'Open production'}[type];
+  const openCount=r=>type==='customers'?state.sales.filter(o=>o.customerId===r.id&&SALES_OPEN.includes(o.status)).length:
+    type==='suppliers'?state.purchases.filter(p=>p.supplierId===r.id&&['Draft','Ordered'].includes(p.status)).length:
+    state.orders.filter(o=>o.processorId===r.id&&['Draft','Released'].includes(o.status)).length;
+  return head('Overview',TITLES[type],button('Add '+title,`masterEdit(${escapeArg(type)})`,'btn-primary','plus'))+
+    searchableTable(['Code','Company','Contact person','Phone','Locations',openLabel,'Status','Actions'],state[type].map(r=>{
+      const args=`${escapeArg(type)},${escapeArg(r.id)}`, open=openCount(r), contacts=companyContacts(r);
+      return [esc(r.code),
+        `<div class="record-media co-media">${companyAvatar(r)}<div>${cell(r.name,[r.city,r.details].filter(Boolean).join(' · '))}${tagChips(r.tags)}</div></div>`,
+        cell(contacts[0]?.name||'—',contacts[0]?.job||(contacts.length>1?'+'+(contacts.length-1)+' more':'')),
+        esc(r.phone||contacts[0]?.phone||'—'),esc(companyLocations(state,type,r.id).length),
+        open?`<span class="co-count">${open}</span>`:'<span class="sub">0</span>',
+        chip(r.active===false?'Archived':'Active'),
+        actionGroup(small('View',`masterView(${args})`),small('Edit',`masterEdit(${args})`),
+          small(r.active===false?'Restore':'Archive',`masterArchive(${args})`),dangerSmall('Delete',`deleteMaster(${args})`))];
+    }),'Add your first '+title.toLowerCase()+'.',
+    state[type].map(r=>[r.code,r.name,r.trn,r.email,r.phone,r.city,r.details,...(r.tags||[]),...companyContacts(r).flatMap(c=>[c.name,c.phone,c.email])].filter(Boolean).join(' ')),
+    {placeholder:'Search by name, code, contact, phone, tag or TRN…',noun:type==='customers'?'customers':type==='suppliers'?'suppliers':'companies'});
+}
 function masterPage(type){
   if(type==='materials')return materialPage();
+  if(COMPANIES.includes(type))return companyPage(type);
   const company=COMPANIES.includes(type), title=ENTITY[type], rows=state[type], isParts=type==='parts';
   const balances=new Map(aggregate(stockRows(state)).map(({sku,qty})=>[sku,qty]));
   for(const variant of isParts?state.variants:[]){
@@ -5238,6 +5423,13 @@ function validateState(s){
       if(!COMPANIES.includes(t)){
         need(validUnit(r.unit)||(r.active===false&&r.legacy&&typeof r.unit==='string'),'Unknown unit on '+r.code+'.');
         if(r.image)need(validImage(r.image),'Invalid image on '+r.code+'.');
+      }else{
+        if(r.image)need(validImage(r.image),'Invalid logo on '+r.code+'.');
+        need(r.contacts==null||Array.isArray(r.contacts)&&r.contacts.length<=50&&
+          r.contacts.every(c=>c&&typeof c==='object'&&typeof c.name==='string'&&c.name.trim()),'Invalid contact people on '+r.code+'.');
+        need(r.tags==null||Array.isArray(r.tags)&&r.tags.every(x=>typeof x==='string'),'Invalid tags on '+r.code+'.');
+        need(r.creditLimit==null||Number.isFinite(r.creditLimit)&&r.creditLimit>=0,'Invalid credit limit on '+r.code+'.');
+        need(r.leadTime==null||Number.isSafeInteger(r.leadTime)&&r.leadTime>=0,'Invalid lead time on '+r.code+'.');
       }
     }
   }
