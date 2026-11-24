@@ -3413,7 +3413,8 @@ function applyPackingTemplate(form,rows,category,useEnteredNets=false){
   form.elements.namedItem('orderQty').dispatchEvent(new Event('input',{bubbles:true}));
 }
 function packingParts(rows,quantities,editable=false,order=1){
-  return panel('Product parts',(editable?note('Choose a packing formula template to calculate the workbook quantities. Changing its net quantities recalculates the other parts. For manual quantities, leave the template unselected. Unused parts should be 0.'):'')+
+  return panel('Product parts',(editable?note('Search for a part and enter its quantity. Selected parts stay visible. A packing formula template can fill quantities automatically.')+
+    `<div class="toolbar erp-packing-search"><div class="search">${ic('search')}<input class="inp" type="search" aria-label="Search product parts" placeholder="Search by part name or code…" oninput="filterPackingParts(this)"></div><span class="pill-legend" aria-live="polite"></span></div>`:'')+
     table(['Picture','Part description','Unit','Quantity per product','Order total'],rows.flatMap((part,i)=>{
       const count=quantities[i];
       if(!editable&&!count)return [];
@@ -3423,11 +3424,28 @@ function packingParts(rows,quantities,editable=false,order=1){
         editable?`<input class="inp packing-qty" aria-label="${esc('Quantity for '+part.name)}" type="number"
           min="0" step="${step}" name="${packingInput(i)}" value="${esc(count)}" required>`:esc(count),
         `<span data-packing-total="${i}">${qfmt(count*order)}</span>`]];
-    }),'No parts selected.')+(rows.some((part,i)=>part.costFormula&&(editable||quantities[i]))?
+    }),'No parts selected.',editable?rows.map(part=>[part.name,part.code,part.unit,part.size,part.color].filter(Boolean).join(' ')):[])+(rows.some((part,i)=>part.costFormula&&(editable||quantities[i]))?
       `<details style="padding:10px 14px"><summary>Workbook accessory cost estimate</summary>${
         table(['Part','Workbook formula','Estimated cost'],rows.flatMap((part,i)=>part.costFormula&&(editable||quantities[i])?[[
           esc(part.name),esc(part.costFormula),`<span data-packing-cost="${i}">${qfmt(packingCost(part,quantities[i]*order))}</span>`
         ]]:[]))}</details>`:''));
+}
+function filterPackingParts(input){
+  const card=input.closest('.card'), query=searchKey(input.value).split(' ').filter(Boolean);
+  const lines=card.querySelector('.tbl-wrap tbody');
+  let selected=0,matches=0;
+  for(const row of lines.rows){
+    const quantity=Number(row.querySelector('.packing-qty')?.value||0);
+    const chosen=Number.isFinite(quantity)&&quantity>0;
+    const text=searchKey(row.dataset.search||row.textContent),words=text.split(' ');
+    const match=query.length>0&&query.every(token=>text.includes(token)||words.some(word=>word.startsWith(token)||
+      (token.length>=4&&searchDistance(token,word)<=(token.length>=8?2:1))));
+    row.hidden=!chosen&&!match;
+    if(chosen)selected++;
+    if(match&&!chosen)matches++;
+  }
+  card.querySelector('.pill-legend').textContent=query.length?`${selected} selected · ${matches} matches`:
+    `${selected} selected · search to add parts`;
 }
 function packingCost(part,total){
   return packingFormula(part.costFormula,{['G'+part.requiredRow]:part.price,['F'+part.requiredRow]:total});
@@ -3566,6 +3584,8 @@ function productPacking(s,product,recipe){
   return {rows,selected,quantities};
 }
 function wireProductPacking(form,rows){
+  const search=form.querySelector('.erp-packing-search input');
+  if(search)filterPackingParts(search);
   form.addEventListener('input',e=>{
     if(e.target.name!=='orderQty'&&!(/^packingQty\d+$/.test(e.target.name||'')))return;
     const category=valOf(form,'category'), template=packingCategory(category);
@@ -3583,6 +3603,7 @@ function wireProductPacking(form,rows){
       const cost=$(`[data-packing-cost="${i}"]`,form);
       if(cost&&part.costFormula)cost.textContent=valid?qfmt(packingCost(part,roundMeasured(quantity))):'—';
     });
+    if(search)filterPackingParts(search);
   });
 }
 function masterEdit(type,id){
