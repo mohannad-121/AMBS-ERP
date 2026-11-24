@@ -3,6 +3,7 @@
 const LEGACY=['meta','materials','products','bom','plans','purchaseRequests','receipts','movements','stockChecks','weighDocs'];
 const LIVE=['customers','suppliers','processors','locations','materials','parts','products','variants','recipes','plans','orders','purchases','jobs','events','reviews'];
 const UNITS=['PCS','TUBE','SHEET','SET','M','M²','M³','MM','KG','G','T','L','ROLL','BOX','PACK','PAIR','BUNDLE'];
+const validUnit=value=>typeof value==='string'&&/^[A-Z][A-Z0-9²³ _/-]{0,23}$/.test(value);
 
 const EPS=1e-9;
 const COMPANIES=LIVE.slice(0,3);
@@ -84,7 +85,7 @@ function validateState(s){
       need(typeof r.code==='string'&&typeof r.name==='string'&&!ids.has(r.id),'Invalid SKU or company in '+t+'.');
       ids.add(r.id);codeCheck(s,t,r);
       if(!COMPANIES.includes(t)){
-        need(UNITS.includes(r.unit)||(r.active===false&&r.legacy&&typeof r.unit==='string'),'Unknown unit on '+r.code+'.');
+        need(validUnit(r.unit)||(r.active===false&&r.legacy&&typeof r.unit==='string'),'Unknown unit on '+r.code+'.');
         if(r.image)need(validImage(r.image),'Invalid image on '+r.code+'.');
       }
     }
