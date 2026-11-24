@@ -31,7 +31,14 @@ const IP = {
   layers:'M12 2l9 5-9 5-9-5 9-5zm9 10l-9 5-9-5m18 5l-9 5-9-5',
   refresh:'M20 11a8 8 0 10-2 5m2 3v-5h-5',
   calc:'M7 3h10a1 1 0 011 1v16a1 1 0 01-1 1H7a1 1 0 01-1-1V4a1 1 0 011-1zm1 3h8v3H8V6zm0 6h2m3 0h2m-7 3h2m3 0h2m-7 3h2',
-  grid:'M3 3h7v7H3V3zm11 0h7v7h-7V3zM3 14h7v7H3v-7zm11 0h7v7h-7v-7z'
+  grid:'M3 3h7v7H3V3zm11 0h7v7h-7V3zM3 14h7v7H3v-7zm11 0h7v7h-7v-7z',
+  users:'M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zm13 10v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75',
+  warehouse:'M3 21h18M5 21V8l7-5 7 5v13M9 21v-6h6v6M9 10h6',
+  factory:'M2 21h20M4 21V11l5 3v-3l5 3v-3l5 3V4h2v17M8 17h2m4 0h2',
+  stack:'M4 6c0-1.66 3.58-3 8-3s8 1.34 8 3-3.58 3-8 3-8-1.34-8-3zm0 0v6c0 1.66 3.58 3 8 3s8-1.34 8-3V6m-16 6v6c0 1.66 3.58 3 8 3s8-1.34 8-3v-6',
+  nut:'M12 2l8.66 5v10L12 22l-8.66-5V7L12 2zm0 7a3 3 0 100 6 3 3 0 000-6z',
+  tree:'M4 4h6v5H4V4zm0 11h6v5H4v-5zm10-5h6v5h-6v-5zM7 9v6m3-3h4',
+  wrench:'M14.7 6.3a4 4 0 00-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 005.4-5.4l-2.5 2.5-2.4-.6-.6-2.4 2.5-2.5z'
 };
 function ic(name,cls){return `<svg class="${cls||''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="${IP[name]||''}"/></svg>`;}
 
@@ -3124,9 +3131,9 @@ const TITLES={dashboard:'Dashboard',customers:'Customers',suppliers:'Suppliers',
   prodcalc:'Product Calculator','prodcalc-new':'Product Take-off',nesting:'Product Nesting',
   'plan-new':'Production','purchase-new':'Purchasing'};
 const GROUPS=[
-  ['Overview',[['dashboard','dashboard'],['customers','box'],['suppliers','cart'],['processors','layers']]],
-  ['Master Data',[['materials','box'],['parts','layers'],['bom','bom'],['products','cube']]],
-  ['Operations',[['production','plan'],['purchase','cart'],['movement','swap'],['dispatch','truck']]],
+  ['Overview',[['dashboard','dashboard'],['customers','users'],['suppliers','warehouse'],['processors','factory']]],
+  ['Master Data',[['materials','stack'],['parts','nut'],['bom','tree'],['products','box']]],
+  ['Operations',[['production','wrench'],['purchase','cart'],['movement','swap'],['dispatch','truck']]],
   ['System',[['reports','chart'],['tools','calc'],['settings','gear']]]
 ];
 const ENTITY={customers:'Customer',suppliers:'Supplier',processors:'Processing Company',materials:'Raw Material',parts:'Part',products:'Product'};
