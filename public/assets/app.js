@@ -3642,11 +3642,41 @@ function wireProductPacking(form,rows){
     if(search)filterPackingParts(search);
   });
 }
+function materialOpening(s,id){
+  return s.events.filter(e=>['Opening stock','Verified legacy opening'].includes(e.type))
+    .reduce((total,e)=>total+e.lines.reduce((sum,line)=>sum+(line.sku===id?line.delta:0),0),0);
+}
+function nextMaterialCode(s){
+  const codes=new Set(['materials','parts','products','variants'].flatMap(type=>s[type].map(row=>row.code?.toUpperCase())));
+  let number=1,code;
+  do{code='RM-'+String(number++).padStart(4,'0');}while(codes.has(code));
+  return code;
+}
+function materialFields(row,old){
+  const opening=old?materialOpening(state,old.id):0;
+  return input('Code','code',row.code||nextMaterialCode(state),{required:true})+
+    input('Category','category',row.category,{extra:'list="erp-categories"'})+
+    input('Material name *','name',row.name,{required:true,full:true})+
+    suggestedInput('Unit','unit',row.unit||'PCS',unitChoices(),true)+
+    number('Bundle quantity (units per bundle)','bundle',row.bundle??0,0,1)+
+    number('Safety / minimum stock','safety',row.safety??0)+
+    (old?input('Opening / initial stock','opening',qfmt(opening),{extra:'readonly'}):
+      number('Opening / initial stock','opening',0,0,'any'))+
+    (!old?`<div class="full" data-opening-location hidden>${select('Opening stock custody location','openingLocation',locOptions(),'',false,
+      'Choose a custody location')}</div>`:'')+
+    field('Section profile (links to calculators)',`<select class="sel" name="profileKey"><option value="">— not linked —</option>${twcTypeOptions(row.profileKey||'')}</select>`)+
+    number('Stock length (m)','stockLen',row.stockLen??6)+
+    number('Rate (AED per kg)','rateKg',row.rateKg??0)+
+    number('Rate (AED per piece)','ratePc',row.ratePc??0)+
+    input('Dimensions / specifications','dimensions',row.dimensions,{full:true})+
+    `<div class="field full material-help">Opening stock is posted once to the selected location. Later changes go through Inventory &amp; Stock Movements. Bundle quantities round purchase suggestions.</div>`+
+    imageField(row.image)+tick('Active (available for planning and movements)','active',row.active!==false);
+}
 function masterEdit(type,id){
   const old=get(state,type,id), company=COMPANIES.includes(type), title=ENTITY[type], row=old||{};
   const product=type==='products', previousRecipe=product?get(state,'recipes',id):null;
   const packing=product?productPacking(state,old,previousRecipe):null;
-  const core=input('Code','code',row.code,{required:true})+input('Name','name',row.name,{required:true})+
+  const core=type==='materials'?materialFields(row,old):input('Code','code',row.code,{required:true})+input('Name','name',row.name,{required:true})+
     (company?input('Contact','contact',row.contact)+input('Email','email',row.email,{type:'email'})+
       input('Phone','phone',row.phone)+input(type==='processors'?'Services (comma separated)':'Business / Supply details','details',row.details):
       (product?suggestedInput('Category / packing formula template','category',row.category,
@@ -3656,17 +3686,15 @@ function masterEdit(type,id){
       (product?number('Default order quantity','orderQty',row.orderQty??1,1,1):
         input('Dimensions / specifications','dimensions',row.dimensions,{full:true}))+
       (type==='parts'?select('Part source','source',same(['Manufactured','Purchased','Stocked']),row.source||'Manufactured'):'')+
-      (type==='materials'?number('Safety / minimum stock','safety',row.safety??0)+number('Purchase bundle quantity','bundle',row.bundle??0,0,1)+
-        field('Section profile (calculator link)',`<select class="sel" name="profileKey"><option value="">None</option>${twcTypeOptions(row.profileKey||'')}</select>`)+
-        number('Stock length (m)','stockLen',row.stockLen??0)+number('Rate (AED/kg)','rateKg',row.rateKg??0)+number('Rate (AED/piece)','ratePc',row.ratePc??0):'')+
       imageField(row.image));
   const list=[...new Set([...(type==='materials'?['Tubes','Steel sections','Sheets','Accessories']:type==='parts'?
     ['Safety net','Aluminium','Steel / fabricated parts','Fasteners / accessories']:[]),...state[type].map(x=>x.category).filter(Boolean)])];
-  const form=formModal((old?'Edit ':'Add ')+title,`<div class="form-grid">${core}${area('Notes','notes',row.notes)}</div>
+  const form=formModal((old?'Edit ':'Add ')+title,`<div class="form-grid ${type==='materials'?'material-form':''}">${core}${area('Notes','notes',row.notes)}</div>
     ${!product&&!company?`<datalist id="erp-categories">${list.map(c=>`<option value="${esc(c)}"></option>`).join('')}</datalist>`:''}
     ${company?'<h4>Company locations</h4><div data-locations></div>':''}
     ${product?packingParts(packing.rows,packing.quantities,true,row.orderQty??1):''}`,async f=>{
-    const data={...old,id:id||key(),code:valOf(f,'code'),name:valOf(f,'name'),notes:valOf(f,'notes'),active:old?.active!==false};
+    const data={...old,id:id||key(),code:valOf(f,'code'),name:valOf(f,'name'),notes:valOf(f,'notes'),
+      active:type==='materials'?checked(f,'active'):old?.active!==false};
     let packingQuantities;
     if(company){
       for(const name of ['contact','email','phone','details'])data[name]=valOf(f,name);
@@ -3684,6 +3712,10 @@ function masterEdit(type,id){
       data.image=await imageValue(f,old?.image);
     }
     const locations=company?lines().map(l=>readLocation(l,true)):[];
+    const opening=type==='materials'&&!old?componentQty(valOf(f,'opening'),data.unit,'Opening stock',true):0;
+    const openingLocation=type==='materials'&&!old?valOf(f,'openingLocation'):'';
+    need(!opening||data.active,'Activate the material before posting opening stock.');
+    need(!opening||openingLocation,'Choose a custody location for opening stock.');
     await commit(s=>{
       const existing=get(s,type,data.id);
       need(!old||sameCloudRecord(old,existing),'This record changed. Reopen it before saving.');
@@ -3719,6 +3751,8 @@ function masterEdit(type,id){
         delete data.packingQuantities;
       }
       add(s[type],{...data,at:now()});
+      if(opening)event(s,'opening:'+data.id,'Opening stock',
+        [{sku:data.id,location:loc(s,openingLocation).id,delta:opening}],'Initial stock · '+data.code);
       if(type==='parts')for(const v of s.variants.filter(v=>v.partId===data.id))v.unit=data.unit;
       if(company){
         const previous=companyLocations(s,type,data.id);
@@ -3737,7 +3771,13 @@ function masterEdit(type,id){
         }
       }
     });
-  });
+  },{text:type==='materials'?(old?'Save changes':'Save material'):'Save'});
+  if(type==='materials'&&!old){
+    const opening=form.elements.namedItem('opening'),location=form.querySelector('[data-opening-location]');
+    const update=()=>{const show=Number(opening.value)>0;location.hidden=!show;
+      form.elements.namedItem('openingLocation').required=show;};
+    opening.addEventListener('input',update);update();
+  }
   if(product){
     wireProductPacking(form,packing.rows);
     form.elements.namedItem('category').addEventListener('change',e=>{
@@ -3852,9 +3892,10 @@ function masterView(type,id){
     (packing?packingParts(packing.rows,packing.quantities,false,r.orderQty??1):'')+connectedPanels(type,r));
 
 }
-function searchableTable(columns,rows,empty,searchTerms=[]){
-  return `<div class="card erp-table"><div class="toolbar"><div class="search">${ic('search')}<input aria-label="Search records" class="inp"
-    placeholder="Search by name, code or size…" oninput="filterTable(this)"></div><span class="pill-legend">${rows.length} records</span></div>${table(columns,rows,empty,searchTerms)}</div>`;
+function searchableTable(columns,rows,empty,searchTerms=[],options={}){
+  const {className='',placeholder='Search by name, code or size…',noun='records'}=options;
+  return `<div class="card erp-table ${className}" data-noun="${esc(noun)}"><div class="toolbar"><div class="search">${ic('search')}<input aria-label="Search records" class="inp"
+    placeholder="${esc(placeholder)}" oninput="filterTable(this)"></div><span class="pill-legend">${rows.length} ${esc(noun)}</span></div>${table(columns,rows,empty,searchTerms)}</div>`;
 }
 function searchKey(value){
   return String(value||'').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g,'')
@@ -3882,9 +3923,40 @@ function filterTable(el){
       (token.length>=4&&searchDistance(token,word)<=(token.length>=8?2:1))));
     if(!tr.hidden)matches++;
   });
-  card.querySelector('.pill-legend').textContent=query.length?`${matches} matches`:`${matches} records`;
+  card.querySelector('.pill-legend').textContent=query.length?`${matches} matches`:`${matches} ${card.dataset.noun||'records'}`;
+}
+function materialHealth(material,onHand){
+  const safety=Number(material.safety)||0;
+  if(safety>0&&onHand<safety-EPS)return {label:'Low',kind:'bad',cell:'stock-low'};
+  if(safety>0&&onHand<=safety*1.25+EPS)return {label:'Watch',kind:'warn',cell:'stock-watch'};
+  return {label:'OK',kind:'ok',cell:'stock-good'};
+}
+function materialPage(){
+  const rows=state.materials;
+  const values=rows.map(material=>{
+    const onHand=physical(state,material.id);
+    const onOrder=state.purchases.filter(p=>p.status==='Ordered').reduce((total,p)=>total+
+      p.lines.filter(line=>line.sku===material.id).reduce((sum,line)=>sum+Math.max(0,line.qty-line.received),0),0);
+    const health=materialHealth(material,onHand),args=`'materials',${escapeArg(material.id)}`;
+    return [esc(material.code),cell(material.name,material.category),
+      `<span class="num">${esc(qfmt(materialOpening(state,material.id)))}</span>`,
+      `<span class="material-balance ${health.cell}"><strong class="num">${esc(qfmt(onHand))}</strong> <span>${esc(material.unit)}</span></span>`,
+      `<span class="num">${esc(qfmt(material.safety??0))}</span>`,
+      `<span class="num">${esc(qfmt(material.bundle??0))}</span>`,
+      `<span class="num">${esc(qfmt(onOrder))}</span>`,
+      `<span class="num">${esc(qfmt(onHand+onOrder))}</span>`,
+      statusChip(health.kind,health.label),chip(material.active===false?'Archived':'Active'),
+      actionGroup(small('View',`masterView(${args})`),small('Edit',`masterEdit(${args})`),
+        small(material.active===false?'Restore':'Archive',`masterArchive(${args})`),
+        dangerSmall('Delete',`deleteMaster(${args})`))];
+  });
+  return head('Master Data','Raw Materials',button('Stock report',"App.go('reports')",'','pdf'),
+    button('Add raw material',"masterEdit('materials')",'btn-primary','plus'))+
+    searchableTable(['Code','Material','Opening','On hand','Safety','Bundle','On order','Avail. after','Status','State','Actions'],
+      values,'Add your first raw material.',[],{className:'material-table',placeholder:'Search code, name, category…',noun:'materials'});
 }
 function masterPage(type){
+  if(type==='materials')return materialPage();
   const company=COMPANIES.includes(type), title=ENTITY[type], rows=state[type], isParts=type==='parts';
   const balances=new Map(aggregate(stockRows(state)).map(({sku,qty})=>[sku,qty]));
   for(const variant of isParts?state.variants:[]){
@@ -4880,18 +4952,24 @@ function locationView(id){
 }
 function settingsPage(){
   return head('System','Settings & Data',button('Add Custody Location','locationEdit()','btn-primary','plus'))+
-    panel('Company profile',`<div class="card-body">${cell(SET.company,[SET.currentUser,SET.address].filter(Boolean).join(' · '))}
-      <div style="margin-top:9px">${small('Edit company profile','profileEdit()')}</div></div>`)+
+    `<div class="settings-grid">
+      <section class="card settings-card"><div class="card-head"><div class="card-title">Company profile</div>${chip('Active')}</div>
+        <div class="card-body"><div class="settings-profile"><div class="settings-mark">${esc((SET.company||'AM').slice(0,2).toUpperCase())}</div>
+          <div>${cell(SET.company,[SET.currentUser,SET.address].filter(Boolean).join(' · '))}</div></div>
+          <div class="settings-meta">${SET.email?`<span>${esc(SET.email)}</span>`:''}${SET.phone?`<span>${esc(SET.phone)}</span>`:''}</div>
+          ${button('Edit company profile','profileEdit()','','edit')}</div></section>
+      <section class="card settings-card"><div class="card-head"><div class="card-title">Back up and restore</div></div>
+        <div class="card-body"><p>Export a JSON copy before moving to another computer or browser profile.</p>
+          ${actionGroup(button('Export Backup (JSON)','exportBackup()','btn-primary','download'),
+            button('Import Backup',"document.getElementById('backup-file').click()",'','refresh'))}
+          <input type="file" id="backup-file" accept=".json,application/json" hidden onchange="previewBackup(this)"></div></section>
+    </div>`+
     panel('Locations',table(['Location','Company','Address','City','Status','Actions'],state.locations.map(l=>[
       esc(l.name),esc(l.ownerId?get(state,l.ownerType,l.ownerId)?.name:'AMBS'),esc(l.address),esc(l.city),chip(l.active===false?'Archived':'Active'),
       actionGroup(small('View',`locationView(${escapeArg(l.id)})`),mapAction(l),l.ownerId?small('Edit company',`masterEdit(${escapeArg(l.ownerType)},${escapeArg(l.ownerId)})`):
         small('Edit',`locationEdit(${escapeArg(l.id)})`)+small(l.active===false?'Restore':'Archive',`custodyArchive(${escapeArg(l.id)})`),
         dangerSmall('Delete',`deleteLocation(${escapeArg(l.id)})`))
-    ])))+
-    panel('Back up and restore',`<div class="card-body"><p style="margin-top:0">Export a JSON copy before moving to another computer or browser profile.</p>
-      ${actionGroup(button('Export Backup (JSON)','exportBackup()','btn-primary','download'),
-        button('Import Backup',"document.getElementById('backup-file').click()",'','refresh'))}
-      <input type="file" id="backup-file" accept=".json,application/json" hidden onchange="previewBackup(this)"></div>`)+reviewsSection();
+    ])))+reviewsSection();
 }
 function profileEdit(){
   formModal('Company Profile',`<div class="form-grid">${input('Company','company',SET.company,{required:true})}
@@ -5137,9 +5215,10 @@ const App={
     $('#nav-toggle')?.setAttribute('aria-expanded',String(open));
   },
   top(){
+    const subtitles={materials:'Stock master & safety levels',settings:'Company profile, locations & data'};
     return `<button type="button" class="erp-nav-shade" aria-label="Close navigation" onclick="App.toggleNavigation(false)"></button><div class="hz hazard"></div><div class="row">
       <button id="nav-toggle" class="menu-btn" aria-label="Toggle navigation" aria-controls="sidebar" aria-expanded="false" onclick="App.toggleNavigation(!document.body.classList.contains('nav-open'))">${ic('layers')}</button>
-      <div><div class="page-title">${esc(TITLES[this.route]||'Dashboard')}</div><div class="page-sub">Production Planning &amp; Stock Control</div></div>
+      <div><div class="page-title">${esc(TITLES[this.route]||'Dashboard')}</div><div class="page-sub">${esc(subtitles[this.route]||'Production Planning & Stock Control')}</div></div>
       <div class="topbar-spacer"></div>
       <button class="btn btn-sm erp-shortcut" onclick="App.go('purchase-new')">${ic('cart')}Purchase</button>
       <button class="btn btn-sm" onclick="refreshCloudWorkspace(true)">Refresh</button>
