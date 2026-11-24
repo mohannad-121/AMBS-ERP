@@ -646,6 +646,13 @@ body::after{width:560px;height:560px;left:calc(var(--nav-w) - 120px);bottom:-260
   transition:transform .35s var(--spring),background .25s,color .25s,box-shadow .25s}
 .nav a:hover svg{transform:scale(1.1) rotate(-6deg);background:color-mix(in srgb,var(--ic) 26%,transparent);box-shadow:0 6px 16px -6px var(--ic),inset 0 0 0 1px color-mix(in srgb,var(--ic) 40%,transparent)}
 .nav a.active svg{color:#fff;background:rgba(255,255,255,.2);box-shadow:inset 0 0 0 1px rgba(255,255,255,.3),0 4px 12px -4px rgba(0,0,0,.35)}
+/* Selected page takes its own colour (deepened so white text stays readable) */
+.nav a.active{color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.35);
+  background:linear-gradient(100deg,color-mix(in srgb,var(--ic) 62%,#000),color-mix(in srgb,var(--ic) 42%,#000));
+  border-color:color-mix(in srgb,var(--ic) 55%,transparent);
+  box-shadow:0 10px 24px -10px color-mix(in srgb,var(--ic) 80%,transparent),inset 0 1px 0 rgba(255,255,255,.18)}
+.nav a.active::before{background:#fff;box-shadow:0 0 10px color-mix(in srgb,var(--ic) 90%,#fff);animation:dotpulse2 2s ease-in-out infinite}
+@keyframes dotpulse2{50%{box-shadow:0 0 0 5px rgba(255,255,255,.15),0 0 14px #fff}}
 .nav a[href="#/dashboard"]{--ic:#60a5fa}
 .nav a[href="#/customers"]{--ic:#34d399}
 .nav a[href="#/suppliers"]{--ic:#fbbf24}
