@@ -3292,7 +3292,7 @@ async function imageValue(form,existing=''){
   const canvas=document.createElement('canvas');
   const context=canvas.getContext('2d');need(context,'This browser could not process the image.');
   let value='';
-  for(const edge of [1200,900,700]){
+  for(const edge of [960,800,640]){
     const scale=Math.min(1,edge/Math.max(img.naturalWidth,img.naturalHeight));
     canvas.width=Math.max(1,Math.round(img.naturalWidth*scale));
     canvas.height=Math.max(1,Math.round(img.naturalHeight*scale));
@@ -3307,11 +3307,11 @@ async function imageValue(form,existing=''){
     }
     for(const quality of [.84,.72,.6,.48]){
       value=canvas.toDataURL(webp?'image/webp':'image/jpeg',quality);
-      if(value.length<=800000)break;
+      if(value.length<=350000)break;
     }
-    if(value.length<=800000)break;
+    if(value.length<=350000)break;
   }
-  need(validImage(value)&&value.length<=800000,'This image is too detailed to save. Choose a smaller image.');
+  need(validImage(value)&&value.length<=350000,'This image is too detailed to save. Choose a smaller image.');
   return value;
 }
 function imageField(old){
