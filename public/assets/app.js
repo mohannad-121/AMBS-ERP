@@ -38,7 +38,8 @@ const IP = {
   stack:'M4 6c0-1.66 3.58-3 8-3s8 1.34 8 3-3.58 3-8 3-8-1.34-8-3zm0 0v6c0 1.66 3.58 3 8 3s8-1.34 8-3V6m-16 6v6c0 1.66 3.58 3 8 3s8-1.34 8-3v-6',
   nut:'M12 2l8.66 5v10L12 22l-8.66-5V7L12 2zm0 7a3 3 0 100 6 3 3 0 000-6z',
   tree:'M4 4h6v5H4V4zm0 11h6v5H4v-5zm10-5h6v5h-6v-5zM7 9v6m3-3h4',
-  wrench:'M14.7 6.3a4 4 0 00-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 005.4-5.4l-2.5 2.5-2.4-.6-.6-2.4 2.5-2.5z'
+  wrench:'M14.7 6.3a4 4 0 00-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 005.4-5.4l-2.5 2.5-2.4-.6-.6-2.4 2.5-2.5z',
+  invoice:'M6 2h9l5 5v15H6V2zm8 0v6h6M9 12h8M9 16h8M9 8h2'
 };
 function ic(name,cls){return `<svg class="${cls||''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="${IP[name]||''}"/></svg>`;}
 
@@ -95,7 +96,10 @@ function startClock(){ const set=()=>{ const c=$('#clock'); if(!c)return; const 
 
 /* AMBS workspace domain model. */
 const LEGACY=['meta','materials','products','bom','plans','purchaseRequests','receipts','movements','stockChecks','weighDocs'];
-const LIVE=['customers','suppliers','processors','locations','materials','parts','products','variants','recipes','plans','orders','purchases','jobs','events','reviews'];
+const LIVE=['customers','suppliers','processors','locations','materials','parts','products','variants','recipes','plans','orders','purchases','jobs','events','reviews','sales'];
+/* Workspaces saved before a collection existed simply get an empty list. */
+const SALES_OPEN=['Draft','Confirmed','Partially delivered'];
+function ensureTables(s){if(s&&typeof s==='object')for(const name of LIVE)if(!Array.isArray(s[name]))s[name]=[];return s;}
 const UNITS=['PCS','TUBE','SHEET','SET','M','M²','M³','MM','KG','G','T','L','ROLL','BOX','PACK','PAIR','BUNDLE'];
 const validUnit=value=>typeof value==='string'&&/^[A-Z][A-Z0-9²³ _/-]{0,23}$/.test(value);
 const unitChoices=()=>[...new Set([...UNITS,...['materials','parts','products','variants'].flatMap(type=>(state?.[type]||[]).map(row=>row.unit).filter(validUnit))])];
@@ -355,7 +359,7 @@ async function nextNo(kind){
   return operationNo('WGT');
 }
 function reflect(next){
-  state=next;
+  state=ensureTables(next);
   SET=state.settings;
   DB.materials=state.materials;
 }
@@ -3065,6 +3069,7 @@ async function transaction(names,mode,work){
   const remote=await CLOUD.api();
   if(!remote.snapshot)throw Error('AMBS has not been initialized.');
   const snapshot=remote.snapshot;
+  ensureTables(snapshot.state);
   let result, mutated=false;
   await new Promise((resolve,reject)=>{
     let pending=0, finalized=false;
@@ -3126,14 +3131,14 @@ async function commit(change){
 /* Shared views and editors */
 const TITLES={dashboard:'Dashboard',customers:'Customers',suppliers:'Suppliers',processors:'Processing Companies',
   materials:'Raw Materials',parts:'Parts',bom:'Bill of Materials',products:'Products',production:'Production',
-  purchase:'Purchasing',movement:'Inventory & Stock Movements',dispatch:'Packing & Dispatch',reports:'Reports',
+  sales:'Sales Orders',purchase:'Purchasing',movement:'Inventory & Stock Movements',dispatch:'Packing & Dispatch',reports:'Reports',
   tools:'Tools',settings:'Settings & Data',market:'Market Sections',steel:'Steel Weight Calculator',
   prodcalc:'Product Calculator','prodcalc-new':'Product Take-off',nesting:'Product Nesting',
   'plan-new':'Production','purchase-new':'Purchasing'};
 const GROUPS=[
   ['Overview',[['dashboard','dashboard'],['customers','users'],['suppliers','warehouse'],['processors','factory']]],
   ['Master Data',[['materials','stack'],['parts','nut'],['bom','tree'],['products','box']]],
-  ['Operations',[['production','wrench'],['purchase','cart'],['movement','swap'],['dispatch','truck']]],
+  ['Operations',[['sales','invoice'],['production','wrench'],['purchase','cart'],['movement','swap'],['dispatch','truck']]],
   ['System',[['reports','chart'],['tools','calc'],['settings','gear']]]
 ];
 const ENTITY={customers:'Customer',suppliers:'Supplier',processors:'Processing Company',materials:'Raw Material',parts:'Part',products:'Product'};
@@ -3153,7 +3158,7 @@ const panel=(name,html)=>`<section class="card erp-table"><div class="card-head"
 const chip=s=>statusChip(['Active','Approved','Complete','Completed','Delivered','Received','Closed'].includes(s)?'ok':
   ['Missing','Cancelled','Archived','Rejected'].includes(s)?'bad':
   ['Review required','Partially delivered','Partially received','Reserved','Shortage','Low stock'].includes(s)?'warn':
-  ['Released','Ordered','Open','In progress'].includes(s)?'info':'neutral',s);
+  ['Released','Ordered','Open','In progress','Confirmed'].includes(s)?'info':'neutral',s);
 const cell=(main,sub='')=>`<strong>${esc(main)}</strong>${sub?`<div class="sub">${esc(sub)}</div>`:''}`;
 const thumb=(src,alt='',size='')=>validImage(src)?`<img class="thumb ${size}" src="${esc(src)}" alt="${esc(alt)}" loading="lazy">`:'';
 const recordPicture=(row,size='thumb-record')=>thumb(row.image,row.name,size)||
@@ -3357,7 +3362,8 @@ function activeCheck(s,table,row,old){
       s.recipes.some(r=>r.lines.some(l=>l.sku===old.id || l.partId===old.id || l.variantId===old.id))||
       s.variants.some(v=>v.partId===old.id)||s.purchases.some(p=>p.lines.some(l=>l.sku===old.id))||
       s.orders.some(o=>o.sku===old.id||o.materials.some(m=>m.sku===old.id))||
-      s.jobs.some(j=>j.productId===old.id||j.parts.some(l=>l.sku===old.id));
+      s.jobs.some(j=>j.productId===old.id||j.parts.some(l=>l.sku===old.id))||
+      s.sales.some(o=>o.lines.some(l=>l.sku===old.id));
     need(!used,'This unit is used in a BOM, variant or operational record.');
   }
   if(old.active!==false && row.active===false){
@@ -3367,7 +3373,8 @@ function activeCheck(s,table,row,old){
     need(!s.orders.some(o=>['Draft','Released'].includes(o.status)&&(o.sku===row.id||o.partId===row.id||o.materials.some(m=>m.sku===row.id)))&&
       !s.jobs.some(j=>j.status!=='Delivered'&&j.status!=='Cancelled'&&(j.productId===row.id||j.parts.some(l=>l.sku===row.id||l.partId===row.id)))&&
       !s.plans.some(p=>p.status==='Reserved'&&(p.products.some(l=>l.productId===row.id)||p.parts.some(l=>l.sku===row.id||l.partId===row.id)||p.materials.some(l=>l.sku===row.id)))&&
-      !s.purchases.some(p=>['Draft','Ordered'].includes(p.status)&&(p.supplierId===row.id||p.lines.some(l=>l.sku===row.id))),
+      !s.purchases.some(p=>['Draft','Ordered'].includes(p.status)&&(p.supplierId===row.id||p.lines.some(l=>l.sku===row.id)))&&
+      !s.sales.some(o=>SALES_OPEN.includes(o.status)&&o.lines.some(l=>l.sku===row.id&&l.qty-l.delivered>EPS)),
       'This record is used in an open operation.');
     need(!s.variants.some(v=>v.partId===row.id&&v.active!==false),'Archive this part’s variants first.');
   }
@@ -3854,6 +3861,7 @@ function masterArchive(type,id){
       if(COMPANIES.includes(type)&&!enable)need(!companyLocations(s,type,id).some(l=>l.stock&&locationUsed(s,l.id)),
         'Resolve stock or open operations at this company’s custody sites first.');
       if(type==='customers'&&!enable)need(!s.jobs.some(j=>j.customerId===id&&['Open','Partially delivered'].includes(j.status)),'Close this customer’s open dispatch jobs first.');
+      if(type==='customers'&&!enable)need(!s.sales.some(o=>o.customerId===id&&SALES_OPEN.includes(o.status)),'Deliver or cancel this customer’s open sales orders first.');
       if(type==='variants'&&enable)need(live(s,'parts',old.partId)&&Math.abs(physical(s,old.partId))<EPS,'Reconcile the generic part balance first.');
       add(s[type],next);
     },enable?'Restore':'Archive');
@@ -4476,7 +4484,7 @@ function balanceData(s=state){
   ]);
 }
 function eventLinks(s,e){
-  const job=e.jobId&&get(s,'jobs',e.jobId),purchase=e.purchaseId&&get(s,'purchases',e.purchaseId);
+  const job=e.jobId&&get(s,'jobs',e.jobId),purchase=e.purchaseId&&get(s,'purchases',e.purchaseId),sale=e.salesId&&get(s,'sales',e.salesId);
   const orderId=e.orderId||(e.id.startsWith('production:')?e.id.slice('production:'.length):'');
   const order=orderId&&get(s,'orders',orderId);
   const partyType=e.partyType||(job?'customers':purchase?'suppliers':order?.customerId?'customers':'');
@@ -4485,7 +4493,7 @@ function eventLinks(s,e){
   return {company:partyId?get(s,partyType,partyId)?.name||'':'',site:siteId?get(s,'locations',siteId)?.name||'':'',
     processor:order?.processorId?get(s,'processors',order.processorId)?.name||'':'',
     processingSite:order?.processorSiteId?get(s,'locations',order.processorSiteId)?.name||'':'',
-    document:job?.no||purchase?.no||order?.no||'',job,purchase,order};
+    document:job?.no||purchase?.no||order?.no||sale?.no||'',job,purchase,order,sale};
 }
 function eventView(id){
   const e=get(state,'events',id);
@@ -4501,6 +4509,7 @@ function eventView(id){
     actionGroup(linked.job?small('Open dispatch',`closeModal();dispatchView(${escapeArg(linked.job.id)})`):'',
       linked.purchase?small('Open purchase',`closeModal();purchaseView(${escapeArg(linked.purchase.id)})`):'',
       linked.order?small('Open order',`closeModal();orderView(${escapeArg(linked.order.id)})`):'',
+      linked.sale?small('Open sales order',`closeModal();salesView(${escapeArg(linked.sale.id)})`):'',
       button('Download PDF',`recordPDF('events',${escapeArg(id)})`,'btn-sm','pdf')));
 }
 function eventsTable(events=state.events){
@@ -4748,6 +4757,155 @@ function dispatchPage(){
     ]));
 }
 
+/* Sales orders: customer orders for any stock item, delivered in one or more shipments. */
+const salesTotal=o=>o.lines.reduce((n,l)=>n+(l.price||0)*l.qty,0);
+const salesOpenLines=o=>o.lines.filter(l=>l.qty-l.delivered>EPS);
+const salesProgress=o=>{
+  const ordered=o.lines.reduce((n,l)=>n+l.qty,0), done=o.lines.reduce((n,l)=>n+l.delivered,0);
+  return ordered?Math.min(100,Math.round(done/ordered*100)):0;
+};
+const isoDate=v=>/^\d{4}-\d{2}-\d{2}$/.test(v);
+function salesEdit(id){
+  const old=get(state,'sales',id);
+  if(old&&old.lines.some(l=>l.delivered>0))return toast('Orders with deliveries cannot be edited.','warn');
+  if(old&&!['Draft','Confirmed'].includes(old.status))return toast('This sales order is closed.','warn');
+  const form=formModal(old?'Edit Sales Order · '+old.no:'New Sales Order',`<div class="form-grid">
+    ${searchable('Customer','customer',pair(current(state,'customers')),old?.customerId)}
+    ${select('Customer delivery site (optional)','site',[],'',false,'No linked site')}
+    ${input('Customer PO / reference (optional)','reference',old?.reference)}
+    ${input('Order date','date',old?.date||todayISO(),{type:'date',required:true})}
+    ${input('Requested delivery date (optional)','due',old?.due,{type:'date'})}
+    ${area('Notes','notes',old?.notes)}</div><div data-sales></div><div data-sales-total></div>`,async f=>{
+      const items=lines().map(l=>({sku:fieldValue(l,'sku'),qty:fieldValue(l,'qty'),price:fieldValue(l,'price')}));
+      need(items.length,'Add at least one order line.');
+      need(items.every(l=>l.sku),'Choose an item on every order line.');
+      need(new Set(items.map(l=>l.sku)).size===items.length,'Use one line per item.');
+      await commit(s=>{
+        const prev=get(s,'sales',id);
+        need(!id||prev&&prev.lines.every(l=>l.delivered===0)&&sameCloudRecord(prev,old),
+          'This order changed or has deliveries. Reopen it before saving.');
+        const customerId=live(s,'customers',valOf(f,'customer')).id, siteId=valOf(f,'site');
+        checkedCompanySite(s,'customers',customerId,siteId);
+        const date=valOf(f,'date'), due=valOf(f,'due');
+        need(isoDate(date),'Enter the order date.');
+        need(!due||isoDate(due)&&due>=date,'The requested delivery date cannot be before the order date.');
+        const orderLines=items.map(l=>{
+          const row=stockItem(s,l.sku);
+          return {sku:l.sku,qty:componentQty(l.qty,row.unit,'Ordered quantity'),
+            price:l.price===''?0:qty(l.price,'Unit price',true),delivered:0};
+        });
+        add(s.sales,{id:id||key(),no:prev?.no||operationNo('SO'),customerId,siteId,reference:valOf(f,'reference'),date,due,
+          notes:valOf(f,'notes'),lines:orderLines,status:prev?.status||'Draft',at:prev?.at||now()});
+      });
+      return old?'Sales order updated.':'Sales order saved.';
+    },{text:'Save Order'});
+  wireCompanySite(form,'customers','customer','site',old?.siteId);
+  const lines=repeat(form,'[data-sales]',(l,n)=>`<legend>Order line</legend><div class="form-grid">
+    ${searchable('Item / SKU',n+'_sku',pair(skus()),l.sku)}
+    ${number('Ordered quantity',n+'_qty',l.qty??'',0,'any')}
+    ${input('Unit price (AED, optional)',n+'_price',l.price||'',{type:'number',extra:'min="0" step="0.01"'})}</div>`,
+    old?.lines||[{}],'Add Line');
+  const total=()=>{
+    const sum=lines().reduce((n,l)=>n+(Number(fieldValue(l,'qty'))||0)*(Number(fieldValue(l,'price'))||0),0);
+    $('[data-sales-total]',form).innerHTML=sum>0?note('Order total · '+nfmt(sum,2)+' AED'):'';
+  };
+  form.addEventListener('input',total);form.addEventListener('change',total);total();
+}
+function salesStatus(id,status){
+  const copy={Confirmed:['Confirm Sales Order','Confirm this order so it can be delivered. Lines can still be edited until the first delivery.','Confirm Order'],
+    Cancelled:['Cancel Sales Order','Close the undelivered balance. Delivered quantities and posted stock stay recorded.','Cancel Order']}[status];
+  approval(copy[0],copy[1],s=>{
+    const o=get(s,'sales',id);
+    need(o&&(status==='Confirmed'?o.status==='Draft':SALES_OPEN.includes(o.status)),'This order status has changed.');
+    if(status==='Confirmed'){live(s,'customers',o.customerId);o.lines.forEach(l=>stockItem(s,l.sku));}
+    o.status=status;
+  },copy[2]);
+}
+function salesDeliver(id){
+  const o=get(state,'sales',id), eventId=key(), sources=custody();
+  if(!sources.length)return toast('Add a custody location in Settings & Data before delivering.','warn');
+  const open=o.lines.map((l,i)=>({...l,i,left:l.qty-l.delivered})).filter(l=>l.left>EPS);
+  const form=formModal('Deliver · '+o.no,
+    note('Choose where the goods leave from and how much of each line is delivered now. Leave 0 for lines that are not shipped yet.')+
+    `<div class="form-grid">${select('Ship from (custody location)','location',locOptions(),sources.length===1?sources[0].id:'')}
+    ${input('Delivery note / reference','ref','',{required:true})}</div><div class="form-grid">`+
+    open.map(l=>{const u=item(state,l.sku)?.unit;
+      return number(labelOf(state,l.sku)+' · outstanding '+qfmt(l.left,u),'qty'+l.i,l.left,0,'any')+
+        `<div class="field"><label>Available at source</label><div class="inp sales-available" data-available="${l.i}">—</div></div>`;
+    }).join('')+'</div>',async f=>{
+      await commit(s=>{
+        const r=get(s,'sales',id);
+        need(r&&['Confirmed','Partially delivered'].includes(r.status),'Confirm this order before delivering.');
+        need(sameCloudRecord(r.lines,o.lines),'This order changed in another tab. Reopen it to review current quantities.');
+        const location=loc(s,valOf(f,'location')).id, ref=valOf(f,'ref');
+        need(ref,'Enter a delivery reference.');
+        need(!s.events.some(e=>e.salesId===id&&e.reference.toLowerCase()===ref.toLowerCase()),'This order already has a delivery with that reference.');
+        const amounts=r.lines.map((l,i)=>{
+          if(!f.elements.namedItem('qty'+i))return 0;
+          const raw=valOf(f,'qty'+i), n=componentQty(raw===''?0:raw,item(s,l.sku).unit,'Delivered quantity',true);
+          need(n<=l.qty-l.delivered+EPS,'Delivery exceeds the outstanding quantity for '+labelOf(s,l.sku)+'.');
+          return n;
+        });
+        const stock=r.lines.map((l,i)=>({sku:l.sku,location,delta:-amounts[i]})).filter(l=>l.delta<0);
+        need(stock.length,'Enter a delivered quantity.');
+        event(s,eventId,'Sales delivery',stock,r.no+' · '+ref);
+        Object.assign(get(s,'events',eventId),{salesId:id,reference:ref,partyType:'customers',partyId:r.customerId,siteId:r.siteId||''});
+        r.lines.forEach((l,i)=>{l.delivered=measured(item(s,l.sku).unit)?roundMeasured(l.delivered+amounts[i]):l.delivered+amounts[i];});
+        r.status=r.lines.every(l=>l.qty-l.delivered<=EPS)?'Delivered':'Partially delivered';
+      });
+      return 'Delivery confirmed.';
+    },{text:'Confirm Delivery'});
+  const update=()=>{
+    const source=valOf(form,'location');
+    open.forEach(l=>{const cellEl=$(`[data-available="${l.i}"]`,form);
+      if(cellEl)cellEl.textContent=source?qfmt(availability(state,l.sku,source),item(state,l.sku)?.unit):'Choose a location';});
+  };
+  form.addEventListener('change',update);update();
+}
+function salesView(id){
+  const o=get(state,'sales',id), total=salesTotal(o);
+  infoModal(o.no+' · '+(get(state,'customers',o.customerId)?.name||''),kv([['Status',o.status],['Customer',label(get(state,'customers',o.customerId))],
+    ['Delivery site',get(state,'locations',o.siteId)?.name],['Customer PO / reference',o.reference],['Order date',fmtDate(o.date)],
+    ['Requested delivery',o.due?fmtDate(o.due):''],['Delivered',salesProgress(o)+'%'],['Order total',total?nfmt(total,2)+' AED':''],['Notes',o.notes]])+
+    textTable(['Item / SKU','Ordered','Delivered','Outstanding','In stock (all locations)','Unit price','Line total'],o.lines.map(l=>{
+      const u=item(state,l.sku)?.unit;
+      return [labelOf(state,l.sku),qfmt(l.qty,u),qfmt(l.delivered,u),qfmt(Math.max(0,l.qty-l.delivered),u),qfmt(physical(state,l.sku),u),
+        l.price?nfmt(l.price,2):'—',l.price?nfmt(l.price*l.qty,2):'—'];
+    }))+panel('Deliveries',eventsTable(state.events.filter(e=>e.salesId===id))),
+    actionGroup(['Confirmed','Partially delivered'].includes(o.status)?button('Deliver',`closeModal();salesDeliver(${escapeArg(id)})`,'btn-sm btn-primary','truck'):'',
+      button('Download PDF',`recordPDF('sales',${escapeArg(id)})`,'btn-sm','pdf')));
+}
+function salesPage(){
+  const orders=state.sales.slice().sort(dateSort);
+  const open=orders.filter(o=>SALES_OPEN.includes(o.status));
+  const due=open.filter(o=>o.due&&o.due<todayISO()).length;
+  const value=open.reduce((n,o)=>n+salesTotal(o),0);
+  return head('Operations',TITLES.sales,button('New Sales Order','salesEdit()','btn-primary','plus'))+
+    `<div class="kpis">${[
+      ['k-ink','Open orders',open.length,'Draft, confirmed or partly delivered'],
+      ['k-yellow','Awaiting delivery',open.filter(o=>o.status!=='Draft').length,'Confirmed and not fully delivered'],
+      [due?'k-red':'k-ok','Past requested date',due,'Open orders after their requested delivery date'],
+      ['k-ok','Open order value',value?nfmt(value,2):'—',value?'AED, from unit prices':'Add unit prices to see order value']
+    ].map(([c,l,v,f])=>`<div class="kpi ${c}"><div class="kl">${esc(l)}</div><div class="kv">${esc(v)}</div><div class="kf">${esc(f)}</div></div>`).join('')}</div>`+
+    searchableTable(['Order','Customer / site','Order date','Requested','Lines','Delivered','Value (AED)','Status','Actions'],orders.map(o=>{
+      const late=SALES_OPEN.includes(o.status)&&o.due&&o.due<todayISO(), total=salesTotal(o), progress=salesProgress(o);
+      return [cell(o.no,o.reference),cell(get(state,'customers',o.customerId)?.name||'—',get(state,'locations',o.siteId)?.name||''),
+        esc(fmtDate(o.date)),late?`<span class="sales-late">${esc(fmtDate(o.due))}</span>`:esc(o.due?fmtDate(o.due):'—'),
+        esc(o.lines.length+(o.lines.length===1?' item':' items')),
+        `<div class="sales-progress" title="${progress}% delivered"><span style="width:${progress}%"></span></div><div class="sub">${progress}%</div>`,
+        esc(total?nfmt(total,2):'—'),chip(o.status),
+        actionGroup(small('View',`salesView(${escapeArg(o.id)})`),
+          ['Draft','Confirmed'].includes(o.status)&&o.lines.every(l=>l.delivered===0)?small('Edit',`salesEdit(${escapeArg(o.id)})`):'',
+          o.status==='Draft'?small('Confirm',`salesStatus(${escapeArg(o.id)},'Confirmed')`):'',
+          ['Confirmed','Partially delivered'].includes(o.status)?small('Deliver',`salesDeliver(${escapeArg(o.id)})`):'',
+          SALES_OPEN.includes(o.status)?small('Cancel',`salesStatus(${escapeArg(o.id)},'Cancelled')`):'',
+          o.lines.every(l=>l.delivered===0)?dangerSmall('Delete',`deleteOperation('sales',${escapeArg(o.id)})`):'')];
+    }),'No sales orders yet. Click New Sales Order to record a customer order.',
+    orders.map(o=>[o.no,o.reference,get(state,'customers',o.customerId)?.name,o.status,...o.lines.map(l=>labelOf(state,l.sku))].join(' ')),
+    {placeholder:'Search by order, customer, item or status…',noun:'orders'})+
+    panel('Sales deliveries',eventsTable(state.events.filter(e=>e.type==='Sales delivery')));
+}
+
 /* Dashboard and offline reports */
 function warningRows(){
   const low=current(state,'materials').filter(m=>Number(m.safety)>0&&physical(state,m.id)<Number(m.safety)-EPS).map(m=>[
@@ -4791,6 +4949,10 @@ function dashboard(){
     (state.reviews.some(r=>!r.resolved)?note('Legacy data is available under Settings & Data for review.','warn'):'')+
     `<div class="grid cols-2">${panel('Raw material stock by category',materialSummary())}
       ${panel('Part stock by category and location',partSummary())}</div>`+
+    (state.sales.some(o=>SALES_OPEN.includes(o.status))?panel('Open sales orders',table(['Order','Customer','Requested delivery','Delivered','Status','Actions'],
+      state.sales.filter(o=>SALES_OPEN.includes(o.status)).sort((a,b)=>(a.due||'9999').localeCompare(b.due||'9999')).slice(0,8).map(o=>[
+        esc(o.no),esc(get(state,'customers',o.customerId)?.name),esc(o.due?fmtDate(o.due):'—'),esc(salesProgress(o)+'%'),chip(o.status),
+        small('View',`salesView(${escapeArg(o.id)})`)]))):'')+
     panel('Finished product and variant stock',skuSummary([...current(state,'products'),...current(state,'variants')]))+
     panel('Production status',textTable(['Draft','Released','Completed','Cancelled'],
       [['Draft','Released','Completed','Cancelled'].map(status=>state.orders.filter(o=>o.status===status).length)]))+
@@ -4848,6 +5010,15 @@ function recordPDF(type,id){
       related.company,related.site,related.document
     ]);
     if(related.processor)lines.unshift([related.processor,related.processingSite,'Processing company']);
+  }else if(type==='sales'){
+    columns=['Item / SKU','Ordered','Delivered','Outstanding','Unit price (AED)','Line total (AED)'];
+    lines=row.lines.map(l=>{const u=item(state,l.sku)?.unit;
+      return [labelOf(state,l.sku),qfmt(l.qty,u),qfmt(l.delivered,u),qfmt(l.qty-l.delivered,u),l.price?nfmt(l.price,2):'',l.price?nfmt(l.price*l.qty,2):''];});
+    lines.unshift(['Customer',label(get(state,'customers',row.customerId)),'Delivery site',get(state,'locations',row.siteId)?.name||'—','Status',row.status],
+      ['Order date',fmtDate(row.date),'Requested delivery',row.due?fmtDate(row.due):'—','Customer PO',row.reference||'—']);
+    if(salesTotal(row))lines.push(['Order total','','','','',nfmt(salesTotal(row),2)]);
+    lines.push(...state.events.filter(e=>e.salesId===id).map(e=>['Delivery · '+e.reference,stamp(e.at),
+      e.lines.map(l=>labelOf(state,l.sku)+' × '+qfmt(-l.delta,item(state,l.sku)?.unit)).join(', '),locName(state,e.lines[0]?.location),'','']));
   }else if(type==='purchases'){
     columns=['Material / SKU','Ordered','Received','Outstanding'];
     lines=row.lines.map(l=>[labelOf(state,l.sku),l.qty,l.received,l.qty-l.received]);
@@ -5057,6 +5228,7 @@ function validateState(s){
   need(s&&s.schema===3&&s.settings&&typeof s.settings.company==='string'&&typeof s.settings.currentUser==='string','Invalid version 3 state.');
   need(s.deletedWorkbookParts==null||(Array.isArray(s.deletedWorkbookParts)&&s.deletedWorkbookParts.every(id=>typeof id==='string'&&id.length<=200)),
     'Invalid deleted workbook parts.');
+  ensureTables(s);
   for(const name of LIVE)validRows(s[name],name);
   const ids=new Set();
   for(const t of [...COMPANIES,'materials','parts','products','variants']){
@@ -5112,7 +5284,12 @@ function validateState(s){
     typeof j.destinationSnapshot?.name==='string'&&(j.trackAtDestination==null||typeof j.trackAtDestination==='boolean')&&
     (!j.trackAtDestination||j.location!==j.destination)&&
     ['Open','Partially delivered','Delivered','Cancelled'].includes(j.status),'Invalid dispatch job.');
-  const sums=new Map(), delivered=new Map(), received=new Map();
+  for(const o of s.sales)need(typeof o.no==='string'&&get(s,'customers',o.customerId)&&linkedSite('customers',o.customerId,o.siteId)&&
+    Array.isArray(o.lines)&&o.lines.length&&new Set(o.lines.map(l=>l.sku)).size===o.lines.length&&
+    o.lines.every(l=>sku(l.sku)&&component(l.qty,sku(l.sku).unit)&&Number.isFinite(l.price)&&l.price>=0&&
+      Number.isFinite(l.delivered)&&l.delivered>=0&&l.delivered<=l.qty+EPS)&&
+    ['Draft','Confirmed','Partially delivered','Delivered','Cancelled'].includes(o.status),'Invalid sales order.');
+  const sums=new Map(), delivered=new Map(), received=new Map(), shipped=new Map();
   for(const e of s.events){
     need(typeof e.at==='string'&&typeof e.type==='string'&&Array.isArray(e.lines),'Invalid stock event.');
     if(e.partyType||e.partyId||e.siteId){
@@ -5145,11 +5322,20 @@ function validateState(s){
     if(e.purchaseId&&e.partyId)need(e.partyType==='suppliers'&&e.partyId===get(s,'purchases',e.purchaseId).supplierId&&
       e.siteId===(get(s,'purchases',e.purchaseId).supplierSiteId||''),
       'Receipt event has an invalid supplier link.');
+    if(e.salesId){
+      const sale=get(s,'sales',e.salesId);
+      need(sale&&typeof e.reference==='string'&&e.partyType==='customers'&&e.partyId===sale.customerId&&
+        (e.siteId||'')===(sale.siteId||'')&&e.lines.every(line=>line.delta<0),'Invalid sales delivery event.');
+    }
     const sumsEvent=new Map();
     for(const l of e.lines){
       need(sku(l.sku)&&site(l.location)&&Number.isFinite(l.delta),'Stock event has an invalid SKU, location or quantity.');
       const k=JSON.stringify([l.sku,l.location]);
       sumsEvent.set(k,(sumsEvent.get(k)||0)+l.delta);
+      if(e.salesId){
+        const id=JSON.stringify([e.salesId,l.sku]);
+        shipped.set(id,(shipped.get(id)||0)-l.delta);
+      }
       if(e.purchaseId){
         const id=JSON.stringify([e.purchaseId,l.sku]);
         received.set(id,(received.get(id)||0)+l.delta);
@@ -5162,6 +5348,8 @@ function validateState(s){
   for(const j of s.jobs)need((delivered.get(j.id)||0)===j.delivered,'Delivery totals do not match the ledger.');
   for(const p of s.purchases)for(const l of p.lines)need(Math.abs((received.get(JSON.stringify([p.id,l.sku]))||0)-l.received)<EPS*10,'Receipt totals do not match the ledger.');
   for(const o of s.orders)need((o.status==='Completed')===!!get(s,'events','production:'+o.id),'Completion does not match the ledger.');
+  for(const o of s.sales)for(const l of o.lines)need(Math.abs((shipped.get(JSON.stringify([o.id,l.sku]))||0)-l.delivered)<EPS*10,
+    'Sales delivery totals do not match the ledger.');
 }
 function nativeBackup(d){
   need(d?._app==='AMBS_MRP'&&[1,3].includes(d._version),'Choose a valid AMBS JSON backup.');
@@ -5292,7 +5480,7 @@ const App={
   render(){
     $('#sidebar').innerHTML=this.nav();
     $('#topbar').innerHTML=this.top();
-    const screens={dashboard,production:productionPage,purchase:purchasingPage,movement:inventoryPage,
+    const screens={dashboard,sales:salesPage,production:productionPage,purchase:purchasingPage,movement:inventoryPage,
       dispatch:dispatchPage,reports:reportPage,settings:settingsPage,bom:recipePage,tools:toolsPage};
     const utilities={steel:Tools,market:Market,prodcalc:PWC,nesting:Nest};
     const utility=utilities[this.route];

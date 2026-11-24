@@ -653,6 +653,67 @@ Every stock change is an **event** in the ledger: Opening stock, Supplier receip
 - **View** on an event shows when and by whom it was recorded (the **Operator name** from the Company profile), the reference, related company, site and document, and each line's change and current balance. It has links such as **Open purchase**, **Open order** or **Open dispatch**, plus **Download PDF**.
 - Events **cannot be edited or deleted**. Correct mistakes with a new **Stock Adjustment** or **Stock Check**. Operations with posted stock (completed orders, purchases with receipts, jobs with deliveries) can't be deleted either.
 
+## Sales Orders page 🧾
+Keywords: sales order, sales orders, customer order, sell, selling, order from customer, SO, مبيعات, طلبية, طلب زبون, بيع
+
+**Sales Orders** (`#/sales`) is in the sidebar under **Operations**. It records what a customer ordered and delivers it in one or more shipments.
+
+- The cards at the top show **Open orders**, **Awaiting delivery**, **Past requested date** and **Open order value** (from unit prices).
+- The list shows each order with its customer, order date, requested delivery date (red when it has passed), number of items, a **Delivered** progress bar, value and status.
+- Actions per order: **View**, **Edit**, **Confirm**, **Deliver**, **Cancel** and **Delete** (only the ones allowed for its status appear).
+- **Sales deliveries** at the bottom lists every delivery posted from sales orders.
+
+A sales order can contain **any stock item**: products, parts (for example loose safety nets), variants or raw materials, with several lines per order.
+
+## Create a sales order
+Keywords: new sales order, add sales order, record customer order, create order for customer, quotation, PO from customer, طلبية جديدة, اضافة طلب
+
+1. Open **Sales Orders** (`#/sales`) and click **New Sales Order**.
+2. Choose the **Customer**. Optionally choose a **Customer delivery site (optional)** from that customer's locations.
+3. Optionally enter **Customer PO / reference (optional)**, change the **Order date**, and set a **Requested delivery date (optional)**.
+4. In **Order line**, pick the **Item / SKU**, enter the **Ordered quantity** and optionally a **Unit price (AED, optional)**. Click **Add Line** for more items (one line per item).
+5. The **Order total** appears when unit prices are entered.
+6. Click **Save Order**. The order gets a number starting **SO-** and status **Draft**.
+
+Then click **Confirm** when the customer's order is final.
+
+## Deliver a sales order (full or partial)
+Keywords: deliver sales order, ship order, send to customer, partial delivery, give customer, deduct stock, delivery note, تسليم طلبية, تسليم جزئي, شحن للزبون
+
+1. On **Sales Orders** (`#/sales`), click **Deliver** on a **Confirmed** or **Partially delivered** order.
+2. Choose **Ship from (custody location)**: the store the goods leave from. **Available at source** shows the stock there for each line.
+3. Enter **Delivery note / reference** (required and new for this order).
+4. For each line, enter the quantity delivered now (up to the outstanding quantity). Leave 0 for lines not shipped yet.
+5. Click **Confirm Delivery**.
+
+The stock is deducted from that location immediately and a **Sales delivery** movement appears in **Inventory & Stock Movements**. The order becomes **Partially delivered** or **Delivered**. Repeat for later shipments.
+
+Errors:
+- "Insufficient stock for … at …": receive or transfer stock to that location first.
+- "Delivery exceeds the outstanding quantity for …"
+- "This order already has a delivery with that reference."
+- "Confirm this order before delivering."
+
+## Sales order statuses
+Keywords: sales order status, draft, confirmed, partially delivered, delivered, cancelled, cancel sales order, حالة الطلبية
+
+- **Draft**: just saved. **Edit**, **Confirm**, **Cancel**, **Delete**.
+- **Confirmed**: ready to ship. **Edit** (until the first delivery), **Deliver**, **Cancel**, **Delete** (no deliveries yet).
+- **Partially delivered**: some quantity shipped. **Deliver** the rest or **Cancel** the remaining balance. It can no longer be edited or deleted.
+- **Delivered**: everything shipped.
+- **Cancelled**: the undelivered balance is closed. Deliveries already made stay in the stock history.
+
+**View** shows each line's ordered, delivered and outstanding quantities, total stock on hand, prices, and the delivery history, plus **Download PDF**.
+
+## Example: receive 20 safety nets and deliver 13 to a customer
+Keywords: receive 20 give 13, part of stock to customer, split stock, sell some nets, deliver some, جزء من الكمية, استلمت وبدي اعطي
+
+1. **Receive the 20**: on **Purchasing** (`#/purchase`) create a **New Purchase Request** for the safety net with quantity 20, click **Mark Ordered**, then **Record Receipt** when it arrives. Stock = 20 at your custody location.
+2. **Record the customer's order**: on **Sales Orders** (`#/sales`) click **New Sales Order**, choose the customer, add the safety net with quantity 13, save and click **Confirm**.
+3. **Deliver**: click **Deliver**, choose the location, enter the delivery note and 13, then **Confirm Delivery**. Stock = 7.
+
+You can also deliver 8 now and 5 later; the order shows **Partially delivered** until all 13 are shipped.
+
 ## Create a dispatch job 🚚
 Keywords: dispatch, delivery, packing, ship, send to customer, DSP, job, شحن, تسليم, توصيل
 
@@ -735,7 +796,7 @@ Keywords: workflow, process, step by step, full cycle, how to start, دورة ا
 4. **Buy**: on **Purchasing**, use **New Purchase Request** → **Mark Ordered**.
 5. **Receive**: **Record Receipt** with the supplier's delivery note. Stock increases at the receiving location.
 6. **Produce**: on **Production**, use **Create Production Order** → **Release** → **Complete**. Raw materials are consumed and the part is added. Use **Transfer Stock** if materials are at another location.
-7. **Dispatch**: on **Packing & Dispatch**, use **New Dispatch Job** with **Pack from parts**.
+7. **Sell / dispatch**: record the customer order on **Sales Orders** and **Deliver** it (any item), or use **Packing & Dispatch** → **New Dispatch Job** with **Pack from parts** for packed product kits.
 8. **Deliver**: **Record Delivery** with the delivery note. Parts are deducted, or moved to the customer site if tracked.
 9. **Close the plan**: **Close reservation**.
 10. **Control**: run **Stock Check** periodically and review **Reports**.
@@ -1037,7 +1098,8 @@ Keywords: limitation, not possible, missing feature, can't, unsupported, غير 
 The current version does **not** support:
 - Assembling finished products from parts as a stock transaction. Production orders make parts only. See "How do I get finished product stock?".
 - Editing or deleting posted stock movements. Correct them with adjustments or counts.
-- Prices, invoices, sales orders, payments or stock valuation in operations. Costs exist only in the Tools calculators.
+- Invoices, payments or stock valuation. Sales orders can hold optional unit prices and show an order total, but no invoice or payment is created.
+- Reserving stock for a sales order. Confirmed sales orders do not hold stock; it is only deducted when you confirm a delivery.
 - Automatic purchase suggestions or reorder requests from safety stock. You create purchase requests yourself, apart from the nesting **Purchase N × code** button.
 - More than one product per dispatch job.
 - Managing users, roles or invitations inside the app. Members are set up by the administrator.

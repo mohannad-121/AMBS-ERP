@@ -73,7 +73,8 @@
     plan:'plan plans planning schedule reserve reservation خطه تخطيط حجز',
     unit:'unit units uom kg pcs meter metre وحده وحدات',
     variant:'variant variants size color colour sku مقاس لون',
-    permission:'admin staff role permission access allowed صلاحيه صلاحيات مدير موظف'
+    permission:'admin staff role permission access allowed صلاحيه صلاحيات مدير موظف',
+    sales:'sales sale sell selling sold quotation so مبيعات بيع طلبيه طلبيات'
   };
   const CONCEPT_OF=new Map();
   for(const [name,list] of Object.entries(CONCEPTS))for(const w of list.split(' '))CONCEPT_OF.set(stem(normalize(w)),'§'+name);
@@ -165,7 +166,7 @@
     ['customers','customer client عميل عملاء زبون','👥'],['suppliers','supplier vendor مورد موردين','🏢'],
     ['processors','processor processing معالجه','🏭'],['materials','material raw ماده مواد خام','🧱'],
     ['parts','part component قطع قطعه','🔩'],['products','product منتج منتجات','📦'],['variants','variant sku مقاس','🎨'],
-    ['locations','location custody warehouse موقع مواقع مخزن','📍'],['orders','production order انتاج','🏭'],
+    ['locations','location custody warehouse موقع مواقع مخزن','📍'],['sales','sales sale مبيعات طلبيه طلبيات','🧾'],['orders','production order انتاج','🏭'],
     ['plans','plan خطه','🗓️'],['purchases','purchase شراء مشتريات','🛒'],['jobs','dispatch delivery توصيل شحن','🚚'],
     ['events','movement حركه حركات','🔄']
   ];
@@ -175,16 +176,16 @@
     for(const [table,words,icon] of ENTITIES){
       if(!words.split(' ').some(w=>q.includes(normalize(w))))continue;
       const list=table==='locations'?custodyList():table==='events'?(state.events||[]):live(table);
-      const label=table==='locations'?'custody (stock) locations':table==='orders'?'production orders':table==='jobs'?'dispatch jobs':table==='events'?'stock movements':table;
+      const label=table==='locations'?'custody (stock) locations':table==='orders'?'production orders':table==='sales'?'sales orders':table==='jobs'?'dispatch jobs':table==='events'?'stock movements':table;
       let extra='';
-      if(['orders','plans','purchases','jobs'].includes(table)){
+      if(['orders','plans','purchases','jobs','sales'].includes(table)){
         const by={};for(const r of state[table]||[])by[r.status||'—']=(by[r.status||'—']||0)+1;
         const parts=Object.entries(by).map(([k,v])=>`**${v}** ${k}`);
         if(parts.length)extra='\n\nBy status: '+parts.join(' · ');
       }
       if(table==='locations'&&list.length)extra='\n\n'+list.slice(0,12).map(l=>'- 📍 '+l.name).join('\n');
       const route={customers:'customers',suppliers:'suppliers',processors:'processors',materials:'materials',parts:'parts',
-        products:'products',variants:'products',locations:'settings',orders:'production',plans:'production',purchases:'purchase',jobs:'dispatch',events:'movement'}[table];
+        products:'products',variants:'products',locations:'settings',orders:'production',plans:'production',sales:'sales',purchases:'purchase',jobs:'dispatch',events:'movement'}[table];
       return (ar?`${icon} عندك حالياً **${list.length}** ${label}.`:`${icon} You currently have **${list.length}** active ${label}.`)+extra+
         `\n\n👉 See them in [${pageName(route)}](#/${route})`;
     }
@@ -216,7 +217,7 @@
     dashboard:'dashboard home main overview الرئيسيه لوحه داشبورد',customers:'customers clients عملاء زباين',
     suppliers:'suppliers vendors موردين',processors:'processing companies processors معالجه',
     materials:'raw materials materials مواد خام',parts:'parts قطع',bom:'bom bill of materials تركيبه',
-    products:'products منتجات',production:'production انتاج تصنيع',purchase:'purchasing purchase مشتريات شراء',
+    products:'products منتجات',sales:'sales orders sales order sales customer orders مبيعات طلبيات',production:'production انتاج تصنيع',purchase:'purchasing purchase مشتريات شراء',
     movement:'inventory stock movements مخزون حركات',dispatch:'dispatch packing delivery توصيل شحن تغليف',
     reports:'reports تقارير',tools:'tools ادوات',settings:'settings data backup اعدادات',
     steel:'steel weight calculator حاسبه الوزن',nesting:'nesting cutting قص',prodcalc:'product calculator take off',market:'market sections'
