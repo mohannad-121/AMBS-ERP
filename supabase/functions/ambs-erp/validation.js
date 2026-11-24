@@ -78,6 +78,8 @@ function validRows(rows,name){
 }
 function validateState(s){
   need(s&&s.schema===3&&s.settings&&typeof s.settings.company==='string'&&typeof s.settings.currentUser==='string','Invalid version 3 state.');
+  need(s.deletedWorkbookParts==null||(Array.isArray(s.deletedWorkbookParts)&&s.deletedWorkbookParts.every(id=>typeof id==='string'&&id.length<=200)),
+    'Invalid deleted workbook parts.');
   for(const name of LIVE)validRows(s[name],name);
   const ids=new Set();
   for(const t of [...COMPANIES,'materials','parts','products','variants']){
