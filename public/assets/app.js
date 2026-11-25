@@ -6388,9 +6388,12 @@ function driversPage(){
         html:`${companyAvatar(d,'co-avatar-md')}<div class="o-card-main"><div class="o-card-title">${esc(d.name)}</div>
           <div class="o-card-line">${esc([d.vehiclePlate,d.vehicleType].filter(Boolean).join(' · ')||d.kind||'')}</div>
           ${d.phone?`<div class="o-card-line">${ic('phone')}${esc(d.phone)}</div>`:''}
-          <div class="o-card-tags">${papersChip(d)}<span class="o-tag">${trips.length} trips · ${esc(nfmt(tripKm(trips),0))} km</span></div>
+          <div class="o-card-tags">${papersChip(d)}<span class="o-tag">${trips.length} trip${trips.length===1?'':'s'} · ${esc(nfmt(tripKm(trips),0))} km</span></div>
           <div class="o-card-line o-muted">${esc(where.text)}</div></div>`};
-    }),{placeholder:'Search drivers by name, phone or vehicle…',noun:'drivers',empty:'Add your drivers: name, phone, vehicle and official papers.'});
+    }),{placeholder:'Search drivers by name, phone or vehicle…',noun:'drivers',empty:'Add your drivers: name, phone, vehicle and official papers.',
+      list:{columns:['Driver','Type','Phone','Vehicle','Official papers','Trips','Distance','Where now'],
+        rows:drivers.map(d=>{const trips=driverTrips(d.id);return [`<div class="record-media co-media">${companyAvatar(d)}<div>${cell(d.name)}</div></div>`+openBtn(`driverView(${escapeArg(d.id)})`),
+          esc(d.kind||'—'),esc(d.phone||'—'),cell(d.vehiclePlate||'—',d.vehicleType),papersChip(d),esc(trips.length),esc(nfmt(tripKm(trips),1)+' km'),esc(driverWhere(d).text)];})}});
 }
 /* ---------------- Deliveries (operations): created from confirmed sales orders and dispatch jobs ----------------
    The employee only assigns a driver and the km; customer, site, map and items come from the order.
@@ -6886,18 +6889,23 @@ const App={
     if(r==='plan-new')planEdit();
     if(r==='purchase-new')purchaseEdit();
   },
-  nav(){return '';},
+  nav(){
+    const selected=['market','steel','prodcalc','prodcalc-new','nesting'].includes(this.route)?'tools':this.route;
+    return `<div class="o-side"><button type="button" class="o-brand o-side-brand" onclick="App.go('dashboard')"><span class="o-brand-mark">AM</span><span>AMBS</span></button>
+      <nav class="o-side-nav" aria-label="Main navigation">${GROUPS.map(([group,rows])=>`<div class="o-side-group"><div class="o-side-head">${esc(group)}</div>
+        ${rows.map(([r,i])=>`<a href="#/${r}" class="o-side-link${selected===r?' on':''}"${selected===r?' aria-current="page"':''}
+          onclick="event.preventDefault();App.go('${r}')">${ic(i)}<span>${esc(TITLES[r])}</span></a>`).join('')}</div>`).join('')}</nav>
+      <div class="o-side-foot">${esc(SET.company)}</div></div>`;
+  },
   toggleNavigation(open){
     document.body.classList.toggle('nav-open',open);
     $('#nav-toggle')?.setAttribute('aria-expanded',String(open));
   },
   top(){
     const selected=['market','steel','prodcalc','prodcalc-new','nesting'].includes(this.route)?'tools':this.route;
-    return `<nav class="o-navbar" aria-label="Main navigation">
-      <button type="button" class="o-brand" onclick="App.go('dashboard')"><span class="o-brand-mark">AM</span><span>AMBS</span></button>
-      <div class="o-menus">${GROUPS.map(([group,rows])=>`<div class="o-menu${rows.some(([r])=>r===selected)?' on':''}">
-        <button type="button" class="o-menu-btn">${esc(group)}</button><div class="o-dd">${rows.map(([r])=>
-          `<a href="#/${r}" class="${selected===r?'active':''}" onclick="event.preventDefault();App.go('${r}')">${esc(TITLES[r])}</a>`).join('')}</div></div>`).join('')}</div>
+    return `<nav class="o-navbar" aria-label="Top bar">
+      <button type="button" id="nav-toggle" class="o-nav-toggle" aria-label="Open menu" aria-controls="sidebar" aria-expanded="false"
+        onclick="App.toggleNavigation(!document.body.classList.contains('nav-open'))">${ic('list')}</button>
       <div class="o-gsearch" role="search">${ic('search')}<input id="o-gsearch-input" type="search" autocomplete="off" spellcheck="false"
         placeholder="Search menus and records…" aria-label="Search menus and records" aria-controls="o-gs-results"><kbd>/</kbd>
         <div class="o-gs-results" id="o-gs-results" role="listbox" hidden></div></div>
@@ -7039,6 +7047,10 @@ function enhanceTables(root){
 }
 new MutationObserver(list=>{for(const m of list)for(const n of m.addedNodes)if(n.nodeType===1){enhanceRows(n);enhanceTables(n);}})
   .observe(document.documentElement,{childList:true,subtree:true});
+// small screens: tapping outside the open sidebar closes it
+document.addEventListener('click',e=>{
+  if(document.body.classList.contains('nav-open')&&!e.target.closest('#sidebar,#nav-toggle'))App.toggleNavigation(false);
+});
 window.addEventListener('DOMContentLoaded',()=>CLOUD.start());
 window.addEventListener('hashchange',()=>{
   const r=location.hash.slice(2);
