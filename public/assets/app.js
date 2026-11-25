@@ -3198,7 +3198,7 @@ const link=(r,text=TITLES[r])=>button(text,`App.go(${escapeArg(r)})`,'btn-sm');
 /* Menu group of the current page, e.g. "Master Data" for Products; tool pages sit under System / Tools. */
 const menuGroup=()=>{const r=typeof App!=='undefined'?App.route:'';
   if(['steel','market','prodcalc','prodcalc-new','nesting'].includes(r))return 'System / Tools';
-  if(['owner','team','items'].includes(r))return 'Owner';
+  if(['owner','team','items'].includes(r))return isOwner()?'Super admin':'Owner view';
   return GROUPS.find(([,rows])=>rows.some(([x])=>x===r))?.[0]||'';};
 const crumbParent=()=>menuGroup()?`<span class="o-bc-parent">${esc(menuGroup())}</span><span class="o-bc-sep">/</span>`:'';
 const head=(group,title,...actions)=>`<div class="view-head"><div class="o-bc o-bc-list">${crumbParent()}<h1 class="h1">${esc(title)}</h1></div><div class="head-actions">${actions.join('')}</div></div>`;
@@ -6648,7 +6648,7 @@ function ownerPage(){
     toReceive&&[`📦 ${toReceive} purchase${toReceive>1?'s were':' was'} ordered but not received yet`,'purchase'],
     badPapers&&[`🛂 ${badPapers} driver${badPapers>1?'s have':' has'} missing or expired papers`,'deliveries'],
     warn&&[`⚠️ ${warn} stock warning${warn>1?'s':''} (items running low or short)`,'items']].filter(Boolean);
-  return head('Owner','Overview',liveChip())+
+  return head(isOwner()?'Super admin':'Owner view','Overview',liveChip())+
     `<h2 class="ow-hello">${hello}${CLOUD.name?', '+esc(CLOUD.name.split(' ')[0]):''}.</h2><p class="sub ow-sub">This page shows what your team did and what needs attention. Click anything to see the details.</p>`+
     `<div class="ow-bigs">${big(today.length,'Things done today',people.length?'by '+people.map(p=>p.name).join(', '):'nobody has worked in the system yet today','team')}
       ${big(month.length,'Deliveries this month',month.length?nfmt(tripKm(month),0)+' km driven':'no deliveries yet this month','deliveries')}
@@ -6671,7 +6671,7 @@ function teamPage(){
   const people=[...new Set(all.map(r=>r.by))].filter(p=>p!=='—').sort();
   const rows=all.filter(r=>(!f.who||r.by===f.who)&&(!since||Date.parse(r.at)>=since));
   const opt=(list,sel,first)=>`<option value="">${esc(first)}</option>`+list.map(([v,l])=>`<option value="${esc(v)}"${v===sel?' selected':''}>${esc(l)}</option>`).join('');
-  return head('Owner','Team activity')+
+  return head(isOwner()?'Super admin':'Owner view','Team activity')+
     `<div class="card"><div class="toolbar">
       <select class="sel" aria-label="Person" onchange="Team.f.who=this.value;App.render()">${opt(people.map(p=>[p,p]),f.who,'Everyone')}</select>
       <select class="sel" aria-label="Period" onchange="Team.f.days=this.value;App.render()">${opt([['1','Today'],['7','Last 7 days'],['30','Last 30 days']],f.days,'All time')}</select>
@@ -6685,7 +6685,7 @@ function itemsPage(){
   const rows=stockRows(state), last=new Map();
   for(const e of state.events)for(const l of e.lines){const p=last.get(l.sku);if(!p||String(e.at)>String(p.at))last.set(l.sku,e);}
   const items=[...current(state,'materials').map(r=>['Raw material',r]),...current(state,'parts').map(r=>['Part',r]),...current(state,'products').map(r=>['Product',r])];
-  return head('Owner','Items & stock')+
+  return head(isOwner()?'Super admin':'Owner view','Items & stock')+
     searchableTable(['Item','Type','On hand','Where it is','Last movement'],items.map(([kind,r])=>{
       const here=rows.filter(b=>b.sku===r.id&&Math.abs(b.qty)>EPS), total=here.reduce((n,b)=>n+b.qty,0), e=last.get(r.id);
       return [`<div class="record-media">${recordPicture(r,'thumb-kanban')}<div>${cell(r.name,r.code)}</div></div>`+openBtn(`trackItem(${escapeArg(r.id)})`),esc(kind),
@@ -6964,7 +6964,8 @@ function dashboard(){
 /* ---------------- Odoo-style global search: menus as "AMBS / Group / Page", then matching records ---------------- */
 const TOOL_PAGES=[['steel','Tools'],['market','Tools'],['prodcalc','Tools'],['nesting','Tools']];
 function searchIndex(){
-  const menus=GROUPS.flatMap(([group,rows])=>rows.map(([r])=>({kind:'menu',path:['AMBS',group,TITLES[r]],go:()=>App.go(r)})));
+  const extra=canSeeOwner()?[[isOwner()?'Super admin':'Owner view',OWNER_GROUPS[0][1]]]:[];
+  const menus=[...extra,...GROUPS].flatMap(([group,rows])=>rows.map(([r])=>({kind:'menu',path:['AMBS',group,TITLES[r]],go:()=>App.go(r)})));
   for(const [r,parent] of TOOL_PAGES)menus.push({kind:'menu',path:['AMBS','System',parent,TITLES[r]],go:()=>App.go(r)});
   const records=[
     ['customers','Customers',r=>[r.name,r.code,r.phone,r.position]],
@@ -7044,7 +7045,7 @@ const App={
   nav(){
     const selected=['market','steel','prodcalc','prodcalc-new','nesting'].includes(this.route)?'tools':this.route;
     const ownerMenu=isOwner();
-    const groups=ownerMenu?OWNER_GROUPS:canSeeOwner()?[...GROUPS,['Owner view',OWNER_GROUPS[0][1]]]:GROUPS;
+    const groups=ownerMenu?[['Super admin',OWNER_GROUPS[0][1]],...GROUPS]:canSeeOwner()?[...GROUPS,['Owner view',OWNER_GROUPS[0][1]]]:GROUPS;
     return `<div class="o-side"><button type="button" class="o-brand o-side-brand" onclick="App.go('${ownerMenu?'owner':'dashboard'}')"><span class="o-brand-mark">AM</span><span>AMBS</span></button>
       <nav class="o-side-nav" aria-label="Main navigation">${groups.map(([group,rows])=>`<div class="o-side-group"><div class="o-side-head">${esc(group)}</div>
         ${rows.map(([r,i])=>`<a href="#/${r}" class="o-side-link${selected===r?' on':''}"${selected===r?' aria-current="page"':''}
@@ -7079,7 +7080,6 @@ const App={
       dispatch:dispatchPage,reports:reportPage,settings:settingsPage,bom:recipePage,tools:toolsPage,
       owner:ownerPage,team:teamPage,items:itemsPage};
     if(['owner','team','items'].includes(this.route)&&!canSeeOwner())this.route='dashboard';
-    if(isOwner()&&!OWNER_GROUPS.some(([,rows])=>rows.some(([r])=>r===this.route)))this.route='owner';
     const utilities={steel:Tools,market:Market,prodcalc:PWC,nesting:Nest};
     const utility=utilities[this.route];
     const view=$('#view');
