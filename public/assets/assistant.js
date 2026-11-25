@@ -7,13 +7,38 @@
   const STORE_KEY='ambs-assistant-chat-v2';
   const GUIDE_URL='/assets/assistant-guide.md';
   const SUGGESTIONS=[
-    '📍 Why is the custody location list empty?',
-    '🛒 How do I create a purchase request?',
-    '🖼️ How do I add a product with a picture?',
-    '🏭 How does a production order work?',
-    '🚚 How do I pack and dispatch an order?',
-    '💾 How do I back up my data?'
+    '📋 What is waiting for me?',
+    '🧭 Get started: first-day setup checklist',
+    '🔘 Where did the button go?',
+    '🛒 Job 1 (A to Z): buy raw materials and receive them',
+    '🏭 Job 2 (A to Z): make parts and a product',
+    '🚚 Job 3 (A to Z): sell, pack, deliver with a driver, export'
   ];
+  /* Chips for the page the user is on — each is a guide section title, so it always finds the right answer. */
+  const PAGE_TIPS={
+    dashboard:['📋 What is waiting for me?','Stock alerts and warnings'],
+    tracking:['Live Tracking: where every item is and where it went','Delivery and driver reports (PDF / Excel)'],
+    customers:['Add a customer, supplier or processing company','Google Maps link (copy and paste a location)','Customer, supplier and processor page (smart buttons)'],
+    suppliers:['Add a customer, supplier or processing company','Job 1 (A to Z): buy raw materials and receive them'],
+    drivers:['Add a driver','Driver papers rule (why a driver is blocked)','Delivery and driver reports (PDF / Excel)'],
+    materials:['Add a raw material','Opening stock for a new raw material','Units of measure'],
+    parts:['Add a part (manufactured, purchased or stocked)','Create a Part BOM (raw material consumption)','Part variants (size / color SKUs)'],
+    products:['Add a finished product','Create a Product BOM (parts per product)','How do I get finished product stock?'],
+    bom:['Create a Part BOM (raw material consumption)','Create a Product BOM (parts per product)','BOM formula rules and errors'],
+    sales:['Create a sales order','Deliver a sales order (full or partial)','Sales order statuses'],
+    purchase:['Create a purchase request','Receive goods from a supplier (record receipt)','Purchase request statuses'],
+    production:['Create a production order (manufacture a part)','Production order statuses (Draft → Released → Completed)','Create a production plan'],
+    movement:['Transfer stock between locations','Record a stock adjustment','Physical stock check (stock count)'],
+    dispatch:['Create a dispatch job','Packing list (print for the truck)','Fulfilment: Pack from parts vs Finished stock'],
+    deliveries:['Assign a driver to an order (create the trip)','Start a trip and mark it delivered','Packing list (print for the truck)'],
+    reports:['Reports page and exports','Delivery and driver reports (PDF / Excel)'],
+    settings:['Add an AMBS custody location (warehouse / store)','Export a backup (JSON)','Company profile settings (name, logo, operator)'],
+    tools:['Steel Weight Calculator','Product Calculator (take-offs and costing)']
+  };
+  function suggestions(){
+    const route=typeof App!=='undefined'?App.route:'';
+    return [...new Set([...(PAGE_TIPS[route]||[]),...SUGGESTIONS])].slice(0,6);
+  }
 
   /* ------------------------------------------------------------------
      Language helpers
@@ -74,7 +99,12 @@
     unit:'unit units uom kg pcs meter metre وحده وحدات',
     variant:'variant variants size color colour sku مقاس لون',
     permission:'admin staff role permission access allowed صلاحيه صلاحيات مدير موظف',
-    sales:'sales sale sell selling sold quotation so مبيعات بيع طلبيه طلبيات'
+    sales:'sales sale sell selling sold quotation so مبيعات بيع طلبيه طلبيات',
+    driver:'driver drivers chauffeur papers licence license سائق سواق سايق رخصه',
+    trip:'trip trips route assign assigned road journey رحله رحلات مشوار',
+    tracking:'track tracking trace traced history timeline where تتبع وين',
+    map:'map maps google pin coordinates خريطه خرايط',
+    menu:'button buttons menu gear actions disappeared gone زر ازرار قائمه اختفى'
   };
   const CONCEPT_OF=new Map();
   for(const [name,list] of Object.entries(CONCEPTS))for(const w of list.split(' '))CONCEPT_OF.set(stem(normalize(w)),'§'+name);
@@ -167,7 +197,8 @@
     ['processors','processor processing معالجه','🏭'],['materials','material raw ماده مواد خام','🧱'],
     ['parts','part component قطع قطعه','🔩'],['products','product منتج منتجات','📦'],['variants','variant sku مقاس','🎨'],
     ['locations','location custody warehouse موقع مواقع مخزن','📍'],['sales','sales sale مبيعات طلبيه طلبيات','🧾'],['orders','production order انتاج','🏭'],
-    ['plans','plan خطه','🗓️'],['purchases','purchase شراء مشتريات','🛒'],['jobs','dispatch delivery توصيل شحن','🚚'],
+    ['plans','plan خطه','🗓️'],['purchases','purchase شراء مشتريات','🛒'],['drivers','driver drivers سائق سواق','🚗'],
+    ['trips','trip trips رحله رحلات','🛻'],['jobs','dispatch delivery توصيل شحن','🚚'],
     ['events','movement حركه حركات','🔄']
   ];
   function countAnswer(query,ar){
@@ -176,16 +207,17 @@
     for(const [table,words,icon] of ENTITIES){
       if(!words.split(' ').some(w=>q.includes(normalize(w))))continue;
       const list=table==='locations'?custodyList():table==='events'?(state.events||[]):live(table);
-      const label=table==='locations'?'custody (stock) locations':table==='orders'?'production orders':table==='sales'?'sales orders':table==='jobs'?'dispatch jobs':table==='events'?'stock movements':table;
+      const label=table==='locations'?'custody (stock) locations':table==='orders'?'production orders':table==='sales'?'sales orders':table==='jobs'?'dispatch jobs':table==='events'?'stock movements':table==='trips'?'delivery trips':table;
       let extra='';
-      if(['orders','plans','purchases','jobs','sales'].includes(table)){
+      if(['orders','plans','purchases','jobs','sales','trips'].includes(table)){
         const by={};for(const r of state[table]||[])by[r.status||'—']=(by[r.status||'—']||0)+1;
         const parts=Object.entries(by).map(([k,v])=>`**${v}** ${k}`);
         if(parts.length)extra='\n\nBy status: '+parts.join(' · ');
       }
       if(table==='locations'&&list.length)extra='\n\n'+list.slice(0,12).map(l=>'- 📍 '+l.name).join('\n');
       const route={customers:'customers',suppliers:'suppliers',processors:'processors',materials:'materials',parts:'parts',
-        products:'products',variants:'products',locations:'settings',orders:'production',plans:'production',sales:'sales',purchases:'purchase',jobs:'dispatch',events:'movement'}[table];
+        products:'products',variants:'products',locations:'settings',orders:'production',plans:'production',sales:'sales',purchases:'purchase',jobs:'dispatch',events:'movement',
+        drivers:'drivers',trips:'deliveries'}[table];
       return (ar?`${icon} عندك حالياً **${list.length}** ${label}.`:`${icon} You currently have **${list.length}** active ${label}.`)+extra+
         `\n\n👉 See them in [${pageName(route)}](#/${route})`;
     }
@@ -206,6 +238,15 @@
     if(has('purchase')&&!live('materials').length&&!live('parts').length)notes.push(ar?'⚠️ ما عندك مواد أو قطع لتشتريها — أضفها من [Raw Materials](#/materials) أو [Parts](#/parts).':'⚠️ There are no raw materials or parts to buy yet — add them in [Raw Materials](#/materials) or [Parts](#/parts).');
     if(has('production')&&!live('products').length&&!live('parts').length)notes.push(ar?'⚠️ ما عندك منتجات أو قطع لإنتاجها بعد.':'⚠️ You have no products or parts to produce yet — add them first.');
     if(has('dispatch')&&!live('customers').length)notes.push(ar?'⚠️ ما عندك عملاء بعد — أضف عميل من [Customers](#/customers).':'⚠️ You have no customers yet — add one in [Customers](#/customers).');
+    if(has('driver')||has('trip')){
+      const ds=live('drivers');
+      if(!ds.length)notes.push(ar?'⚠️ ما عندك سائقين بعد — أضف سائق من [Drivers](#/drivers).':'⚠️ You have no drivers yet — add one in [Drivers](#/drivers).');
+      else{const bad=typeof papersOk==='function'?ds.filter(d=>!papersOk(d)):[];
+        if(bad.length)notes.push(ar?`🛂 **${bad.length}** سائق أوراقه ناقصة أو منتهية: ${bad.slice(0,4).map(d=>'**'+d.name+'**').join('، ')}`:
+          `🛂 **${bad.length}** driver${bad.length>1?'s':''} can’t take trips (papers missing or expired): ${bad.slice(0,4).map(d=>'**'+d.name+'**').join(', ')}`);}
+    }
+    if(has('dispatch')||has('trip')){try{const n=typeof deliveryQueue==='function'?deliveryQueue().length:0;
+      if(n)notes.push(ar?`🚚 **${n}** طلب ينتظر سائق — [Deliveries](#/deliveries).`:`🚚 **${n}** order${n>1?'s are':' is'} waiting for a driver — [Deliveries](#/deliveries).`);}catch{}}
     if(has('stock')){try{const w=typeof warningRows==='function'?warningRows().length:0;if(w)notes.push(ar?`🔔 عندك **${w}** تنبيه مخزون — شوفها في [Dashboard](#/dashboard).`:`🔔 You have **${w}** stock warning${w>1?'s':''} — see the [Dashboard](#/dashboard).`);}catch{}}
     return notes.length?'\n\n---\n'+(ar?'💡 **في مساحة عملك:**\n':'💡 **In your workspace:**\n')+notes.map(n=>'- '+n).join('\n'):'';
   }
@@ -220,6 +261,7 @@
     products:'products منتجات',sales:'sales orders sales order sales customer orders مبيعات طلبيات',production:'production انتاج تصنيع',purchase:'purchasing purchase مشتريات شراء',
     movement:'inventory stock movements مخزون حركات',dispatch:'dispatch packing delivery توصيل شحن تغليف',
     reports:'reports تقارير',tools:'tools ادوات',settings:'settings data backup اعدادات',
+    drivers:'drivers driver سائقين سواقين',deliveries:'deliveries trips delivery trips توصيلات رحلات',tracking:'live tracking tracking track تتبع',
     steel:'steel weight calculator حاسبه الوزن',nesting:'nesting cutting قص',prodcalc:'product calculator take off',market:'market sections'
   };
   function findPage(text){
@@ -255,8 +297,29 @@
 
   function capabilities(ar){
     return ar
-      ?'🤖 أنا **مساعد AMBS** — بعرف كل شي عن هذا النظام!\n\nبقدر:\n- 📘 أشرح أي شاشة أو زر خطوة بخطوة\n- 🧭 أفتحلك أي صفحة — اكتب مثلاً *افتح الإعدادات*\n- 🔢 أحكيلك أرقامك — مثلاً *كم منتج عندي؟*\n- 🩺 أكتشف ليش شي مش شغال — مثلاً *ليش قائمة المواقع فاضية؟*\n\nاسألني أي شي 😊'
-      :'🤖 I’m the **AMBS Assistant** — I know this whole system inside out!\n\nI can:\n- 📘 Explain any page, form or button step by step\n- 🧭 Open pages for you — try *open settings*\n- 🔢 Tell you your numbers — try *how many products do I have?*\n- 🩺 Figure out why something isn’t working — try *why is the location list empty?*\n\nJust ask! 😊';
+      ?'🤖 أنا **مساعد AMBS** — بعرف كل شي عن هذا النظام!\n\nبقدر:\n- 📘 أشرح أي شاشة أو زر خطوة بخطوة\n- 🧭 أفتحلك أي صفحة — اكتب مثلاً *افتح الإعدادات*\n- 🔢 أحكيلك أرقامك — مثلاً *كم منتج عندي؟*\n- 🩺 أكتشف ليش شي مش شغال — مثلاً *ليش قائمة المواقع فاضية؟*\n- 📋 أحكيلك شو ينتظرك — *شو في شغل؟*\n- 🚚 أمشي معك خطوة بخطوة — *job 1* أو *job 3*\n\nاسألني أي شي 😊'
+      :'🤖 I’m the **AMBS Assistant** — I know this whole system inside out!\n\nI can:\n- 📘 Explain any page, form or button step by step\n- 🧭 Open pages for you — try *open settings*\n- 🔢 Tell you your numbers — try *how many products do I have?*\n- 🩺 Figure out why something isn’t working — try *why is this driver blocked?*\n- 📋 Tell you what is waiting — try *what is waiting for me?*\n- 🚚 Walk you through a whole job A to Z — try *job 1*, *job 2* or *job 3*\n- 🔘 Find a button — try *where is delete?*\n\nJust ask! 😊';
+  }
+
+  function todo(ar){
+    if(!hasState())return null;
+    const n=(t,f)=>(state[t]||[]).filter(f).length, rows=[];
+    const add=(count,en,arText,route)=>{if(count)rows.push(`- ${ar?arText(count):en(count)} → [${pageName(route)}](#/${route})`);};
+    let queue=0;try{queue=typeof deliveryQueue==='function'?deliveryQueue().length:0;}catch{}
+    add(queue,c=>`🚚 **${c}** order${c>1?'s':''} waiting for a driver`,c=>`🚚 **${c}** طلب ينتظر سائق`,'deliveries');
+    add(n('trips',t=>t.status==='Next'),c=>`🛻 **${c}** trip${c>1?'s':''} ready to leave — click **Start trip**`,c=>`🛻 **${c}** رحلة جاهزة للانطلاق`,'deliveries');
+    add(n('trips',t=>t.status==='On the way'),c=>`🛣️ **${c}** trip${c>1?'s':''} on the road — mark **Delivered** when done`,c=>`🛣️ **${c}** رحلة على الطريق`,'deliveries');
+    add(n('sales',o=>o.status==='Draft'),c=>`🧾 **${c}** sales order${c>1?'s':''} in Draft — **Confirm** when final`,c=>`🧾 **${c}** طلبية مسودة`,'sales');
+    add(n('purchases',p=>p.status==='Draft'),c=>`🛒 **${c}** purchase${c>1?'s':''} to order — **Mark ordered**`,c=>`🛒 **${c}** طلب شراء مسودة`,'purchase');
+    add(n('purchases',p=>p.status==='Ordered'),c=>`📥 **${c}** purchase${c>1?'s':''} waiting to be received — **Receive**`,c=>`📥 **${c}** طلب شراء ينتظر الاستلام`,'purchase');
+    add(n('orders',o=>o.status==='Draft'),c=>`🏭 **${c}** production order${c>1?'s':''} to release`,c=>`🏭 **${c}** أمر إنتاج مسودة`,'production');
+    add(n('orders',o=>o.status==='Released'),c=>`⚙️ **${c}** production order${c>1?'s':''} in progress — **Mark completed** when made`,c=>`⚙️ **${c}** أمر إنتاج قيد التنفيذ`,'production');
+    let bad=0;try{bad=typeof papersOk==='function'?(state.drivers||[]).filter(d=>d.active!==false&&!papersOk(d)).length:0;}catch{}
+    add(bad,c=>`🛂 **${c}** driver${c>1?'s':''} with missing or expired papers`,c=>`🛂 **${c}** سائق أوراقه ناقصة`,'drivers');
+    let warn=0;try{warn=typeof warningRows==='function'?warningRows().length:0;}catch{}
+    add(warn,c=>`🔔 **${c}** stock warning${c>1?'s':''}`,c=>`🔔 **${c}** تنبيه مخزون`,'dashboard');
+    if(!rows.length)return ar?'✅ ما في شي ينتظرك الآن — كل شي تمام!':'✅ Nothing is waiting for you right now — all clear!';
+    return (ar?'📋 **هذا اللي ينتظرك الآن:**\n\n':'📋 **Here’s what is waiting right now:**\n\n')+rows.join('\n');
   }
 
   async function answer(question){
@@ -265,11 +328,11 @@
 
     // Small talk
     if(wc<=4&&/^(hi|hello|hey|hii+|yo|good (morning|evening|afternoon)|salam|السلام|مرحبا|اهلا|هلا|هاي|صباح|مسا)/.test(q))
-      return {text:(ar?'👋 أهلاً وسهلاً! أنا مساعد AMBS.\n\n':'👋 Hi there! ')+capabilities(ar).replace(/^🤖[^\n]*\n\n/,''),chips:SUGGESTIONS.slice(0,4)};
+      return {text:(ar?'👋 أهلاً وسهلاً! أنا مساعد AMBS.\n\n':'👋 Hi there! ')+capabilities(ar).replace(/^🤖[^\n]*\n\n/,''),chips:suggestions().slice(0,4)};
     if(/^(thanks|thank you|thx|ty|great|perfect|awesome|nice|cool|ok thanks|شكرا|يسلمو|مشكور|يعطيك|تسلم)/.test(q))
       return {text:ar?'😊 العفو! إذا احتجت أي شي ثاني أنا هون 👋':'😊 You’re welcome! I’m here whenever you need help 👋'};
     if(/(what can you do|who are you|what are you|^help$|^help me$|^مساعده$|شو بتقدر|مين انت|ايش تقدر)/.test(q))
-      return {text:capabilities(ar),chips:SUGGESTIONS.slice(0,4)};
+      return {text:capabilities(ar),chips:suggestions().slice(0,4)};
 
     // Navigation: "open settings", "افتح المشتريات"
     const nav=q.match(/^(open|go to|goto|take me to|navigate to|show me|show|bring me to|افتح|روح|روح على|خذني|وديني|اعرض|افتحلي)\s+(.+)$/);
@@ -282,6 +345,20 @@
         return {text:(ar?`✅ فتحتلك صفحة **${pageName(route)}**.`:`✅ Opened **${pageName(route)}** for you.`)+
           (sec?(ar?`\n\nبدك أشرحلك كيف تستخدمها؟ 👇`:`\n\nWant a quick tour of this page? 👇`):''),chips:sec?[sec.title]:[]};
       }
+    }
+
+    // Common phrasings that plain word search gets wrong → straight to the right section
+    const DIRECT=[
+      [/^(where|how) (do|should|can) i (start|begin)|^where to start|^getting started|^first steps|^how to start|^start here|من وين ابدا|كيف ابدا/,'Get started: first-day setup checklist'],
+      [/where.*(delete|pdf|archive|cancel|excel|restore|variants|partial delivery)( button)?\??$|button (is )?(gone|missing|disappeared)|can'?t find (the )?(button|delete|pdf)|وين (زر|الحذف|الطباعه)/,'Where did the button go? (⚙ Actions menu)'],
+      [/^job ?(1|one)|first job|اول شغله/,'Job 1 (A to Z): buy raw materials and receive them'],
+      [/^job ?(2|two)|second job/,'Job 2 (A to Z): make parts and a product'],
+      [/^job ?(3|three)|third job/,'Job 3 (A to Z): sell, pack, deliver with a driver, export']];
+    for(const [re,title] of DIRECT)if(re.test(q)){const sec=sections.find(s=>s.title.startsWith(title));if(sec)return reply(sec,question,ar);}
+
+    // Live to-do: "what is waiting for me", "what should I do today"
+    if(/(waiting for me|what is waiting|whats waiting|what's waiting|to ?do list|todo|my tasks|what should i do|what do i (need|have) to do|pending work|anything pending|today'?s work|شو في|ايش في|شو لازم|شو المطلوب|مهام|شغل اليوم)/.test(q)){
+      const t=todo(ar);if(t)return {text:t,chips:['Deliveries page: what is waiting and what is on the road','Where did the button go?']};
     }
 
     // Counts: "how many products", "كم منتج"
@@ -306,7 +383,7 @@
     if(!results.length||results[0].score<4){
       const close=results.slice(0,3).map(r=>r.s.title);
       return {text:ar?'🤔 ما فهمت سؤالك تماماً. جرب تكتبه بطريقة ثانية، أو اختار موضوع من هون 👇':'🤔 I’m not sure I understood that. Try rephrasing it, or pick one of these topics 👇',
-        chips:close.length?close:SUGGESTIONS.slice(0,4)};
+        chips:close.length?close:suggestions().slice(0,4)};
     }
     const [top,second]=results;
     if(second&&second.score>top.score*.9&&top.score<12)
@@ -361,7 +438,7 @@
   let messages=load(), busy=false, els={};
   function load(){try{const v=JSON.parse(localStorage.getItem(STORE_KEY)||'[]');return Array.isArray(v)?v.slice(-40):[];}catch{return [];}}
   function save(){try{localStorage.setItem(STORE_KEY,JSON.stringify(messages.slice(-40)));}catch{}}
-  const WELCOME="👋 Hi! I’m the **AMBS Assistant** — I know every page, button and form in this system.\n\nAsk me anything — in English or عربي — about materials 📦, purchasing 🛒, production 🏭, stock 📊, dispatch 🚚 or settings ⚙️. I can also open pages for you 🧭 and check your data 🔍.";
+  const WELCOME="👋 Hi! I’m the **AMBS Assistant** — I know every page, button and form in this system.\n\nAsk me anything — in English or عربي — about materials 📦, purchasing 🛒, production 🏭, dispatch & packing lists 🚚, drivers & deliveries 🛻, tracking 🛰️ or settings ⚙️. I can walk you through a whole job A to Z, tell you **what is waiting for you** 📋, open pages 🧭 and check your data 🔍.";
 
   function build(){
     const fab=document.createElement('button');
@@ -408,6 +485,7 @@
   function toggle(open){
     els.panel.hidden=!open;els.fab.setAttribute('aria-expanded',String(open));
     document.body.classList.toggle('as-open',open);
+    if(open&&!messages.length)render();
     if(open)requestAnimationFrame(()=>{els.panel.classList.add('in');els.input.focus();scroll();});
     else{els.panel.classList.remove('in');els.fab.focus({preventScroll:true});}
   }
@@ -424,7 +502,7 @@
   function render(){
     els.log.innerHTML='';
     bubble('assistant',markdown(WELCOME));
-    if(!messages.length)chipRow(SUGGESTIONS);
+    if(!messages.length)chipRow(suggestions());
     for(const m of messages)bubble(m.role,m.role==='user'?`<p>${esc(m.content)}</p>`:markdown(m.content));
     const last=messages[messages.length-1];
     if(last?.chips)chipRow(last.chips);
