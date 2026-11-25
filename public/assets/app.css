@@ -1270,3 +1270,10 @@ tr.o-group td{background:#f8f9fa!important;font-weight:600;cursor:pointer;color:
   .tbl td[colspan]{display:block}
   .o-statusbar{margin-left:0}
 }
+
+/* Breadcrumb: menu group in front of the page title (Master Data / Products) */
+.o-bc-list{display:flex;align-items:center;gap:8px;font-size:20px}
+.o-bc-list .h1{font-size:20px!important}
+.o-bc-parent{color:var(--o-muted);font-weight:400;white-space:nowrap}
+.o-bc-list .o-bc-sep{color:#adb5bd}
+@media(max-width:620px){.o-bc-list,.o-bc-list .h1{font-size:17px!important}.o-cp .o-bc-parent,.o-cp .o-bc-parent+.o-bc-sep{display:none}}
