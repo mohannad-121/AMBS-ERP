@@ -309,20 +309,15 @@ Both roles see the same pages and buttons. The server enforces these rules when 
 - Nobody can change or delete posted stock movements: "Existing stock movements cannot be changed or removed."
 
 ## Dashboard overview 📊
-Keywords: dashboard, home, overview, KPI, summary, alerts, start page, لوحة
+Keywords: dashboard, home, overview, kpi, summary, what to do, to do, main page, الرئيسية, لوحة
 
-The **Dashboard** (`#/dashboard`) is the start page.
+The **Dashboard** (`#/dashboard`) is written in plain words:
+- **4 big numbers**: Items in stock, Waiting for a driver, On the road, Delivered this month. Click one to open its page.
+- **What to do now**: only the things that need someone, each with the next step — orders waiting for a driver (**Assign driver**), trips ready to leave (**Start trip**), deliveries on the road, draft sales orders (**Confirm**), purchases to order or receive, production to release or complete, drivers with bad papers, items out of stock or running low. When nothing is waiting: "✅ All done".
+- **Trucks out and waiting**: every trip on the road or ready to leave — packing no., driver → customer, address. Click to open the trip.
+- **Latest stock movements**: the last 10 movements as sentences ("Utrkash recorded a transfer stock — DN-2001"). Click to open it; **Live Tracking →** shows everything.
 
-- **KPI cards** show active counts of Customers, Suppliers, Processing Companies, Raw Materials, Parts and Products. **Open Production Orders** counts orders in Draft or Released. **Stock Warnings** counts safety-stock and reserved shortages. Click any card to open that page. Stock Warnings opens **Reports**.
-- **View Stock** (top right) opens **Inventory & Stock Movements**.
-- **Raw material stock by category** totals balances per category and unit across all locations.
-- **Part stock by category and location** does the same for parts.
-- **Finished product and variant stock** lists the balance of each product and variant per custody location.
-- **Production status** counts Draft, Released, Completed and Cancelled orders.
-- **Stock alerts** lists materials below safety stock and reserved demand shortages.
-- **Recent stock movements** shows the last 8 ledger entries.
-
-A yellow note says "Legacy data is available under Settings & Data for review." when old imported records still need review.
+The page refreshes itself every 30 seconds.
 
 ## Searching lists and picking records in forms
 Keywords: search, filter, find record, picker, dropdown, typo, بحث
