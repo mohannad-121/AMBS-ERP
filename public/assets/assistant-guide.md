@@ -2,15 +2,28 @@
 
 The AMBS Production System is the production planning and stock control web app of AM Building Solutions DWC LLC. It keeps the master data (customers, suppliers, processing companies, raw materials, parts, products and their Bills of Materials). It also runs the daily operations: production plans and orders, purchasing and supplier receipts, stock transfers, adjustments and counts, and packing and dispatch to customer sites. Stock is held per **custody location**, and every stock change is a permanent entry in the movement ledger. The app also includes engineering tools: a steel weight calculator, a market sections catalogue, a product take-off calculator and bar/plate nesting. This guide explains every page, form, status and common error message.
 
+## What changed in November 2026 (owner requests) 🆕
+Keywords: vendor, supplier renamed, driver, delivery, trip, papers, tracking, live, excel, phone +971, required
+
+- **Nothing is marked "Required"** any more. Empty codes are filled in automatically (C-001 customers, V-001 vendors, RM-0001 raw materials, PT-001 parts, PR-001 products). A save only stops when something truly cannot work, for example a record without a name.
+- **Customers** need only: **Name**, **Code**, **Phone number**, **Position** and **Delivery address**. The phone box already shows **+971**; type the rest, e.g. `50 123 4567`. The delivery address is also kept as the customer's "Delivery address" site for dispatch.
+- **Suppliers are now called Vendors**. Same short form (name, code, phone, position, address) plus **Materials this vendor supplies**: pick a raw material and the number of **bundles**. Click **View** on a vendor to see its materials, bundles, units per bundle and stock on hand.
+- **Raw materials**: the form starts with **Material name**. Safety / minimum stock and the Archive button were removed.
+- **Bills of Materials**: **Create BOM** has a search box — type part of a name or code. Each BOM has a **View** button that lists what is inside. In the BOM form there is no "Add line" button: a new empty line appears by itself when the last line is filled; empty lines are ignored.
+- **Drivers & Deliveries** (`#/drivers`): add drivers with phone, vehicle, licence, Emirates ID, vehicle registration and the **Official papers checked and on file** box. **A trip cannot be created, started or delivered with a driver whose papers are missing or expired.** Each trip has a packing number (PL2026-11-001), customer, project, system, short description, from / delivery location, distance in km, priority, status (Next → On the way → Delivered), delivery date and delivery paper status. Export everything with **PDF** or **Excel** (Excel has a Deliveries sheet and a Drivers sheet); each driver's View has its own PDF / Excel.
+- **Live Tracking** (`#/tracking`): where every item is now, every movement with the balance left at that location, filters for item type, location, movement type and dates, a **Track** timeline per item, and an Excel export. Dashboard, Live Tracking and Drivers refresh themselves every 30 seconds.
+- **Dashboard**: live KPI cards, stock movements over 14 days, deliveries by status and per driver, where stock is held, most moved items, the live movement feed and deliveries to watch.
+
 ## Navigating the app (sidebar and pages)
 Keywords: menu, sidebar, navigation, pages, where is, find page, القائمة, صفحة
 
-The left sidebar has four groups:
+The left sidebar has five groups:
 
-1. **Overview**: **Dashboard** (`#/dashboard`), **Customers** (`#/customers`), **Suppliers** (`#/suppliers`), **Processing Companies** (`#/processors`).
-2. **Master Data**: **Raw Materials** (`#/materials`), **Parts** (`#/parts`), **Bill of Materials** (`#/bom`), **Products** (`#/products`).
-3. **Operations**: **Production** (`#/production`), **Purchasing** (`#/purchase`), **Inventory & Stock Movements** (`#/movement`), **Packing & Dispatch** (`#/dispatch`).
-4. **System**: **Reports** (`#/reports`), **Tools** (`#/tools`), **Settings & Data** (`#/settings`).
+1. **Overview**: **Dashboard** (`#/dashboard`), **Live Tracking** (`#/tracking`).
+2. **Contacts & Products**: **Customers** (`#/customers`), **Vendors** (`#/suppliers`, previously called Suppliers), **Products** (`#/products`), **Bills of Materials** (`#/bom`).
+3. **Master Data**: **Raw Materials** (`#/materials`), **Parts** (`#/parts`), **Processing Companies** (`#/processors`).
+4. **Operations**: **Sales Orders** (`#/sales`), **Production** (`#/production`), **Purchasing** (`#/purchase`), **Inventory & Stock Movements** (`#/movement`), **Packing & Dispatch** (`#/dispatch`), **Drivers & Deliveries** (`#/drivers`).
+5. **System**: **Reports** (`#/reports`), **Tools** (`#/tools`), **Settings & Data** (`#/settings`).
 
 The Tools pages (Steel Weight Calculator `#/steel`, Market Sections `#/market`, Product Calculator `#/prodcalc`, Product Nesting `#/nesting`) highlight **Tools** in the sidebar. On a narrow screen or phone, the sidebar is hidden. Open it with the menu button at the top left of the top bar. Press **Escape** or tap outside it to close it.
 

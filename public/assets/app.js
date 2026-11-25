@@ -39,7 +39,14 @@ const IP = {
   nut:'M12 2l8.66 5v10L12 22l-8.66-5V7L12 2zm0 7a3 3 0 100 6 3 3 0 000-6z',
   tree:'M4 4h6v5H4V4zm0 11h6v5H4v-5zm10-5h6v5h-6v-5zM7 9v6m3-3h4',
   wrench:'M14.7 6.3a4 4 0 00-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 005.4-5.4l-2.5 2.5-2.4-.6-.6-2.4 2.5-2.5z',
-  invoice:'M6 2h9l5 5v15H6V2zm8 0v6h6M9 12h8M9 16h8M9 8h2'
+  invoice:'M6 2h9l5 5v15H6V2zm8 0v6h6M9 12h8M9 16h8M9 8h2',
+  route:'M6 19a2 2 0 100-4 2 2 0 000 4zm12-10a2 2 0 100-4 2 2 0 000 4zM6 15V9a4 4 0 014-4h2m0 14h2a4 4 0 004-4V9',
+  driver:'M12 12a4 4 0 100-8 4 4 0 000 8zm-7 9v-1a5 5 0 015-5h4a5 5 0 015 5v1M9 4.5h6',
+  pulse:'M3 12h4l3-8 4 16 3-8h4',
+  idcard:'M3 5h18v14H3V5zm5 4a2 2 0 100 4 2 2 0 000-4zm-3 8a3 3 0 016 0m3-7h5m-5 4h4',
+  pin:'M12 22s7-6.2 7-12a7 7 0 10-14 0c0 5.8 7 12 7 12zm0-9a3 3 0 100-6 3 3 0 000 6z',
+  alert:'M12 3l10 18H2L12 3zm0 7v5m0 3v.5',
+  xls:'M6 2h9l5 5v15H6V2zm8 0v6h6M9 11l5 6m0-6l-5 6'
 };
 function ic(name,cls){return `<svg class="${cls||''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="${IP[name]||''}"/></svg>`;}
 
@@ -96,7 +103,7 @@ function startClock(){ const set=()=>{ const c=$('#clock'); if(!c)return; const 
 
 /* AMBS workspace domain model. */
 const LEGACY=['meta','materials','products','bom','plans','purchaseRequests','receipts','movements','stockChecks','weighDocs'];
-const LIVE=['customers','suppliers','processors','locations','materials','parts','products','variants','recipes','plans','orders','purchases','jobs','events','reviews','sales'];
+const LIVE=['customers','suppliers','processors','locations','materials','parts','products','variants','recipes','plans','orders','purchases','jobs','events','reviews','sales','drivers','trips'];
 /* Workspaces saved before a collection existed simply get an empty list. */
 const SALES_OPEN=['Draft','Confirmed','Partially delivered'];
 function ensureTables(s){if(s&&typeof s==='object')for(const name of LIVE)if(!Array.isArray(s[name]))s[name]=[];return s;}
@@ -427,7 +434,7 @@ function drawPDFTable(doc,options){
 const PDFR={
   _ok(){ if(!window.jspdf||!window.jspdf.jsPDF){ toast('PDF export is unavailable','warn'); return false; }
     return true; },
-  _doc(){ const {jsPDF}=window.jspdf; const doc=new jsPDF({unit:'pt',format:'a4'}); doc.autoTable=options=>drawPDFTable(doc,options); return doc; },
+  _doc(orientation){ const {jsPDF}=window.jspdf; const doc=new jsPDF({unit:'pt',format:'a4',orientation:orientation||'portrait'}); doc.autoTable=options=>drawPDFTable(doc,options); return doc; },
   _hf(doc,docTitle){ return ()=>{ const W=doc.internal.pageSize.getWidth(),H=doc.internal.pageSize.getHeight();
     doc.setFillColor(204,6,5); doc.rect(0,0,W,56,'F'); doc.setFillColor(255,173,0); doc.rect(0,56,W,3.5,'F');
     let x=40; if(SET.logo){ try{ doc.addImage(SET.logo,imgFmt(SET.logo),40,11,34,34); x=84; }catch(e){} }
@@ -3129,19 +3136,21 @@ async function commit(change){
 }
 
 /* Shared views and editors */
-const TITLES={dashboard:'Dashboard',customers:'Customers',suppliers:'Suppliers',processors:'Processing Companies',
-  materials:'Raw Materials',parts:'Parts',bom:'Bill of Materials',products:'Products',production:'Production',
+const TITLES={dashboard:'Dashboard',customers:'Customers',suppliers:'Vendors',processors:'Processing Companies',
+  materials:'Raw Materials',parts:'Parts',bom:'Bills of Materials',products:'Products',production:'Production',
+  tracking:'Live Tracking',drivers:'Drivers & Deliveries',
   sales:'Sales Orders',purchase:'Purchasing',movement:'Inventory & Stock Movements',dispatch:'Packing & Dispatch',reports:'Reports',
   tools:'Tools',settings:'Settings & Data',market:'Market Sections',steel:'Steel Weight Calculator',
   prodcalc:'Product Calculator','prodcalc-new':'Product Take-off',nesting:'Product Nesting',
   'plan-new':'Production','purchase-new':'Purchasing'};
 const GROUPS=[
-  ['Overview',[['dashboard','dashboard'],['customers','users'],['suppliers','warehouse'],['processors','factory']]],
-  ['Master Data',[['materials','stack'],['parts','nut'],['bom','tree'],['products','box']]],
-  ['Operations',[['sales','invoice'],['production','wrench'],['purchase','cart'],['movement','swap'],['dispatch','truck']]],
+  ['Overview',[['dashboard','dashboard'],['tracking','route']]],
+  ['Contacts & Products',[['customers','users'],['suppliers','warehouse'],['products','box'],['bom','tree']]],
+  ['Master Data',[['materials','stack'],['parts','nut'],['processors','factory']]],
+  ['Operations',[['sales','invoice'],['production','wrench'],['purchase','cart'],['movement','swap'],['dispatch','truck'],['drivers','driver']]],
   ['System',[['reports','chart'],['tools','calc'],['settings','gear']]]
 ];
-const ENTITY={customers:'Customer',suppliers:'Supplier',processors:'Processing Company',materials:'Raw Material',parts:'Part',products:'Product'};
+const ENTITY={customers:'Customer',suppliers:'Vendor',processors:'Processing Company',materials:'Raw Material',parts:'Part',products:'Product'};
 const COMPANIES=['customers','suppliers','processors'];
 const qfmt=(n,u='')=>nfmt(Math.abs(n)<EPS?0:n,6)+(u?' '+u:'');
 const stamp=x=>fmtDate(x)+' '+(x?new Date(x).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}):'');
@@ -3169,21 +3178,60 @@ const valOf=(form,name)=>form.elements.namedItem(name)?.value?.trim()||'';
 const checked=(form,name)=>form.elements.namedItem(name)?.checked===true;
 const labelOf=(s,id)=>label(item(s,id));
 const field=(title,html,full=false)=>`<div class="field ${full?'full':''}"><label>${esc(title)}${html.startsWith('<input')||html.startsWith('<select')||html.startsWith('<textarea')?html:''}</label>${html.startsWith('<div')?html:''}</div>`;
+/* Example hints shown inside empty fields. Matched by label first, then by field name
+   (repeated lines use "<line>_<field>" names, matched by their "_field" suffix). */
+const byPage=(map,fallback)=>()=>map[typeof App!=='undefined'?App.route:'']||fallback;
+const HINT_LABELS={
+  'Confirmation code':'e.g. 123456','Reset code':'e.g. 123456','Code / SKU':'e.g. NET-4.5-Y','SKU':'e.g. NET-4.5-Y',
+  'Reference / project':'e.g. Dubai Hills Tower B','Material name':'e.g. MS SHS 50×50×2.5 mm',
+  'Password':'Your password','New password':'At least 12 characters','Tax registration':'e.g. 100123456700003',
+  'Reference / notes':'e.g. Urgent, needed for Dubai Hills site','Location notes':'e.g. Gate 3, call before arrival',
+  'Line notes':'e.g. Cut to 6 m lengths','Verification reason / reference':'e.g. Physical count on 24 Nov'
+};
+const HINTS={
+  code:byPage({customers:'e.g. C-001',suppliers:'e.g. S-001',processors:'e.g. P-001',materials:'e.g. RM-SHS-50',
+    parts:'e.g. PT-COUPLER-01',products:'e.g. NET-4Y'},'e.g. ITEM-001'),
+  name:byPage({customers:'e.g. Emaar Construction LLC',suppliers:'e.g. Metal Solution Trading',processors:'e.g. Gulf Galvanizing Factory',
+    parts:'e.g. Adjustable coupler',products:'e.g. Safety Net 4.0 m Yellow'},'e.g. Main item name'),
+  category:byPage({materials:'e.g. Tubes',parts:'e.g. Fasteners / accessories',products:'e.g. 4.0 STD-Y'},'e.g. Accessories'),
+  details:byPage({processors:'e.g. Galvanizing, Powder coating'},'e.g. Steel tubes and sheets'),
+  email:'e.g. name@company.com',phone:'e.g. +971 50 123 4567',address:'e.g. Building 3, Emaar Square, Downtown',
+  city:'e.g. Dubai',country:'e.g. United Arab Emirates',contact:'e.g. Ahmad Saleh',manager:'e.g. Mohannad',
+  creditLimit:'e.g. 50000',leadTime:'e.g. 7',paymentTerms:'e.g. 30 days',reference:'e.g. PO-7781',ref:'e.g. DN-1024',
+  company:'e.g. AM Building Solutions DWC LLC',currentUser:'e.g. Store Keeper',dimensions:'e.g. 50 × 50 × 2.5 mm, 6 m length',
+  color:'e.g. Yellow',size:'e.g. 4.5 × 3.1 m',unit:'e.g. PCS',opening:'e.g. 120',safety:'e.g. 20',bundle:'e.g. 10',
+  stockLen:'e.g. 6',rateKg:'e.g. 3.25',ratePc:'e.g. 12.50',orderQty:'e.g. 1',qty:'e.g. 10',line:'e.g. 4',
+  reason:'e.g. Physical count on 24 Nov',notes:'e.g. Deliveries only on weekdays before 3 pm',
+  _cname:'e.g. Ahmad Saleh',_job:'e.g. Site Engineer',_cphone:'e.g. +971 50 123 4567',_cemail:'e.g. ahmad@company.com',
+  _name:'e.g. Main Store',_address:'e.g. Plot 598-123, Dubai Investment Park',_city:'e.g. Dubai',
+  _url:'e.g. https://maps.app.goo.gl/…',_lat:'e.g. 25.2048',_lng:'e.g. 55.2708',_notes:'e.g. Gate 3, call before arrival',
+  _qty:'e.g. 13',_price:'e.g. 250',_count:'e.g. 2',_formula:'e.g. 4.2 * 2',_wastage:'e.g. 5',_unit:'e.g. PCS'
+};
+const PICK_HINTS={customer:'Type a customer name or code…',supplier:'Type a vendor name or code…',processor:'Type a processing company…',
+  relatedParty:'Type a company name…',part:'Type a part name or code…',product:'Type a product name or code…',
+  sku:'Type an item name or code, e.g. safety net…',bomOwner:'Type a part or product name or code…'};
+function fieldHint(title,name){
+  const key=String(name).replace(/\d+$/,'');
+  const hint=HINT_LABELS[title]??HINTS[key]??HINTS['_'+key.split('_').pop()];
+  return typeof hint==='function'?hint():hint||'';
+}
 function input(title,name,value='',options={}){
   const {type='text',required=false,full=false,extra=''}=options;
-  return field(title,`<input class="inp" name="${name}" type="${type}" value="${esc(value)}" ${required?'required':''} ${extra}>`,full);
+  const hint=/placeholder=/.test(extra)||['file','date','hidden','checkbox','radio','password'].includes(type)&&!HINT_LABELS[title]?'':fieldHint(title,name);
+  return field(title,`<input class="inp" name="${name}" type="${type}" value="${esc(value)}" ${extra}${hint?` placeholder="${esc(hint)}"`:''}>`,full);
 }
 function number(title,name,value='',min=0,step='any',required=true){
   return input(title,name,value,{type:'number',required,extra:`min="${min}" step="${step}"`});
 }
 function area(title,name,value=''){
-  return field(title,`<textarea class="inp" name="${name}" rows="2">${esc(value)}</textarea>`,true);
+  const hint=fieldHint(title,name);
+  return field(title,`<textarea class="inp" name="${name}" rows="2"${hint?` placeholder="${esc(hint)}"`:''}>${esc(value)}</textarea>`,true);
 }
 function choiceOptions(rows,selected='',placeholder='Select…'){
   return `<option value="">${esc(placeholder)}</option>`+rows.map(([id,name])=>`<option value="${esc(id)}" ${id===selected?'selected':''}>${esc(name)}</option>`).join('');
 }
 function select(title,name,rows,selected='',required=true,placeholder){
-  return field(title,`<select class="sel" name="${name}" ${required?'required':''}>${choiceOptions(rows,selected,placeholder)}</select>`);
+  return field(title,`<select class="sel" name="${name}">${choiceOptions(rows,selected,placeholder)}</select>`);
 }
 function suggestedInput(title,name,value,options,required=false){
   const id='suggest_'+name.replace(/[^a-z0-9_-]/gi,'_');
@@ -3201,8 +3249,9 @@ function locOptions(){return pair(custody(),l=>locName(state,l.id));}
 function skus(s=state){return [...current(s,'materials'),...current(s,'parts'),...current(s,'products'),...current(s,'variants')]
   .filter(r=>{try{stockItem(s,r.id);return true;}catch{return false;}});}
 function searchable(title,name,rows,selected=''){
+  const hint=PICK_HINTS[name]||PICK_HINTS[String(name).split('_').pop()]||'Type to search…';
   return field(title,`<div class="erp-pick" data-pick="${name}"><input class="inp" name="${name}Search" aria-label="${esc(title)}"
-     autocomplete="off" value="${esc(rows.find(r=>r[0]===selected)?.[1]||'')}"><input type="hidden" name="${name}" value="${esc(selected)}">
+     placeholder="${esc(hint)}" autocomplete="off" value="${esc(rows.find(r=>r[0]===selected)?.[1]||'')}"><input type="hidden" name="${name}" value="${esc(selected)}">
      <div class="erp-options"></div><template>${choiceOptions(rows)}</template></div>`);
 }
 function wirePicks(root){
@@ -3213,11 +3262,15 @@ function wirePicks(root){
     function choose(o){hidden.value=o.value;text.value=o.textContent;menu.replaceChildren();hidden.dispatchEvent(new Event('change',{bubbles:true}));}
     function show(){
       const query=hidden.value?'':text.value.toLowerCase().trim();
-      const matches=choices.filter(o=>o.textContent.toLowerCase().includes(query));
-      menu.replaceChildren(...matches.map(o=>{
+      const words=query.split(/\s+/).filter(Boolean);
+      const matches=choices.filter(o=>{const t=o.textContent.toLowerCase();return words.every(w=>t.includes(w));});
+      // Large lists (thousands of items) only draw the first matches; typing narrows them down.
+      menu.replaceChildren(...matches.slice(0,60).map(o=>{
         const b=document.createElement('button'); b.type='button'; b.textContent=o.textContent;
         b.onclick=()=>choose(o); return b;
       }));
+      if(matches.length>60){const more=document.createElement('div');more.className='erp-options-more';
+        more.textContent=`Showing 60 of ${matches.length} — keep typing to narrow down`;menu.append(more);}
       if(!matches.length)menu.textContent='No matching records';
       return matches;
     }
@@ -3239,6 +3292,8 @@ function formModal(title,body,save,{text='Save',intro='',danger=false}={}){
     <button class="btn ${danger?'btn-danger':'btn-primary'}" type="submit">${ic(danger?'trash':'save')}${esc(text)}</button></div></form>`,'lg');
   back.classList.add('erp-form');
   const form=$('form',back), submit=$('[type=submit]',form), error=$('.erp-error',form);
+  // Owner request: no field is marked or enforced as "required" by the browser; saves explain what is missing.
+  form.noValidate=true;form.querySelectorAll('[required]').forEach(el=>el.removeAttribute('required'));
   form.onsubmit=async e=>{
     e.preventDefault(); if(submit.disabled)return;
     error.textContent=''; submit.disabled=true;
@@ -3263,11 +3318,13 @@ function approval(title,description,work,text='Confirm'){
     return text.startsWith('Delete')?'Deleted.':undefined;
   },{text,danger:text.startsWith('Delete')});
 }
-function repeat(form,container,draw,rows,addLabel){
+/* Repeating line editor. With `auto` there is no "Add line" button: the list always keeps one empty
+   line at the bottom (at least auto.min lines), and a new one appears as soon as the last line is filled. */
+function repeat(form,container,draw,rows,addLabel,auto=null){
   const box=form.querySelector(container), list=document.createElement('div');
   box.append(list);
   const b=document.createElement('button');
-  b.type='button';b.className='btn btn-sm';b.textContent=addLabel;box.append(b);
+  b.type='button';b.className='btn btn-sm';b.textContent=addLabel;if(!auto)box.append(b);
   const create=(value={})=>{
     const line=document.createElement('fieldset');line.className='erp-line';
     const n=key().replace(/[^a-z0-9]/gi,'');
@@ -3279,6 +3336,17 @@ function repeat(form,container,draw,rows,addLabel){
   };
   rows.forEach(create);
   b.onclick=()=>{create();box.dispatchEvent(new Event('change',{bubbles:true}));};
+  if(auto){
+    box.classList.add('erp-auto-lines');
+    const grow=()=>{
+      while(list.children.length<(auto.min||1))create();
+      const last=list.lastElementChild;
+      if(auto.filled(last))create();
+    };
+    grow();
+    box.addEventListener('change',grow);box.addEventListener('input',grow);
+    return ()=>[...list.children].filter(line=>auto.filled(line));
+  }
   return ()=>[...list.children];
 }
 function fieldValue(row,name){return row.querySelector(`[data-field="${name}"],[name$="_${name}"]`)?.value?.trim()||'';}
@@ -3349,8 +3417,17 @@ function wireImagePreviews(form){
     remove?.addEventListener('change',()=>{if(remove.checked)fileInput.value='';update();});
   });
 }
+const CODE_PREFIX={customers:'C-',suppliers:'V-',processors:'P-',materials:'RM-',parts:'PT-',products:'PR-',variants:'VR-'};
+function nextCode(s,table){
+  const groups=COMPANIES.includes(table)?[table]:['materials','parts','products','variants'];
+  const used=new Set(groups.flatMap(k=>s[k].map(r=>String(r.code||'').toUpperCase())));
+  let n=1,code;
+  do{code=CODE_PREFIX[table]+String(n++).padStart(table==='materials'?4:3,'0');}while(used.has(code));
+  return code;
+}
 function codeCheck(s,table,row){
-  need(row.code?.trim()&&row.name?.trim(),'Code and name are required.');
+  need(row.name?.trim(),'Enter a name.');
+  if(!row.code?.trim())row.code=nextCode(s,table);
   const groups=COMPANIES.includes(table)?[table]:['materials','parts','products','variants'];
   need(!groups.some(k=>s[k].some(r=>r.id!==row.id&&r.code.toLowerCase()===row.code.toLowerCase())),
     'This code or SKU is already in use.');
@@ -3523,7 +3600,7 @@ function packingParts(rows,quantities,editable=false,order=1){
       const image=part.stockImage||PACKING_IMAGES[part.image];
       return [[image?thumb(image,part.name,'thumb-part'):'—',part.code?cell(part.name,part.code):esc(part.name),esc(part.unit),
         editable?`<input class="inp packing-qty" aria-label="${esc('Quantity for '+part.name)}" type="number"
-          min="0" step="${step}" name="${packingInput(i)}" value="${esc(count)}" required>`:esc(count),
+          min="0" step="${step}" name="${packingInput(i)}" value="${esc(count)}" placeholder="e.g. 2" required>`:esc(count),
         `<span data-packing-total="${i}">${qfmt(count*order)}</span>`]];
     }),'No parts selected.',editable?rows.map(part=>[part.name,part.code,part.unit,part.size,part.color].filter(Boolean).join(' ')):[])+(rows.some((part,i)=>part.costFormula&&(editable||quantities[i]))?
       `<details style="padding:10px 14px"><summary>Workbook accessory cost estimate</summary>${
@@ -3720,12 +3797,11 @@ function nextMaterialCode(s){
 }
 function materialFields(row,old){
   const opening=old?materialOpening(state,old.id):0;
-  return input('Code','code',row.code||nextMaterialCode(state),{required:true})+
+  return input('Material name','name',row.name,{full:true,extra:'autofocus'})+
+    input('Code','code',row.code||nextMaterialCode(state))+
     input('Category','category',row.category,{extra:'list="erp-categories"'})+
-    input('Material name *','name',row.name,{required:true,full:true})+
     suggestedInput('Unit','unit',row.unit||'PCS',unitChoices(),true)+
     number('Bundle quantity (units per bundle)','bundle',row.bundle??0,0,1)+
-    number('Safety / minimum stock','safety',row.safety??0)+
     (old?input('Opening / initial stock','opening',qfmt(opening),{extra:'readonly'}):
       number('Opening / initial stock','opening',0,0,'any'))+
     (!old?`<div class="full" data-opening-location hidden>${select('Opening stock custody location','openingLocation',locOptions(),'',false,
@@ -3740,7 +3816,7 @@ function materialFields(row,old){
 }
 /* Companies (customers, suppliers, processing companies): tabbed profile form and overview page. */
 const PAYMENT_TERMS=['Advance payment','Cash on delivery','Immediate payment','7 days','15 days','30 days','45 days','60 days','90 days'];
-const COMPANY_KIND={customers:'Customer',suppliers:'Supplier',processors:'Processing company'};
+const COMPANY_KIND={customers:'Customer',suppliers:'Vendor',processors:'Processing company'};
 const companyContacts=r=>Array.isArray(r?.contacts)&&r.contacts.length?r.contacts:(r?.contact?[{name:r.contact,job:'',phone:'',email:''}]:[]);
 const initials=name=>String(name||'?').trim().split(/\s+/).slice(0,2).map(w=>w[0]).join('').toUpperCase()||'?';
 function companyAvatar(r,size='co-avatar-sm'){
@@ -3761,7 +3837,61 @@ function wireFormTabs(form){
   // A required field on a hidden tab: jump to that tab so the browser can point at it.
   form.addEventListener('invalid',e=>{const p=e.target.closest('.co-panel');if(p?.hidden)show(p.dataset.panel);},true);
 }
+/* UAE phone numbers: +971 is fixed, the employee types the rest (kept in one format for WhatsApp later). */
+const uaeLocal=phone=>String(phone||'').trim().replace(/^(?:\+|00)?971[\s-]*/,'');
+function phoneField(title,name,value){
+  return field(title,`<div class="phone-in"><span class="phone-cc">+971</span><input class="inp" name="${name}" type="tel" inputmode="tel"
+    value="${esc(uaeLocal(value))}" placeholder="50 123 4567" autocomplete="off" aria-label="${esc(title)}"></div>`);
+}
+function readPhone(form,name){
+  const raw=valOf(form,name);
+  if(!raw)return '';
+  const digits=raw.replace(/\D/g,'').replace(/^(?:00)?971/,'').replace(/^0/,'');
+  need(/^\d{8,9}$/.test(digits),'Enter the UAE number after +971, e.g. 50 123 4567.');
+  return '+971 '+(digits.length===9?digits.slice(0,2)+' '+digits.slice(2,5)+' '+digits.slice(5):digits.slice(0,1)+' '+digits.slice(1,4)+' '+digits.slice(4));
+}
+const vendorSupplies=r=>(Array.isArray(r?.supplies)?r.supplies:[]).filter(x=>get(state,'materials',x.sku));
+function deliverySite(s,type,id){return s.locations.find(l=>l.ownerType===type&&l.ownerId===id&&l.delivery);}
+/* Customers and vendors: one short form — name, code, phone, position and (delivery) address. */
+function simpleCompanyEdit(type,id){
+  const old=get(state,type,id), row=old||{}, vendor=type==='suppliers', title=ENTITY[type];
+  const address=row.address||deliverySite(state,type,id)?.address||'';
+  const form=formModal((old?'Edit ':'Add ')+title,`<div class="form-grid">
+    ${input('Name','name',row.name,{full:true,extra:`placeholder="${vendor?'e.g. Metal Solution Trading':'e.g. Emaar Construction LLC'}"`})}
+    ${input('Code','code',row.code||nextCode(state,type),{extra:'placeholder="Left empty, a code is given automatically"'})}
+    ${phoneField('Phone number','phone',row.phone)}
+    ${input('Position','position',row.position,{extra:`placeholder="${vendor?'e.g. Sales Manager':'e.g. Project Manager'}"`})}
+    ${input(vendor?'Address':'Delivery address','address',address,{full:true,extra:`placeholder="${vendor?'e.g. Al Quoz Industrial Area 3, Dubai':'e.g. Dubai Hills, Building 3, Gate 2'}"`})}
+    </div>`+(vendor?`<h4 class="erp-sub-head">Materials this vendor supplies</h4>
+    <p class="sub" style="margin:-4px 0 10px">Pick a material and how many bundles. A new line appears by itself when you fill the last one.</p>
+    <div data-supplies></div>`:''),async f=>{
+    const data={...old,id:id||key(),name:valOf(f,'name'),code:valOf(f,'code'),phone:readPhone(f,'phone'),
+      position:valOf(f,'position'),address:valOf(f,'address'),active:old?.active!==false};
+    if(vendor){
+      data.supplies=supplyLines().map(l=>({sku:fieldValue(l,'sku'),bundles:qty(fieldValue(l,'bundles')||0,'Bundles',true)}));
+      need(new Set(data.supplies.map(x=>x.sku)).size===data.supplies.length,'Each material can be listed once per vendor.');
+    }
+    await commit(s=>{
+      const existing=get(s,type,data.id);
+      need(!old||sameCloudRecord(old,existing),'This record changed. Reopen it before saving.');
+      codeCheck(s,type,data);
+      for(const x of data.supplies||[])need(get(s,'materials',x.sku),'Choose a raw material for every line.');
+      add(s[type],{...data,at:now()});
+      if(type!=='customers')return;
+      const site=deliverySite(s,type,data.id);
+      if(data.address)add(s.locations,{...(site||{id:key(),name:'Delivery address',city:'',url:'',notes:'',lat:null,lng:null}),
+        address:data.address,stock:site?.stock??false,active:true,delivery:true,ownerType:type,ownerId:data.id});
+      else if(site&&!locationUsed(s,site.id))site.active=false;
+    });
+    return old?'Saved.':title+' added.';
+  },{text:old?'Save changes':'Save '+title.toLowerCase()});
+  const supplyLines=vendor?repeat(form,'[data-supplies]',(x,n)=>`<div class="form-grid line-compact">
+    ${searchable('Raw material',n+'_sku',pair(state.materials.filter(m=>m.active!==false||m.id===x.sku)),x.sku)}
+    ${input('Bundles',n+'_bundles',x.bundles??'',{type:'number',extra:'min="0" step="any" placeholder="e.g. 10"'})}</div>`,
+    vendorSupplies(row),'Add material',{min:1,filled:line=>!!fieldValue(line,'sku')}):null;
+}
 function companyEdit(type,id){
+  if(type!=='processors')return simpleCompanyEdit(type,id);
   const old=get(state,type,id), row=old||{}, title=ENTITY[type];
   const general=`<div class="form-grid">
     ${input('Code','code',row.code,{required:true})}${input('Name','name',row.name,{required:true})}
@@ -3859,7 +3989,13 @@ function companyView(type,id){
       ['dashboard','Locations',sites.filter(l=>l.active!==false).length,sites.some(l=>l.stock)?'Some hold stock':'Delivery / pickup sites','co-locations']]);
   const over=type==='customers'&&r.creditLimit>0&&openValue>r.creditLimit;
   const link=(href,text)=>text?`<a href="${esc(href)}" class="co-link"${href.startsWith('http')?' target="_blank" rel="noopener noreferrer"':''}>${esc(text)}</a>`:'—';
-  const details=[
+  const supplies=type==='suppliers'?vendorSupplies(r):[];
+  if(type==='suppliers')smart.unshift(['stack','Materials supplied',supplies.length,nfmt(supplies.reduce((n,x)=>n+x.bundles,0),2)+' bundles in total','co-supplies']);
+  const simple=type!=='processors';
+  if(simple)for(let i=smart.length-1;i>=0;i--)if(['Contacts','Locations'].includes(smart[i][1])&&!smart[i][2])smart.splice(i,1);
+  const details=simple?[['Code',esc(r.code)],['Position',esc(r.position||'—')],
+    ['Phone',r.phone?link('tel:'+r.phone.replace(/[^\d+]/g,''),r.phone):'—'],
+    [type==='customers'?'Delivery address':'Address',esc(r.address||deliverySite(state,type,id)?.address||'—')]]:[
     ['TRN / VAT',esc(r.trn||'—')],['Email',r.email?link('mailto:'+r.email,r.email):'—'],['Phone',r.phone?link('tel:'+r.phone.replace(/[^\d+]/g,''),r.phone):'—'],
     ['Website',r.website&&/^https?:\/\//i.test(r.website)?link(r.website,r.website.replace(/^https?:\/\//i,'')):'—'],
     ['Address',esc([r.address,r.city,r.country].filter(Boolean).join(', ')||'—')],
@@ -3877,12 +4013,18 @@ function companyView(type,id){
       ${ic(icon)}<span><b>${esc(value)}</b><small>${esc(labelText)}</small><em>${esc(sub)}</em></span></button>`).join('')}</div>`+
     `<div class="co-details">${details.map(([k,v])=>`<div><span>${esc(k)}</span><div>${v}</div></div>`).join('')}</div>`+
     (r.notes?note(r.notes):'')+
-    section('co-contacts',panel('Contacts',table(['Name','Job title','Phone','Email'],contacts.map(c=>[
+    (type==='suppliers'?section('co-supplies',panel('Materials this vendor supplies',table(['Material','Category','Bundles','Units per bundle','Total units','On hand now'],
+      supplies.map(x=>{const m=get(state,'materials',x.sku), per=Number(m.bundle)||0;
+        return [`<div class="record-media">${recordPicture(m)}<div>${cell(m.name,m.code)}</div></div>`,esc(m.category||'—'),
+          `<strong class="num">${esc(nfmt(x.bundles,2))}</strong>`,esc(per?qfmt(per,m.unit):'—'),
+          esc(per?qfmt(per*x.bundles,m.unit):'—'),esc(qfmt(physical(state,m.id),m.unit))];}),
+      'No materials listed yet. Click Edit to add the materials and bundles this vendor supplies.'))):'')+
+    (simple&&!contacts.length?'':section('co-contacts',panel('Contacts',table(['Name','Job title','Phone','Email'],contacts.map(c=>[
       `<strong>${esc(c.name)}</strong>`,esc(c.job||'—'),c.phone?link('tel:'+c.phone.replace(/[^\d+]/g,''),c.phone):'—',c.email?link('mailto:'+c.email,c.email):'—']),
-      'No contact people yet. Click Edit → Contacts to add them.')))+
-    section('co-locations',panel('Locations',table(['Name','Address','City','Holds AMBS stock','Status','Map'],sites.map(l=>[
+      'No contact people yet. Click Edit → Contacts to add them.'))))+
+    (simple&&!sites.length?'':section('co-locations',panel('Locations',table(['Name','Address','City','Holds AMBS stock','Status','Map'],sites.map(l=>[
       esc(l.name),esc(l.address),esc(l.city),l.stock?statusChip('ok','Yes'):'No',chip(l.active===false?'Archived':'Active'),mapAction(l)]),
-      'No locations yet. Click Edit → Locations to add sites.')))+
+      'No locations yet. Click Edit → Locations to add sites.'))))+
     (type==='customers'?section('co-sales',panel('Sales orders',table(['Order','Order date','Requested','Delivered','Value (AED)','Status','Action'],sales.map(o=>[
       cell(o.no,o.reference),esc(fmtDate(o.date)),esc(o.due?fmtDate(o.due):'—'),esc(salesProgress(o)+'%'),esc(salesTotal(o)?nfmt(salesTotal(o),2):'—'),chip(o.status),
       small('View',`closeModal();salesView(${escapeArg(o.id)})`)]),'No sales orders yet.'))):'')+
@@ -3931,15 +4073,15 @@ function masterEdit(type,id){
         if(!data.category&&!packingCategory(row.category))data.category=row.category||'';
         data.orderQty=whole(valOf(f,'orderQty')||1,'Default order quantity');
         packingQuantities=packing.rows.map((part,i)=>componentQty(
-          valOf(f,packingInput(i)),packingUnit(part),part.name,true));
+          valOf(f,packingInput(i))||0,packingUnit(part),part.name,true));
       }
-      for(const name of ['safety','bundle','stockLen','rateKg','ratePc'])if(f.elements[name])data[name]=qty(valOf(f,name),name,true);
+      for(const name of ['safety','bundle','stockLen','rateKg','ratePc'])if(f.elements[name])data[name]=qty(valOf(f,name)||0,name,true);
       data.unit=unit(data.unit);
       need(validUnit(data.unit),'Enter a stock unit using letters, numbers, spaces, / or -.');
       data.image=await imageValue(f,old?.image);
     }
     const locations=company?lines().map(l=>readLocation(l,true)):[];
-    const opening=type==='materials'&&!old?componentQty(valOf(f,'opening'),data.unit,'Opening stock',true):0;
+    const opening=type==='materials'&&!old?componentQty(valOf(f,'opening')||0,data.unit,'Opening stock',true):0;
     const openingLocation=type==='materials'&&!old?valOf(f,'openingLocation'):'';
     need(!opening||data.active,'Activate the material before posting opening stock.');
     need(!opening||openingLocation,'Choose a custody location for opening stock.');
@@ -4033,7 +4175,11 @@ function hasReference(value,id){
   return value&&typeof value==='object'&&Object.values(value).some(item=>hasReference(item,id));
 }
 function recordIsUsed(s,type,id){
-  return LIVE.some(table=>table!==type&&s[table].some(row=>hasReference(row,id)));
+  // A company's own sites and a vendor's "materials supplied" list do not block deleting; the sites must be unused themselves.
+  const own=new Set(COMPANIES.includes(type)?companyLocations(s,type,id,false).map(l=>l.id):[]);
+  const plain=(table,row)=>table==='suppliers'&&type==='materials'?{...row,supplies:null}:row;
+  return LIVE.some(table=>table!==type&&s[table].some(row=>!(table==='locations'&&own.has(row.id))&&hasReference(plain(table,row),id)))||
+    [...own].some(site=>LIVE.some(table=>table!=='locations'&&s[table].some(row=>hasReference(row,site))));
 }
 function deleteMaster(type,id){
   const old=get(state,type,id);
@@ -4046,6 +4192,8 @@ function deleteMaster(type,id){
       s.deletedWorkbookParts=[...new Set([...(s.deletedWorkbookParts||[]),...removed])];
     }
     s[type]=s[type].filter(row=>row.id!==id);
+    if(COMPANIES.includes(type))s.locations=s.locations.filter(l=>!(l.ownerType===type&&l.ownerId===id));
+    if(type==='materials')for(const v of s.suppliers)if(Array.isArray(v.supplies))v.supplies=v.supplies.filter(x=>x.sku!==id);
   },'Delete');
 }
 function deleteRecipe(id){
@@ -4157,10 +4305,8 @@ function filterTable(el){
   card.querySelector('.pill-legend').textContent=query.length?`${matches} matches`:`${matches} ${card.dataset.noun||'records'}`;
 }
 function materialHealth(material,onHand){
-  const safety=Number(material.safety)||0;
-  if(safety>0&&onHand<safety-EPS)return {label:'Low',kind:'bad',cell:'stock-low'};
-  if(safety>0&&onHand<=safety*1.25+EPS)return {label:'Watch',kind:'warn',cell:'stock-watch'};
-  return {label:'OK',kind:'ok',cell:'stock-good'};
+  if(onHand<=EPS)return {label:'Out of stock',kind:'bad',cell:'stock-low'};
+  return {label:'In stock',kind:'ok',cell:'stock-good'};
 }
 function materialPage(){
   const rows=state.materials;
@@ -4172,21 +4318,42 @@ function materialPage(){
     return [esc(material.code),`<div class="record-media">${recordPicture(material)}<div>${cell(material.name,material.category)}</div></div>`,
       `<span class="num">${esc(qfmt(materialOpening(state,material.id)))}</span>`,
       `<span class="material-balance ${health.cell}"><strong class="num">${esc(qfmt(onHand))}</strong> <span>${esc(material.unit)}</span></span>`,
-      `<span class="num">${esc(qfmt(material.safety??0))}</span>`,
       `<span class="num">${esc(qfmt(material.bundle??0))}</span>`,
       `<span class="num">${esc(qfmt(onOrder))}</span>`,
       `<span class="num">${esc(qfmt(onHand+onOrder))}</span>`,
       statusChip(health.kind,health.label),chip(material.active===false?'Archived':'Active'),
       actionGroup(small('View',`masterView(${args})`),small('Edit',`masterEdit(${args})`),
-        small(material.active===false?'Restore':'Archive',`masterArchive(${args})`),
+        material.active===false?small('Restore',`masterArchive(${args})`):'',
         dangerSmall('Delete',`deleteMaster(${args})`))];
   });
   return head('Master Data','Raw Materials',button('Stock report',"App.go('reports')",'','pdf'),
     button('Add raw material',"masterEdit('materials')",'btn-primary','plus'))+
-    searchableTable(['Code','Material','Opening','On hand','Safety','Bundle','On order','Avail. after','Status','State','Actions'],
+    searchableTable(['Code','Material','Opening','On hand','Bundle','On order','Avail. after','Status','State','Actions'],
       values,'Add your first raw material.',[],{className:'material-table',placeholder:'Search code, name, category…',noun:'materials'});
 }
+function simpleCompanyPage(type){
+  const title=ENTITY[type], vendor=type==='suppliers';
+  const openCount=r=>vendor?state.purchases.filter(p=>p.supplierId===r.id&&['Draft','Ordered'].includes(p.status)).length:
+    state.sales.filter(o=>o.customerId===r.id&&SALES_OPEN.includes(o.status)).length;
+  const address=r=>r.address||deliverySite(state,type,r.id)?.address||companyLocations(state,type,r.id)[0]?.address||'';
+  return head('Contacts',TITLES[type],button('Add '+title,`masterEdit(${escapeArg(type)})`,'btn-primary','plus'))+
+    searchableTable(['Code','Name','Position','Phone',vendor?'Address':'Delivery address',...(vendor?['Materials']:[]),vendor?'Open purchases':'Open sales','Actions'],
+    state[type].map(r=>{
+      const args=`${escapeArg(type)},${escapeArg(r.id)}`, open=openCount(r), supplies=vendorSupplies(r);
+      return [esc(r.code),`<div class="record-media co-media">${companyAvatar(r)}<div>${cell(r.name)}${r.active===false?chip('Archived'):''}</div></div>`,
+        esc(r.position||companyContacts(r)[0]?.job||'—'),
+        r.phone?`<a class="co-link" href="tel:${esc(r.phone.replace(/[^\d+]/g,''))}">${esc(r.phone)}</a>`:'—',
+        esc(address(r)||'—'),
+        ...(vendor?[supplies.length?`<span class="co-count">${supplies.length}</span> <span class="sub">${esc(nfmt(supplies.reduce((n,x)=>n+x.bundles,0),2))} bundles</span>`:'<span class="sub">0</span>']:[]),
+        open?`<span class="co-count">${open}</span>`:'<span class="sub">0</span>',
+        actionGroup(button('View',`masterView(${args})`,'btn-sm btn-view','search'),small('Edit',`masterEdit(${args})`),
+          dangerSmall('Delete',`deleteMaster(${args})`))];
+    }),'Add your first '+title.toLowerCase()+'.',
+    state[type].map(r=>[r.code,r.name,r.position,r.phone,address(r),...vendorSupplies(r).map(x=>label(get(state,'materials',x.sku)))].filter(Boolean).join(' ')),
+    {placeholder:'Search by name, code, phone, position or address…',noun:vendor?'vendors':'customers'});
+}
 function companyPage(type){
+  if(type!=='processors')return simpleCompanyPage(type);
   const title=ENTITY[type];
   const openLabel={customers:'Open sales',suppliers:'Open purchases',processors:'Open production'}[type];
   const openCount=r=>type==='customers'?state.sales.filter(o=>o.customerId===r.id&&SALES_OPEN.includes(o.status)).length:
@@ -4266,17 +4433,45 @@ function createBOM(){
   const rows=['parts','products'].flatMap(type=>current(state,type).map(r=>[
     JSON.stringify([type,r.id]),ENTITY[type]+' · '+label(r)+(get(state,'recipes',r.id)?' · Edit existing':'')
   ]));
-  const body=rows.length?select('Part or finished product','bom-owner',rows):
-    note('Add a part or finished product first.')+actionGroup(
-      small('Parts',"closeModal();App.go('parts')"),small('Products',"closeModal();App.go('products')"));
-  infoModal('Create BOM',body,rows.length?button('Continue','openBOMOwner(this)','btn-primary'):'');
+  if(!rows.length)return infoModal('Create BOM',note('Add a part or finished product first.')+actionGroup(
+      small('Parts',"closeModal();App.go('parts')"),small('Products',"closeModal();App.go('products')")));
+  // Searchable picker: works the same with ten items or thousands — type part of a name or code.
+  const back=infoModal('Create BOM',`<div class="erp-error" role="alert"></div>`+searchable('Part or finished product','bomOwner',rows)+
+    `<p class="sub" style="margin:6px 0 0">Type a few letters of the name or code, e.g. <b>net 4.5</b> or <b>PT-0</b>, then pick it from the list.</p>`,
+    button('Continue','openBOMOwner(this)','btn-primary'));
+  wirePicks(back);
+  const text=$('[name="bomOwnerSearch"]',back);text.focus();
+  $('[name="bomOwner"]',back).addEventListener('change',e=>{if(e.target.value)openBOMOwner(text);});
 }
 function openBOMOwner(button){
-  const picker=$('[name="bom-owner"]',button.closest('.modal'));
-  if(!picker.reportValidity())return;
-  const [type,id]=JSON.parse(picker.value);
+  const modal=button.closest('.modal'), value=$('[name="bomOwner"]',modal).value;
+  if(!value){$('.erp-error',modal).textContent='Pick a part or product from the list first.';return;}
+  const [type,id]=JSON.parse(value);
   closeModal();
   recipeEdit(type,id);
+}
+/* Read-only look at what is inside a BOM. */
+function recipeView(type,id){
+  const owner=get(state,type,id), recipe=get(state,'recipes',id), isPart=type==='parts';
+  if(!recipe)return toast('This item has no BOM yet.','warn');
+  const body=isPart?table(['Raw material','Formula','Per part','Wastage','Per part incl. wastage','On hand'],recipe.lines.map(l=>{
+      const m=get(state,'materials',l.sku), r=evalFormula(l.formula), per=r.ok?r.value:0, w=Number(l.wastage)||0;
+      return [`<div class="record-media">${recordPicture(m||{})}<div>${cell(m?.name||'Removed material',m?.code||'')}</div></div>`,
+        `<code>${esc(l.formula)}</code>`,esc(qfmt(per,l.unit)),esc(w+'%'),`<strong>${esc(qfmt(per*(1+w/100),l.unit))}</strong>`,
+        esc(m?qfmt(physical(state,m.id),m.unit):'—')];
+    })):table(['Part','Size / colour','Qty per product','Raw materials inside','On hand'],recipe.lines.map(l=>{
+      const part=get(state,'parts',l.partId), sub=get(state,'recipes',l.partId), sku=l.variantId||l.partId;
+      return [`<div class="record-media">${recordPicture(part||{})}<div>${cell(part?.name||'Removed part',part?.code||'')}</div></div>`,
+        esc(l.variantId?label(get(state,'variants',l.variantId)):'—'),`<strong>${esc(qfmt(l.count,part?.unit))}</strong>`,
+        sub?esc(sub.lines.map(x=>get(state,'materials',x.sku)?.name).filter(Boolean).join(', ')):'<span class="sub">No part BOM</span>',
+        esc(qfmt(physical(state,sku),part?.unit))];
+    }));
+  infoModal('BOM · '+label(owner),`<div class="co-hero">${recordPicture(owner,'thumb-record')}<div class="co-hero-main">
+      <div class="co-hero-name">${esc(owner.name)}</div><div class="co-hero-sub">${esc(owner.code)} · ${isPart?'Part → Raw materials':'Product → Parts'}
+      ${chip(recipe.approved?'Approved':'Review required')}</div></div></div>`+
+    note(isPart?'Quantities are for one part. Wastage is added on top.':'Quantities are for one complete product.')+
+    panel((isPart?'Raw materials':'Parts')+' in this BOM · '+recipe.lines.length+' lines',body),
+    small('Edit BOM',`closeModal();recipeEdit(${escapeArg(type)},${escapeArg(id)})`));
 }
 function recipePage(){
   const rows=[...state.parts.map(x=>['parts',x]),...state.products.map(x=>['products',x])];
@@ -4288,7 +4483,8 @@ function recipePage(){
       const options=name=>r[name]||[...new Set(variants.map(v=>v[name]).filter(Boolean))].join(', ')||'—';
       return [cell(r.name,r.code),esc(isPart?'Part → Raw Materials':'Product → Parts'),esc(options('size')),esc(options('color')),
         String(recipe?.lines.length||0),chip(recipe?(recipe.approved?'Approved':'Review required'):'Missing'),
-        actionGroup(small(recipe?'Edit BOM':'Create BOM',`recipeEdit(${escapeArg(type)},${escapeArg(r.id)})`),
+        actionGroup(recipe?button('View',`recipeView(${escapeArg(type)},${escapeArg(r.id)})`,'btn-sm btn-view','search'):'',
+          small(recipe?'Edit BOM':'Create BOM',`recipeEdit(${escapeArg(type)},${escapeArg(r.id)})`),
           recipe?dangerSmall('Delete BOM',`deleteRecipe(${escapeArg(r.id)})`):'')];
     }));
 }
@@ -4299,7 +4495,8 @@ function recipeEdit(type,id){
   const row=get(state,type,id), isPart=type==='parts', old=get(state,'recipes',id);
   const form=formModal((old?'Edit ':'Create ')+(isPart?'Part BOM':'Product BOM')+' · '+label(row),
     (old?.approved===false?note('Legacy recipe. Verify every formula and wastage value before approving it.','warn'):'')+
-    note(isPart?'Enter raw material consumption per one part. The line unit follows the material stock unit.':'Enter the part quantities for one complete product.')+
+    note((isPart?'Enter raw material consumption per one part. The line unit follows the material stock unit.':'Enter the part quantities for one complete product.')+
+      ' A new empty line appears by itself once you fill the last one — empty lines are ignored.')+
     '<div data-recipe></div><div style="margin-top:12px">'+tick('Approve for operational use','approve',old?.approved??!old)+'</div>',async f=>{
     const raw=lines().map(l=>isPart?{sku:fieldValue(l,'sku'),unit:unit(fieldValue(l,'unit')),formula:fieldValue(l,'formula'),
       wastage:fieldValue(l,'wastage')||0,notes:fieldValue(l,'notes')}:{partId:fieldValue(l,'part'),variantId:fieldValue(l,'variant'),count:fieldValue(l,'count')});
@@ -4328,7 +4525,7 @@ function recipeEdit(type,id){
     ${searchable('Part',n+'_part',pair(state.parts.filter(x=>x.active!==false||x.id===l.partId)),l.partId)}
     ${number('Quantity per product',n+'_count',l.count,0.000001)}
     ${field('Size / color SKU',`<select class="sel" name="${n}_variant" data-bom-variant>${bomVariantOptions(l.partId,l.variantId)}</select>`,true)}
-    </div>`,old?.lines?.length?old.lines:[{}],'Add Line');
+    </div>`,old?.lines||[],'Add Line',{min:2,filled:line=>!!fieldValue(line,isPart?'sku':'part')});
   if(!isPart)form.addEventListener('change',e=>{
     if(e.target.name?.endsWith('_part')){
       const picker=$('[data-bom-variant]',e.target.closest('fieldset'));
@@ -4683,7 +4880,7 @@ function eventLinks(s,e){
 function eventView(id){
   const e=get(state,'events',id);
   const linked=eventLinks(state,e);
-  infoModal(e.type,kv([['Recorded',stamp(e.at)],['By',e.by],['Reference / reason',e.note],
+  infoModal(evType(e.type),kv([['Recorded',stamp(e.at)],['By',e.by],['Reference / reason',e.note],
     ['Related company',linked.company],['Related site',linked.site],
     ['Processing company',linked.processor],['Processing site',linked.processingSite],['Related document',linked.document],
     ['System count',e.systemCount],['Physical count',e.physicalCount]])+
@@ -4701,7 +4898,7 @@ function eventsTable(events=state.events){
   return table(['Date','Event','Items / SKUs','Location','Change','Related company / site','Reference','Actions'],events.slice().sort(dateSort).map(e=>{
     const linked=eventLinks(state,e);
     return [
-    esc(stamp(e.at)),esc(e.type),esc([...new Set(e.lines.map(l=>labelOf(state,l.sku)))].join(', ')),
+    esc(stamp(e.at)),esc(evType(e.type)),esc([...new Set(e.lines.map(l=>labelOf(state,l.sku)))].join(', ')),
     esc(e.lines.length===2&&e.type==='Transfer Stock'?e.lines.map(l=>locName(state,l.location)).join(' → '):
       [...new Set(e.lines.map(l=>locName(state,l.location)))].join(', ')),
       esc(e.lines.map(l=>(l.delta>0?'+':'')+qfmt(l.delta,item(state,l.sku)?.unit)).join(', ')),
@@ -4722,8 +4919,8 @@ const PR={
 function purchaseEdit(id,initial){
   const old=get(state,'purchases',id);
   const form=formModal(old?'Edit Purchase Request':'New Purchase Request',`<div class="form-grid">
-    ${searchable('Supplier','supplier',pair(current(state,'suppliers')),old?.supplierId)}
-    ${select('Supplier site (optional)','supplierSite',[],'',false,'No linked site')}
+    ${searchable('Vendor','supplier',pair(current(state,'suppliers')),old?.supplierId)}
+    ${select('Vendor site (optional)','supplierSite',[],'',false,'No linked site')}
     ${select('Receiving custody location','location',locOptions(),old?.location||'')}
     ${area('Reference / notes','notes',old?.notes)}</div><div data-purchase></div>`,async f=>{
       const items=lines().map(l=>({sku:fieldValue(l,'sku'),qty:qty(fieldValue(l,'qty')),received:0}));
@@ -4761,7 +4958,7 @@ function purchaseStatus(id,status){
 }
 function receiptEdit(id){
   const p=get(state,'purchases',id), eventId=key();
-  formModal('Supplier Receipt · '+p.no,note('Receiving into '+locName(state,p.location))+
+  formModal('Vendor Receipt · '+p.no,note('Receiving into '+locName(state,p.location))+
     input('Delivery note / reference','ref','',{required:true})+p.lines.map((l,i)=>{
       const m=item(state,l.sku);
       return number(label(m)+' · Outstanding '+qfmt(l.qty-l.received,m.unit),'qty'+i,0);
@@ -4785,13 +4982,13 @@ function receiptEdit(id){
       r.lines.forEach((l,i)=>l.received+=deltas[i]);
       if(r.lines.every(l=>l.qty-l.received<=EPS))r.status='Received';
     });
-    return 'Supplier receipt confirmed.';
+    return 'Vendor receipt confirmed.';
   },{text:'Confirm Receipt'});
 }
 function purchaseView(id){
   const p=get(state,'purchases',id);
-  infoModal(p.no,kv([['Status',p.status],['Supplier',label(get(state,'suppliers',p.supplierId))],
-    ['Supplier site',get(state,'locations',p.supplierSiteId)?.name],
+  infoModal(p.no,kv([['Status',p.status],['Vendor',label(get(state,'suppliers',p.supplierId))],
+    ['Vendor site',get(state,'locations',p.supplierSiteId)?.name],
     ['Receiving location',locName(state,p.location)],['Notes',p.notes]])+
     textTable(['Material / SKU','Ordered','Received','Outstanding'],p.lines.map(l=>{
       const unit=item(state,l.sku)?.unit;
@@ -4801,7 +4998,7 @@ function purchaseView(id){
 }
 function purchasingPage(){
   return head('Operations','Purchasing',button('New Purchase Request','purchaseEdit()','btn-primary','plus'))+
-    panel('Purchase requests',table(['Request','Supplier','Supplier site','Receiving location','Status','Actions'],state.purchases.slice().sort(dateSort).map(p=>[
+    panel('Purchase requests',table(['Request','Vendor','Vendor site','Receiving location','Status','Actions'],state.purchases.slice().sort(dateSort).map(p=>[
       esc(p.no),esc(label(get(state,'suppliers',p.supplierId))),esc(get(state,'locations',p.supplierSiteId)?.name),esc(locName(state,p.location)),
       chip(p.status==='Ordered'&&p.lines.some(l=>l.received>0)?'Partially received':p.status),
       actionGroup(small('View',`purchaseView(${escapeArg(p.id)})`),
@@ -4810,8 +5007,8 @@ function purchasingPage(){
         p.status==='Ordered'?small('Record Receipt',`receiptEdit(${escapeArg(p.id)})`):'',
         ['Draft','Ordered'].includes(p.status)?small('Cancel',`purchaseStatus(${escapeArg(p.id)},'Cancelled')`):'',
         p.lines.every(line=>line.received===0)?dangerSmall('Delete',`deleteOperation('purchases',${escapeArg(p.id)})`):'')
-    ])))+panel('Supplier receipts',eventsTable(state.events.filter(e=>e.type==='Supplier receipt')))+
-    legacySection('purchaseRequests','Legacy purchase requests')+legacySection('receipts','Legacy supplier receipts');
+    ])))+panel('Vendor receipts',eventsTable(state.events.filter(e=>e.type==='Supplier receipt')))+
+    legacySection('purchaseRequests','Legacy purchase requests')+legacySection('receipts','Legacy vendor receipts');
 }
 
 /* Packing and dispatch */
@@ -5093,9 +5290,7 @@ function salesPage(){
 
 /* Dashboard and offline reports */
 function warningRows(){
-  const low=current(state,'materials').filter(m=>Number(m.safety)>0&&physical(state,m.id)<Number(m.safety)-EPS).map(m=>[
-    label(m),'Safety stock','All custody locations',qfmt(Number(m.safety)-physical(state,m.id),m.unit)
-  ]);
+  const low=[];
   const req=state.orders.filter(x=>x.status==='Released').concat(state.plans.filter(x=>x.status==='Reserved'));
   const seen=new Set();
   for(const p of req)for(const l of p.materials){
@@ -5124,26 +5319,6 @@ function skuSummary(rows){
     return found.length?found.map(b=>[label(r),locName(state,b.location),qfmt(b.qty,r.unit)]):[[label(r),'—',qfmt(0,r.unit)]];
   }));
 }
-function dashboard(){
-  const warnings=warningRows(), orders=state.orders.filter(o=>['Draft','Released'].includes(o.status));
-  const stats=['customers','suppliers','processors','materials','parts','products'].map(x=>[TITLES[x],current(state,x).length,x,'Active records']);
-  stats.push(['Open Production Orders',orders.length,'production','Draft or released'],['Stock Warnings',warnings.length,'reports','Safety stock and reserved shortages']);
-  return head('Overview','Dashboard',link('movement','View Stock'))+
-    `<div class="kpis">${stats.map(([title,value,r,sub],i)=>`<button type="button" class="kpi erp-kpi ${r==='reports'&&value?'k-red':r==='production'?'k-yellow':['k-ink','k-ok','k-red','k-ink'][i%4]}"
-      onclick="App.go(${escapeArg(r)})"><div class="kl">${esc(title)}</div><div class="kv">${value}</div><div class="kf">${esc(sub)}</div></button>`).join('')}</div>`+
-    (state.reviews.some(r=>!r.resolved)?note('Legacy data is available under Settings & Data for review.','warn'):'')+
-    `<div class="grid cols-2">${panel('Raw material stock by category',materialSummary())}
-      ${panel('Part stock by category and location',partSummary())}</div>`+
-    (state.sales.some(o=>SALES_OPEN.includes(o.status))?panel('Open sales orders',table(['Order','Customer','Requested delivery','Delivered','Status','Actions'],
-      state.sales.filter(o=>SALES_OPEN.includes(o.status)).sort((a,b)=>(a.due||'9999').localeCompare(b.due||'9999')).slice(0,8).map(o=>[
-        esc(o.no),esc(get(state,'customers',o.customerId)?.name),esc(o.due?fmtDate(o.due):'—'),esc(salesProgress(o)+'%'),chip(o.status),
-        small('View',`salesView(${escapeArg(o.id)})`)]))):'')+
-    panel('Finished product and variant stock',skuSummary([...current(state,'products'),...current(state,'variants')]))+
-    panel('Production status',textTable(['Draft','Released','Completed','Cancelled'],
-      [['Draft','Released','Completed','Cancelled'].map(status=>state.orders.filter(o=>o.status===status).length)]))+
-    panel('Stock alerts',textTable(['Item','Alert','Location','Shortfall'],warnings,'No current stock warnings.'))+
-    panel('Recent stock movements',eventsTable(state.events.slice().sort(dateSort).slice(0,8)));
-}
 function partSummary(){
   const rows=stockRows(state), totals=new Map();
   for(const l of rows){
@@ -5157,9 +5332,9 @@ function partSummary(){
     const [c,l,u]=JSON.parse(k);return [c,locName(state,l),v.keys.size,qfmt(v.qty,u)];
   }));
 }
-function pdf(title,columns,rows){
+function pdf(title,columns,rows,{landscape=false}={}){
   if(!PDFR._ok())return;
-  const doc=PDFR._doc(), drawBrand=PDFR._hf(doc);
+  const doc=PDFR._doc(landscape?'landscape':'portrait'), drawBrand=PDFR._hf(doc);
   doc.autoTable({
     startY:94,head:[columns],body:rows.map(row=>row.map(x=>String(x??''))),
     margin:{top:94,bottom:45,left:40,right:40},styles:{fontSize:8,overflow:'linebreak'},headStyles:{fillColor:[30,35,43]},
@@ -5208,7 +5383,7 @@ function recordPDF(type,id){
     columns=['Material / SKU','Ordered','Received','Outstanding'];
     lines=row.lines.map(l=>[labelOf(state,l.sku),l.qty,l.received,l.qty-l.received]);
     lines.unshift([label(get(state,'suppliers',row.supplierId)),locName(state,row.location),row.status,'']);
-    if(row.supplierSiteId)lines.splice(1,0,['Supplier site',get(state,'locations',row.supplierSiteId)?.name,'','']);
+    if(row.supplierSiteId)lines.splice(1,0,['Vendor site',get(state,'locations',row.supplierSiteId)?.name,'','']);
   }else{
     columns=['Part SKU','Standard','Adjusted','Delivery'];
     lines=row.parts.map(l=>[labelOf(state,l.sku),l.standard,l.qty,'']);
@@ -5229,7 +5404,7 @@ function reportPage(){
     button('Stock CSV',"csv(STOCK_COLUMNS,balanceData(),'stock')",'','download'),
     button('Ledger CSV','ledgerCSV()','','download'))+
     panel('Stock status',textTable(STOCK_COLUMNS,balanceData()))+
-    panel('Shortages and safety stock',textTable(['Item','Alert','Location','Shortfall'],warningRows(),'No current stock warnings.'))+
+    panel('Reserved demand shortages',textTable(['Item','Alert','Location','Shortfall'],warningRows(),'No current stock warnings.'))+
     panel('Movement ledger',eventsTable());
 }
 function ledgerCSV(){
@@ -5476,6 +5651,10 @@ function validateState(s){
     typeof j.destinationSnapshot?.name==='string'&&(j.trackAtDestination==null||typeof j.trackAtDestination==='boolean')&&
     (!j.trackAtDestination||j.location!==j.destination)&&
     ['Open','Partially delivered','Delivered','Cancelled'].includes(j.status),'Invalid dispatch job.');
+  for(const d of s.drivers)need(typeof d.name==='string'&&d.name.trim()&&typeof d.hasPapers==='boolean','Invalid driver.');
+  for(const t of s.trips)need(typeof t.no==='string'&&get(s,'drivers',t.driverId)&&(!t.customerId||get(s,'customers',t.customerId))&&
+    (!t.jobId||get(s,'jobs',t.jobId))&&Number.isFinite(t.km)&&t.km>=0&&
+    ['Next','On the way','Delivered','Cancelled'].includes(t.status),'Invalid delivery trip.');
   for(const o of s.sales)need(typeof o.no==='string'&&get(s,'customers',o.customerId)&&linkedSite('customers',o.customerId,o.siteId)&&
     Array.isArray(o.lines)&&o.lines.length&&new Set(o.lines.map(l=>l.sku)).size===o.lines.length&&
     o.lines.every(l=>sku(l.sku)&&component(l.qty,sku(l.sku).unit)&&Number.isFinite(l.price)&&l.price>=0&&
@@ -5632,6 +5811,594 @@ function toolsPage(){
   ].map(([r,icon,desc])=>panel(TITLES[r],`<div class="card-body"><p style="margin-top:0">${esc(desc)}</p>
     ${button('Open '+TITLES[r],`App.go(${escapeArg(r)})`,'btn-sm',icon)}</div>`)).join('')}</div>`;
 }
+/* ---------------- Excel (.xlsx) export: a small, dependency-free writer ---------------- */
+const XLSX={
+  _crc:null,
+  crc(bytes){
+    const t=this._crc||(this._crc=Array.from({length:256},(_,n)=>{let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;return c>>>0;}));
+    let c=0xFFFFFFFF;for(const b of bytes)c=t[(c^b)&255]^(c>>>8);return (c^0xFFFFFFFF)>>>0;
+  },
+  zip(files){
+    const enc=new TextEncoder(), parts=[], central=[];let offset=0;
+    for(const f of files){
+      const name=enc.encode(f.name), data=enc.encode(f.data), crc=this.crc(data);
+      const local=new DataView(new ArrayBuffer(30));
+      local.setUint32(0,0x04034b50,true);local.setUint16(4,20,true);local.setUint16(6,0x0800,true);local.setUint16(12,0x21,true);
+      local.setUint32(14,crc,true);local.setUint32(18,data.length,true);local.setUint32(22,data.length,true);local.setUint16(26,name.length,true);
+      parts.push(new Uint8Array(local.buffer),name,data);
+      const c=new DataView(new ArrayBuffer(46));
+      c.setUint32(0,0x02014b50,true);c.setUint16(4,20,true);c.setUint16(6,20,true);c.setUint16(8,0x0800,true);c.setUint16(14,0x21,true);
+      c.setUint32(16,crc,true);c.setUint32(20,data.length,true);c.setUint32(24,data.length,true);c.setUint16(28,name.length,true);c.setUint32(42,offset,true);
+      central.push(new Uint8Array(c.buffer),name);
+      offset+=30+name.length+data.length;
+    }
+    const size=central.reduce((n,p)=>n+p.length,0), end=new DataView(new ArrayBuffer(22));
+    end.setUint32(0,0x06054b50,true);end.setUint16(8,files.length,true);end.setUint16(10,files.length,true);end.setUint32(12,size,true);end.setUint32(16,offset,true);
+    return new Blob([...parts,...central,new Uint8Array(end.buffer)],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  },
+  col(i){let s='';i++;while(i){const m=(i-1)%26;s=String.fromCharCode(65+m)+s;i=Math.floor((i-1)/26);}return s;},
+  x(v){return String(v??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,'');},
+  sheet(columns,rows){
+    const all=[columns,...rows], last=this.col(columns.length-1)+all.length;
+    const widths=columns.map((_,i)=>Math.min(48,Math.max(9,...all.map(r=>String(r[i]??'').length))+2));
+    const cell=(v,r,c)=>{const ref=this.col(c)+(r+1), s=r?'':' s="1"';
+      return typeof v==='number'&&Number.isFinite(v)?`<c r="${ref}"${s}><v>${v}</v></c>`:
+        `<c r="${ref}" t="inlineStr"${s}><is><t xml:space="preserve">${this.x(v)}</t></is></c>`;};
+    return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'+
+      '<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>'+
+      `<cols>${widths.map((w,i)=>`<col min="${i+1}" max="${i+1}" width="${w}" customWidth="1"/>`).join('')}</cols>`+
+      `<sheetData>${all.map((r,ri)=>`<row r="${ri+1}">${r.map((v,ci)=>cell(v,ri,ci)).join('')}</row>`).join('')}</sheetData>`+
+      `<autoFilter ref="A1:${last}"/></worksheet>`;
+  },
+  save(filename,sheets){
+    const names=sheets.map((s,i)=>(String(s.name).replace(/[\[\]:*?\/\\]/g,' ').slice(0,31).trim()||'Sheet'+(i+1)));
+    const ns='http://schemas.openxmlformats.org/', head='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
+    const files=[
+      {name:'[Content_Types].xml',data:head+`<Types xmlns="${ns}package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${sheets.map((_,i)=>`<Override PartName="/xl/worksheets/sheet${i+1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('')}</Types>`},
+      {name:'_rels/.rels',data:head+`<Relationships xmlns="${ns}package/2006/relationships"><Relationship Id="rId1" Type="${ns}officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`},
+      {name:'xl/workbook.xml',data:head+`<workbook xmlns="${ns}spreadsheetml/2006/main" xmlns:r="${ns}officeDocument/2006/relationships"><sheets>${names.map((n,i)=>`<sheet name="${this.x(n)}" sheetId="${i+1}" r:id="rId${i+1}"/>`).join('')}</sheets><definedNames>${sheets.map((s,i)=>`<definedName name="_xlnm._FilterDatabase" localSheetId="${i}" hidden="1">'${this.x(names[i].replace(/'/g,"''"))}'!$A$1:$${this.col(s.columns.length-1)}$${s.rows.length+1}</definedName>`).join('')}</definedNames></workbook>`},
+      {name:'xl/_rels/workbook.xml.rels',data:head+`<Relationships xmlns="${ns}package/2006/relationships">${sheets.map((_,i)=>`<Relationship Id="rId${i+1}" Type="${ns}officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i+1}.xml"/>`).join('')}<Relationship Id="rId${sheets.length+1}" Type="${ns}officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`},
+      {name:'xl/styles.xml',data:head+`<styleSheet xmlns="${ns}spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFC00605"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`},
+      ...sheets.map((s,i)=>({name:`xl/worksheets/sheet${i+1}.xml`,data:this.sheet(s.columns,s.rows)}))
+    ];
+    download(filename.replace(/[^a-z0-9_.-]+/gi,'_')+'.xlsx',this.zip(files),'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  }
+};
+
+/* ---------------- Drivers & deliveries ----------------
+   A delivery trip can only go out with a driver whose official papers are on file and not expired. */
+const DRIVER_KINDS=['AMBS driver','Outside driver','Client pickup'];
+const TRIP_STATUS=['Next','On the way','Delivered','Cancelled'];
+const TRIP_SYSTEMS=['Safety Net','Edge Protection','Vertical Net','Fabrication','Hand Rail','Hoist Gate','Shaft Gate'];
+const PAPER_STATUS=['Pending','Signed & returned','Missing'];
+const DRIVER_PAPERS=[['licenseExpiry','Driving licence','licenseNo'],['idExpiry','Emirates ID','emiratesId'],['vehicleExpiry','Vehicle registration (Mulkiya)','vehiclePlate']];
+const monthKey=d=>String(d||'').slice(0,7);
+const thisMonth=()=>todayISO().slice(0,7);
+function papersIssues(d,day=todayISO()){
+  const issues=[];
+  if(!d)return ['Driver not found'];
+  if(!d.hasPapers)issues.push('Official papers not on file');
+  for(const [field,name] of DRIVER_PAPERS)if(d[field]&&d[field]<day)issues.push(name+' expired '+fmtDate(d[field]));
+  return issues;
+}
+const papersOk=d=>!papersIssues(d).length;
+function papersSoon(d){
+  const soon=new Date(Date.now()+30*864e5).toISOString().slice(0,10), day=todayISO();
+  return DRIVER_PAPERS.filter(([field])=>d[field]&&d[field]>=day&&d[field]<=soon).map(([field,name])=>name+' expires '+fmtDate(d[field]));
+}
+function papersChip(d){
+  const issues=papersIssues(d);
+  if(issues.length)return `<span data-tip="${esc(issues.join(' · '))}">${statusChip('bad','Papers missing')}</span>`;
+  const soon=papersSoon(d);
+  return soon.length?`<span data-tip="${esc(soon.join(' · '))}">${statusChip('warn','Expiring soon')}</span>`:statusChip('ok','Papers OK');
+}
+const driverTrips=id=>state.trips.filter(t=>t.driverId===id);
+const tripKm=trips=>trips.filter(t=>t.status!=='Cancelled').reduce((n,t)=>n+(Number(t.km)||0),0);
+function driverWhere(d){
+  const moving=driverTrips(d.id).find(t=>t.status==='On the way');
+  return moving?{text:'On the way → '+(moving.location||moving.customerName||'customer'),kind:'info',trip:moving}:{text:'At base / available',kind:'neutral'};
+}
+function nextTripNo(s,date){
+  const ym=(date||todayISO()).slice(0,7), prefix='PL'+ym.replace('-','-')+'-';
+  const used=new Set(s.trips.map(t=>t.no));
+  let n=s.trips.filter(t=>String(t.no).startsWith(prefix)).length+1, no;
+  do{no=prefix+String(n++).padStart(3,'0');}while(used.has(no));
+  return no;
+}
+function driverEdit(id){
+  const old=get(state,'drivers',id), d=old||{};
+  const form=formModal((old?'Edit':'Add')+' driver',`<div class="form-grid">
+    ${input('Driver name','name',d.name,{extra:'placeholder="e.g. Shabir Ahmad"'})}
+    ${phoneField('Phone number','phone',d.phone)}
+    ${select('Driver type','kind',same(DRIVER_KINDS),d.kind||DRIVER_KINDS[0],false)}
+    ${input('Vehicle plate','vehiclePlate',d.vehiclePlate,{extra:'placeholder="e.g. Dubai F 45231"'})}
+    ${suggestedInput('Vehicle type','vehicleType',d.vehicleType||'',['Pickup','3-ton truck','7-ton truck','Flatbed trailer','Van','Crane truck'])}
+    ${input('Vehicle registration (Mulkiya) expiry','vehicleExpiry',d.vehicleExpiry,{type:'date'})}
+    </div><h4 class="erp-sub-head">${ic('idcard')} Official papers</h4>
+    ${note('Nothing can be delivered with a driver until the official papers are on file and none of them has expired.','warn')}
+    <div class="form-grid">
+    ${input('Driving licence number','licenseNo',d.licenseNo,{extra:'placeholder="e.g. 1234567"'})}
+    ${input('Driving licence expiry','licenseExpiry',d.licenseExpiry,{type:'date'})}
+    ${input('Emirates ID number','emiratesId',d.emiratesId,{extra:'placeholder="e.g. 784-1990-1234567-1"'})}
+    ${input('Emirates ID expiry','idExpiry',d.idExpiry,{type:'date'})}
+    <div class="field full papers-confirm"><label><input name="hasPapers" type="checkbox" ${d.hasPapers?'checked':''}>
+      <span><b>Official papers checked and on file</b><small>Licence, Emirates ID and vehicle registration were seen and copies are kept.</small></span></label></div>
+    ${area('Notes','notes',d.notes)}</div>`,async f=>{
+    const data={...old,id:id||key(),name:valOf(f,'name'),phone:readPhone(f,'phone'),kind:valOf(f,'kind')||DRIVER_KINDS[0],
+      vehiclePlate:valOf(f,'vehiclePlate'),vehicleType:valOf(f,'vehicleType'),vehicleExpiry:valOf(f,'vehicleExpiry'),
+      licenseNo:valOf(f,'licenseNo'),licenseExpiry:valOf(f,'licenseExpiry'),emiratesId:valOf(f,'emiratesId'),idExpiry:valOf(f,'idExpiry'),
+      hasPapers:checked(f,'hasPapers'),notes:valOf(f,'notes'),active:old?.active!==false};
+    need(data.name,'Enter the driver’s name.');
+    await commit(s=>{
+      need(!old||sameCloudRecord(get(s,'drivers',data.id),old),'This driver changed. Reopen it before saving.');
+      need(!s.drivers.some(x=>x.id!==data.id&&x.name.trim().toLowerCase()===data.name.toLowerCase()),'A driver with this name already exists.');
+      add(s.drivers,{...data,at:now()});
+    });
+    const issues=papersIssues(data);
+    return issues.length?'Saved — this driver cannot deliver yet: '+issues[0]+'.':'Driver saved.';
+  },{text:old?'Save changes':'Save driver'});
+  return form;
+}
+function deleteDriver(id){
+  const d=get(state,'drivers',id);
+  if(!d)return;
+  approval('Delete '+d.name,'Permanently remove this driver. Drivers with recorded trips cannot be deleted.',s=>{
+    need(!s.trips.some(t=>t.driverId===id),'This driver has trips on record and cannot be deleted.');
+    s.drivers=s.drivers.filter(x=>x.id!==id);
+  },'Delete');
+}
+function tripEdit(id,preset={}){
+  const old=get(state,'trips',id), t=old||{date:todayISO(),from:'AMBS store',priority:'Normal',status:'Next',paperStatus:'Pending',...preset};
+  if(!state.drivers.length){
+    return infoModal('New delivery trip',note('Add a driver first. Every delivery needs a driver with official papers.','warn'),
+      button('Add driver','closeModal();driverEdit()','btn-primary','plus'));
+  }
+  const drivers=state.drivers.filter(d=>d.active!==false||d.id===t.driverId);
+  const jobs=state.jobs.filter(j=>['Open','Partially delivered'].includes(j.status)||j.id===t.jobId);
+  const form=formModal(old?'Edit trip '+old.no:'New delivery trip',`<div class="trip-papers" data-papers></div><div class="form-grid">
+    ${select('Driver','driverId',drivers.map(d=>[d.id,d.name+(d.vehiclePlate?' · '+d.vehiclePlate:'')+(papersOk(d)?'':'  ⚠ papers missing')]),t.driverId||'',false,'Choose a driver…')}
+    ${input('Vehicle','vehicle',t.vehicle,{extra:'placeholder="Filled from the driver, e.g. Dubai F 45231"'})}
+    ${searchable('Customer','customer',pair(current(state,'customers').concat(t.customerId&&!current(state,'customers').some(c=>c.id===t.customerId)?[get(state,'customers',t.customerId)].filter(Boolean):[]),c=>c.name+(c.code?' · '+c.code:'')),t.customerId||'')}
+    ${input('Project','project',t.project,{extra:'placeholder="e.g. Skyflame 2"'})}
+    ${input('From','from',t.from,{extra:'placeholder="e.g. AMBS store, DIP"'})}
+    ${input('Delivery location','location',t.location,{extra:'placeholder="e.g. Dubai Hills, Building 3, Gate 2"'})}
+    ${input('Distance (km)','km',t.km??'',{type:'number',extra:'min="0" step="0.1" placeholder="e.g. 38"'})}
+    ${input('Packing no.','no',t.no||nextTripNo(state,t.date),{extra:'placeholder="e.g. PL2026-11-001"'})}
+    ${input('Trip date','date',t.date,{type:'date'})}
+    ${select('Priority','priority',same(['Normal','Urgent']),t.priority||'Normal',false)}
+    ${suggestedInput('System','system',t.system||'',TRIP_SYSTEMS)}
+    ${input('Short description','description',t.description,{extra:'placeholder="e.g. Full safety net system, 13 sets"'})}
+    ${select('Status','status',same(TRIP_STATUS),t.status||'Next',false)}
+    ${input('Delivery date','deliveredAt',t.deliveredAt,{type:'date'})}
+    ${select('Delivery paper status','paperStatus',same(PAPER_STATUS),t.paperStatus||'Pending',false)}
+    ${jobs.length?select('Dispatch job (optional)','jobId',jobs.map(j=>[j.id,j.no+' · '+(get(state,'customers',j.customerId)?.name||'')]),t.jobId||'',false,'Not linked'):''}
+    ${area('Notes','notes',t.notes)}</div>`,async f=>{
+    const customerId=valOf(f,'customer'), driverId=valOf(f,'driverId'), status=valOf(f,'status')||'Next';
+    const kmRaw=valOf(f,'km'), km=kmRaw===''?0:qty(kmRaw,'Distance',true);
+    const data={...old,id:id||key(),no:valOf(f,'no'),date:valOf(f,'date')||todayISO(),driverId,vehicle:valOf(f,'vehicle'),
+      customerId,customerName:customerId?get(state,'customers',customerId)?.name||'':valOf(f,'customerSearch'),
+      project:valOf(f,'project'),from:valOf(f,'from'),location:valOf(f,'location'),km,priority:valOf(f,'priority')||'Normal',
+      system:valOf(f,'system'),description:valOf(f,'description'),status,deliveredAt:valOf(f,'deliveredAt'),
+      paperStatus:valOf(f,'paperStatus')||'Pending',jobId:valOf(f,'jobId'),notes:valOf(f,'notes'),by:old?.by||SET.currentUser};
+    need(driverId,'Choose the driver for this trip.');
+    if(status==='Delivered'&&!data.deliveredAt)data.deliveredAt=todayISO();
+    await commit(s=>{
+      need(!old||sameCloudRecord(get(s,'trips',data.id),old),'This trip changed. Reopen it before saving.');
+      const driver=get(s,'drivers',driverId);
+      checkTripDriver(driver,status,old?.status);
+      if(!data.no)data.no=nextTripNo(s,data.date);
+      need(!s.trips.some(x=>x.id!==data.id&&x.no===data.no),'This packing number is already used by another trip.');
+      if(data.customerId)need(get(s,'customers',data.customerId),'Choose a customer from the list.');
+      if(data.jobId)need(get(s,'jobs',data.jobId),'Choose a valid dispatch job.');
+      add(s.trips,{...data,at:old?.at||now(),updated:now()});
+    });
+    return old?'Trip saved.':'Trip '+data.no+' created.';
+  },{text:old?'Save trip':'Create trip'});
+  const showPapers=()=>{
+    const d=get(state,'drivers',form.elements.driverId.value), box=$('[data-papers]',form);
+    if(!d){box.innerHTML='';return;}
+    const issues=papersIssues(d);
+    box.innerHTML=issues.length?note('⛔ '+d.name+' cannot deliver: '+issues.join(' · ')+'. Nothing will be delivered with this driver until the papers are complete.','bad'):
+      note('✓ '+d.name+' has official papers on file'+(papersSoon(d).length?' — '+papersSoon(d).join(', '):'')+'.','ok');
+    const vehicle=form.elements.vehicle;
+    if(!vehicle.value||vehicle.dataset.auto)vehicle.value=[d.vehiclePlate,d.vehicleType].filter(Boolean).join(' · '),vehicle.dataset.auto='1';
+  };
+  form.elements.driverId.addEventListener('change',showPapers);showPapers();
+  form.elements.vehicle.addEventListener('input',e=>delete e.target.dataset.auto);
+  form.elements.customer.addEventListener('change',e=>{
+    const c=get(state,'customers',e.target.value), place=form.elements.location;
+    if(c&&!place.value)place.value=c.address||deliverySite(state,'customers',c.id)?.address||'';
+  });
+  form.elements.date.addEventListener('change',()=>{if(!old)form.elements.no.value=nextTripNo(state,form.elements.date.value);});
+  form.elements.jobId?.addEventListener('change',e=>{
+    const j=get(state,'jobs',e.target.value);if(!j)return;
+    const c=get(state,'customers',j.customerId);
+    if(c){form.elements.customer.value=c.id;form.elements.customerSearch.value=c.name+(c.code?' · '+c.code:'');}
+    if(!form.elements.location.value)form.elements.location.value=[j.destinationSnapshot?.name,j.destinationSnapshot?.address].filter(Boolean).join(', ');
+    if(!form.elements.description.value)form.elements.description.value=labelOf(state,j.productId)+' × '+j.qty;
+  });
+}
+function checkTripDriver(driver,status,previous){
+  need(driver,'Choose a driver for this trip.');
+  const leaving=['Next','On the way'].includes(status)||(status==='Delivered'&&previous!=='Delivered');
+  if(!leaving)return;
+  const issues=papersIssues(driver);
+  need(!issues.length,driver.name+' has no valid official papers ('+issues.join(', ')+'). Nothing can be delivered with this driver until the papers are complete.');
+}
+function tripStatus(id,status){
+  const t=get(state,'trips',id);
+  if(!t)return;
+  approval((status==='On the way'?'Start trip ':'Mark delivered · ')+t.no,
+    status==='On the way'?'The driver is leaving now with this delivery.':'The delivery reached the customer. The delivery date is set to today if empty.',s=>{
+      const trip=get(s,'trips',id);
+      checkTripDriver(get(s,'drivers',trip.driverId),status,trip.status);
+      trip.status=status;trip.updated=now();
+      if(status==='On the way')trip.departedAt=now();
+      if(status==='Delivered'&&!trip.deliveredAt)trip.deliveredAt=todayISO();
+    },status==='On the way'?'Start trip':'Mark delivered');
+}
+function deleteTrip(id){
+  const t=get(state,'trips',id);
+  if(!t)return;
+  approval('Delete trip '+t.no,'Permanently remove this delivery trip from the record.',s=>{s.trips=s.trips.filter(x=>x.id!==id);},'Delete');
+}
+function tripView(id){
+  const t=get(state,'trips',id), d=get(state,'drivers',t.driverId);
+  infoModal('Trip '+t.no,`<div class="co-details">${[
+    ['Status',chip(t.status==='Next'?'Open':t.status==='On the way'?'In progress':t.status)+' '+(t.priority==='Urgent'?statusChip('bad','Urgent'):'')],
+    ['Driver',d?`${esc(d.name)} ${papersChip(d)}`:'—'],['Driver phone',esc(d?.phone||'—')],['Vehicle',esc(t.vehicle||'—')],
+    ['Customer',esc(t.customerName||get(state,'customers',t.customerId)?.name||'—')],['Project',esc(t.project||'—')],
+    ['Route',esc((t.from||'—')+' → '+(t.location||'—'))],['Distance',esc(t.km?nfmt(t.km,1)+' km':'—')],
+    ['Trip date',esc(fmtDate(t.date))],['Delivery date',esc(t.deliveredAt?fmtDate(t.deliveredAt):'—')],
+    ['System',esc(t.system||'—')],['Short description',esc(t.description||'—')],['Delivery papers',esc(t.paperStatus||'—')],
+    ['Dispatch job',esc(get(state,'jobs',t.jobId)?.no||'—')],['Recorded by',esc(t.by||'—')]
+  ].map(([k,v])=>`<div><span>${esc(k)}</span><div>${v}</div></div>`).join('')}</div>`+(t.notes?note(t.notes):''),
+  actionGroup(small('Edit',`closeModal();tripEdit(${escapeArg(id)})`),d?small('Driver',`closeModal();driverView(${escapeArg(d.id)})`):'',
+    dangerSmall('Delete trip',`closeModal();deleteTrip(${escapeArg(id)})`)));
+}
+const TRIP_EXPORT_COLUMNS=['Customer','Project','Packing No.','Date','Status','Priority','System','Short description','Driver name','Driver phone',
+  'Vehicle','From','Delivery location','Distance (km)','Delivery date','Paper status','Driver papers'];
+function tripExportRows(trips){
+  return trips.map(t=>{const d=get(state,'drivers',t.driverId);return [t.customerName||get(state,'customers',t.customerId)?.name||'',t.project||'',t.no,
+    t.date||'',t.status,t.priority||'',t.system||'',t.description||'',d?.name||'',d?.phone||'',t.vehicle||'',t.from||'',t.location||'',
+    Number(t.km)||0,t.deliveredAt||'',t.paperStatus||'',d?(papersIssues(d).join('; ')||'OK'):''];});
+}
+const DRIVER_EXPORT_COLUMNS=['Driver','Type','Phone','Vehicle plate','Vehicle type','Licence no.','Licence expiry','Emirates ID','ID expiry',
+  'Vehicle reg. expiry','Papers on file','Papers status','Trips','Delivered','Total km','Current status'];
+function driverExportRows(drivers){
+  return drivers.map(d=>{const trips=driverTrips(d.id);return [d.name,d.kind||'',d.phone||'',d.vehiclePlate||'',d.vehicleType||'',d.licenseNo||'',
+    d.licenseExpiry||'',d.emiratesId||'',d.idExpiry||'',d.vehicleExpiry||'',d.hasPapers?'Yes':'No',papersIssues(d).join('; ')||'OK',
+    trips.length,trips.filter(t=>t.status==='Delivered').length,Number(tripKm(trips).toFixed(1)),driverWhere(d).text];});
+}
+function exportDeliveries(kind,driverId=''){
+  const trips=driverId?driverTrips(driverId).sort((a,b)=>(b.date||'').localeCompare(a.date||'')):Drv.filtered();
+  const drivers=driverId?[get(state,'drivers',driverId)]:state.drivers;
+  const name=driverId?'Driver_'+drivers[0].name:'Deliveries_'+todayISO();
+  if(kind==='xlsx')return XLSX.save('AMBS_'+name,[{name:'Deliveries',columns:TRIP_EXPORT_COLUMNS,rows:tripExportRows(trips)},
+    {name:'Drivers',columns:DRIVER_EXPORT_COLUMNS,rows:driverExportRows(drivers)}]);
+  const cols=['Packing No.','Date','Customer','Project','System','Status','Driver','Vehicle','Delivery location','Km','Delivered','Papers'];
+  pdf((driverId?'Driver trips · '+drivers[0].name+' · '+(papersOk(drivers[0])?'Papers OK':'PAPERS MISSING'):'Delivery tracking')+' · '+fmtDate(todayISO()),cols,
+    trips.map(t=>[t.no,fmtDate(t.date),t.customerName||'',t.project||'',t.system||'',t.status+(t.priority==='Urgent'?' · URGENT':''),
+      get(state,'drivers',t.driverId)?.name||'',t.vehicle||'',t.location||'',t.km?nfmt(t.km,1):'',t.deliveredAt?fmtDate(t.deliveredAt):'',t.paperStatus||'']),
+    {landscape:true});
+}
+function driverView(id){
+  const d=get(state,'drivers',id), trips=driverTrips(id).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const issues=papersIssues(d), where=driverWhere(d), month=trips.filter(t=>monthKey(t.date)===thisMonth());
+  const tiles=[['route','Trips',trips.length,month.length+' this month'],['pulse','Distance',nfmt(tripKm(trips),1)+' km',nfmt(tripKm(month),1)+' km this month'],
+    ['ok','Delivered',trips.filter(t=>t.status==='Delivered').length,trips.filter(t=>t.status==='Next').length+' waiting'],
+    ['pin','Where now',where.trip?'On the way':'At base',where.trip?(where.trip.location||where.trip.customerName||''):'Available']];
+  infoModal(d.name,`<div class="co-hero"><span class="co-avatar co-initials co-avatar-lg">${esc(initials(d.name))}</span><div class="co-hero-main">
+      <div class="co-hero-name">${esc(d.name)}</div><div class="co-hero-sub">${esc(d.kind||'Driver')} · ${esc(d.phone||'no phone')} ${papersChip(d)}</div></div></div>`+
+    (issues.length?note('⛔ Nothing can be delivered with this driver: '+issues.join(' · ')+'.','bad'):'')+
+    `<div class="co-smart-row">${tiles.map(([icon,l,v,sub])=>`<div class="co-smart">${ic(icon)}<span><b>${esc(v)}</b><small>${esc(l)}</small><em>${esc(sub)}</em></span></div>`).join('')}</div>`+
+    panel('Official papers',table(['Paper','Number','Expiry','Status'],[
+      ['Papers checked & on file','—','—',d.hasPapers?statusChip('ok','Yes'):statusChip('bad','No')],
+      ...DRIVER_PAPERS.map(([field,name,num])=>[esc(name),esc(d[num]||'—'),esc(d[field]?fmtDate(d[field]):'—'),
+        !d[field]?statusChip('neutral','No date'):d[field]<todayISO()?statusChip('bad','Expired'):papersSoon({[field]:d[field]}).length?statusChip('warn','Expires soon'):statusChip('ok','Valid')])]))+
+    panel('Vehicle',kv([['Plate',d.vehiclePlate],['Type',d.vehicleType],['Registration expiry',d.vehicleExpiry?fmtDate(d.vehicleExpiry):'']]))+
+    panel('Trips · '+trips.length,table(['Packing no.','Date','Customer / project','Route','Km','Status','Papers'],trips.map(t=>[
+      `<button type="button" class="link-btn" onclick="closeModal();tripView(${escapeArg(t.id)})">${esc(t.no)}</button>`,esc(fmtDate(t.date)),
+      cell(t.customerName||'—',t.project),esc((t.from||'—')+' → '+(t.location||'—')),esc(t.km?nfmt(t.km,1):'—'),tripChip(t),esc(t.paperStatus||'—')]),
+      'No trips yet.'))+(d.notes?note(d.notes):''),
+    actionGroup(button('PDF',`exportDeliveries('pdf',${escapeArg(id)})`,'btn-sm','pdf'),button('Excel',`exportDeliveries('xlsx',${escapeArg(id)})`,'btn-sm','xls'),
+      small('Edit',`closeModal();driverEdit(${escapeArg(id)})`),
+      issues.length?'':button('New trip',`closeModal();tripEdit('',{driverId:${escapeArg(id)}})`,'btn-sm btn-primary','plus')));
+}
+const tripChip=t=>(t.priority==='Urgent'&&!['Delivered','Cancelled'].includes(t.status)?statusChip('bad','Urgent')+' ':'')+
+  statusChip({Next:'neutral','On the way':'info',Delivered:'ok',Cancelled:'bad'}[t.status]||'neutral',t.status);
+const Drv={
+  f:{q:'',driver:'',status:'',month:'',priority:''},
+  filtered(){
+    const f=this.f, q=searchKey(f.q);
+    return state.trips.filter(t=>(!f.driver||t.driverId===f.driver)&&(!f.status||t.status===f.status)&&(!f.month||monthKey(t.date)===f.month)&&
+      (!f.priority||t.priority===f.priority)&&(!q||searchKey([t.no,t.customerName,t.project,t.system,t.description,t.location,t.vehicle,
+        get(state,'drivers',t.driverId)?.name].join(' ')).includes(q)))
+      .sort((a,b)=>(b.date||'').localeCompare(a.date||'')||String(b.no).localeCompare(String(a.no)));
+  },
+  set(name,value){this.f[name]=value;const box=$('#trip-results');if(box)box.innerHTML=this.results();},
+  results(){
+    const rows=this.filtered();
+    return `<div class="pill-legend" style="margin:0 0 8px">${rows.length} trips · ${esc(nfmt(tripKm(rows),1))} km</div>`+
+      table(['Packing no.','Customer / project','System','Driver / vehicle','Delivery location','Km','Status','Delivery papers','Actions'],rows.map(t=>{
+        const d=get(state,'drivers',t.driverId), args=escapeArg(t.id);
+        return [cell(t.no,fmtDate(t.date)),cell(t.customerName||'—',t.project),cell(t.system||'—',t.description),
+          d?`<button type="button" class="link-btn" onclick="driverView(${escapeArg(d.id)})">${esc(d.name)}</button>${papersOk(d)?'':' '+statusChip('bad','Papers')}<div class="sub">${esc(t.vehicle||'')}</div>`:'—',
+          esc(t.location||'—'),`<span class="num">${esc(t.km?nfmt(t.km,1):'—')}</span>`,
+          tripChip(t)+(t.deliveredAt?`<div class="sub">${esc(fmtDate(t.deliveredAt))}</div>`:''),
+          t.paperStatus==='Signed & returned'?statusChip('ok','Signed'):t.paperStatus==='Missing'?statusChip('bad','Missing'):statusChip('warn','Pending'),
+          actionGroup(small('View',`tripView(${args})`),small('Edit',`tripEdit(${args})`),
+            t.status==='Next'?small('Start',`tripStatus(${args},'On the way')`):'',
+            t.status==='On the way'?small('Delivered',`tripStatus(${args},'Delivered')`):'')];
+      }),'No trips match. Create a delivery trip to start tracking.');
+  }
+};
+function driversPage(){
+  Live.start();
+  const drivers=state.drivers.slice().sort((a,b)=>a.name.localeCompare(b.name)), month=state.trips.filter(t=>monthKey(t.date)===thisMonth()&&t.status!=='Cancelled');
+  const blocked=drivers.filter(d=>d.active!==false&&!papersOk(d)), moving=state.trips.filter(t=>t.status==='On the way');
+  const f=Drv.f, opt=(rows,sel,all)=>`<option value="">${esc(all)}</option>`+rows.map(([v,l])=>`<option value="${esc(v)}" ${v===sel?'selected':''}>${esc(l)}</option>`).join('');
+  return head('Operations',TITLES.drivers,button('PDF','exportDeliveries(\'pdf\')','','pdf'),button('Excel','exportDeliveries(\'xlsx\')','','xls'),
+      button('Add driver','driverEdit()','','plus'),button('New delivery trip','tripEdit()','btn-primary','truck'))+
+    kpiRow([['driver','Drivers',drivers.length,drivers.filter(papersOk).length+' with papers OK','k-ink'],
+      ['alert','Cannot deliver',blocked.length,blocked.length?'Papers missing or expired':'All papers in order',blocked.length?'k-red':'k-ok'],
+      ['truck','On the road now',moving.length,moving.length?moving.map(t=>get(state,'drivers',t.driverId)?.name).filter(Boolean).slice(0,2).join(', '):'No trips moving','k-yellow'],
+      ['pulse','This month',month.length+' trips',nfmt(tripKm(month),1)+' km driven','k-ok']])+
+    (blocked.length?note('⛔ No delivery can go out with: '+blocked.map(d=>d.name+' ('+papersIssues(d)[0]+')').join(' · '),'bad'):'')+
+    panel('Drivers',table(['Driver','Vehicle','Official papers','Where now','Trips','Actions'],drivers.map(d=>{
+      const trips=driverTrips(d.id), last=trips.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''))[0], where=driverWhere(d), args=escapeArg(d.id);
+      return [`<div class="record-media co-media"><span class="co-avatar co-initials co-avatar-sm">${esc(initials(d.name))}</span><div>${cell(d.name,[d.phone,d.kind].filter(Boolean).join(' · '))}</div></div>`,
+        cell(d.vehiclePlate||'—',d.vehicleType),papersChip(d),statusChip(where.kind,where.text),
+        `<span class="co-count">${trips.length}</span> <span class="num">${esc(nfmt(tripKm(trips),1))} km</span><div class="sub">${esc(last?'Last: '+fmtDate(last.date)+' · '+last.no:'No trips yet')}</div>`,
+        actionGroup(button('View',`driverView(${args})`,'btn-sm btn-view','search'),small('Edit',`driverEdit(${args})`),
+          papersOk(d)?small('New trip',`tripEdit('',{driverId:${args}})`):'',dangerSmall('Delete',`deleteDriver(${args})`))];
+    }),'Add your drivers: name, phone, vehicle and official papers.'))+
+    `<section class="card erp-table"><div class="card-head"><div class="card-title">Delivery trips</div></div>
+      <div class="toolbar trip-filters"><div class="search">${ic('search')}<input class="inp" aria-label="Search trips" placeholder="Search packing no., customer, project, driver…"
+        value="${esc(f.q)}" oninput="Drv.set('q',this.value)"></div>
+        <select class="sel" aria-label="Driver" onchange="Drv.set('driver',this.value)">${opt(drivers.map(d=>[d.id,d.name]),f.driver,'All drivers')}</select>
+        <select class="sel" aria-label="Status" onchange="Drv.set('status',this.value)">${opt(same(TRIP_STATUS),f.status,'All statuses')}</select>
+        <select class="sel" aria-label="Priority" onchange="Drv.set('priority',this.value)">${opt(same(['Normal','Urgent']),f.priority,'Any priority')}</select>
+        <input class="inp" type="month" aria-label="Month" value="${esc(f.month)}" onchange="Drv.set('month',this.value)"></div>
+      <div id="trip-results" class="card-body-flush">${Drv.results()}</div></section>`;
+}
+
+/* ---------------- Charts (inline HTML/SVG, hover tooltips via data-tip) ---------------- */
+const VIZ=['var(--viz-1)','var(--viz-2)','var(--viz-3)','var(--viz-4)'];
+function kpiRow(items){
+  return `<div class="kpis kpis-live">${items.map(([icon,title,value,sub,tone,go])=>`<${go?'button type="button"':'div'} class="kpi erp-kpi ${tone||'k-ink'}"${go?` onclick="App.go(${escapeArg(go)})"`:''}>
+    <div class="kl">${ic(icon)}${esc(title)}</div><div class="kv">${esc(value)}</div><div class="kf">${esc(sub)}</div></${go?'button':'div'}>`).join('')}</div>`;
+}
+function hbars(rows,{empty='Nothing to show yet.',color=VIZ[0],fmt=v=>nfmt(v,1)}={}){
+  if(!rows.length)return `<div class="viz-empty">${esc(empty)}</div>`;
+  const max=Math.max(...rows.map(r=>r.value),1);
+  return `<div class="viz-hbars">${rows.map(r=>`<div class="viz-hrow" data-tip="${esc(r.tip||r.label+': '+fmt(r.value))}"${r.go?` onclick="${r.go}" role="button" tabindex="0"`:''}>
+    <div class="viz-hl" title="${esc(r.label)}">${esc(r.label)}</div>
+    <div class="viz-htrack"><span style="width:${Math.max(1.5,r.value/max*100)}%;background:${r.color||color}"></span></div>
+    <div class="viz-hv">${esc(fmt(r.value))}${r.sub?`<small>${esc(r.sub)}</small>`:''}</div></div>`).join('')}</div>`;
+}
+function columns(days,series,{height=170}={}){
+  const max=Math.max(1,...days.map(d=>series.reduce((n,s)=>n+(d[s.key]||0),0)));
+  const nice=Math.ceil(max/4)*4||4, W=100/days.length;
+  const grid=[0,.25,.5,.75,1].map(p=>`<div class="viz-grid" style="bottom:${p*100}%"><span>${nfmt(nice*p,0)}</span></div>`).join('');
+  return `<div class="viz-legend">${series.map(s=>`<span><i style="background:${s.color}"></i>${esc(s.label)}</span>`).join('')}</div>
+    <div class="viz-cols" style="height:${height}px">${grid}<div class="viz-plot">${days.map(d=>{
+      const total=series.reduce((n,s)=>n+(d[s.key]||0),0);
+      return `<div class="viz-col" style="width:${W}%" data-tip="${esc(d.label+' — '+series.map(s=>s.label+' '+(d[s.key]||0)).join(' · '))}">
+        <div class="viz-stack" style="height:${total/nice*100}%">${series.slice().reverse().map(s=>d[s.key]?`<span style="flex:${d[s.key]};background:${s.color}"></span>`:'').join('')}</div></div>`;
+    }).join('')}</div></div>
+    <div class="viz-x">${days.map((d,i)=>`<span style="width:${W}%">${i%2===days.length%2?'':esc(d.short)}</span>`).join('')}</div>`;
+}
+function segbar(parts){
+  const total=parts.reduce((n,p)=>n+p.value,0);
+  if(!total)return `<div class="viz-empty">No records yet.</div>`;
+  return `<div class="viz-seg">${parts.filter(p=>p.value).map(p=>`<span style="flex:${p.value};background:${p.color}" data-tip="${esc(p.label+': '+p.value+' ('+Math.round(p.value/total*100)+'%)')}"></span>`).join('')}</div>
+    <div class="viz-legend viz-legend-v">${parts.map(p=>`<span><i style="background:${p.color}"></i>${esc(p.label)}<b>${p.value}</b></span>`).join('')}</div>`;
+}
+function sparkline(points,{height=60}={}){
+  if(points.length<2)return '';
+  const xs=points.map(p=>p.t), ys=points.map(p=>p.v), x0=Math.min(...xs), x1=Math.max(...xs)||x0+1, y0=Math.min(0,...ys), y1=Math.max(...ys,1);
+  const X=t=>((t-x0)/((x1-x0)||1))*300, Y=v=>height-4-((v-y0)/((y1-y0)||1))*(height-8);
+  const d=points.map((p,i)=>(i?'L':'M')+X(p.t).toFixed(1)+' '+Y(p.v).toFixed(1)).join(' ');
+  return `<svg class="viz-spark" viewBox="0 0 300 ${height}" preserveAspectRatio="none" aria-hidden="true"><path d="${d}" fill="none" stroke="var(--viz-1)" stroke-width="2" vector-effect="non-scaling-stroke"/></svg>`;
+}
+(function tooltips(){
+  let tip;
+  const hide=()=>tip&&(tip.hidden=true);
+  document.addEventListener('mouseover',e=>{
+    const el=e.target.closest?.('[data-tip]');
+    if(!el){hide();return;}
+    tip=tip||Object.assign(document.body.appendChild(document.createElement('div')),{className:'viz-tip',hidden:true});
+    tip.textContent=el.dataset.tip;tip.hidden=false;
+    const r=el.getBoundingClientRect(), w=tip.offsetWidth;
+    tip.style.left=Math.max(8,Math.min(innerWidth-w-8,r.left+r.width/2-w/2))+'px';
+    tip.style.top=Math.max(8,r.top-tip.offsetHeight-8)+'px';
+  });
+  addEventListener('scroll',hide,true);
+})();
+
+/* ---------------- Live tracking: every item, every movement ---------------- */
+const EVENT_LABEL={'Supplier receipt':'Vendor receipt'};
+const evType=t=>EVENT_LABEL[t]||t;
+const skuKind=id=>get(state,'materials',id)?'Raw material':get(state,'parts',id)?'Part':get(state,'products',id)?'Product':get(state,'variants',id)?'Part variant':'Item';
+function ledger(){
+  // Every stock line in time order, with the balance left at that location right after it.
+  const run=new Map(), rows=[];
+  for(const e of state.events.slice().sort((a,b)=>(a.at||'').localeCompare(b.at||''))){
+    const transfer=e.lines.length===2&&e.lines[0].sku===e.lines[1].sku&&e.lines[0].delta===-e.lines[1].delta;
+    e.lines.forEach((l,i)=>{
+      const k=l.sku+'|'+l.location, bal=(run.get(k)||0)+l.delta;run.set(k,bal);
+      rows.push({e,l,bal,other:transfer?e.lines[1-i].location:''});
+    });
+  }
+  return rows;
+}
+const Trk={
+  f:{q:'',kind:'',location:'',type:'',from:'',to:''},
+  set(name,value){this.f[name]=value;const box=$('#track-results');if(box)box.innerHTML=this.results();},
+  reset(){this.f={q:'',kind:'',location:'',type:'',from:'',to:''};App.render();},
+  results(){
+    const f=this.f, q=searchKey(f.q), all=ledger();
+    const match=r=>(!f.kind||skuKind(r.l.sku)===f.kind)&&(!f.location||r.l.location===f.location||r.other===f.location)&&
+      (!f.type||evType(r.e.type)===f.type)&&(!f.from||r.e.at.slice(0,10)>=f.from)&&(!f.to||r.e.at.slice(0,10)<=f.to)&&
+      (!q||searchKey([labelOf(state,r.l.sku),r.e.note,evType(r.e.type),locName(state,r.l.location),eventLinks(state,r.e).company].join(' ')).includes(q));
+    const feed=all.filter(match).reverse();
+    const ids=[...new Set(feed.map(r=>r.l.sku))];
+    // Items with no stock and no movement stay hidden unless someone searches for them by name.
+    const items=[...ids, ...(f.type||f.from||f.to||!q?[]:skus().map(r=>r.id).filter(id=>!ids.includes(id)&&(!f.kind||skuKind(id)===f.kind)&&
+      searchKey(labelOf(state,id)).includes(q)&&!f.location))];
+    const balances=stockRows(state);
+    const itemRows=items.slice(0,200).map(id=>{
+      const it=item(state,id), here=balances.filter(b=>b.sku===id), last=feed.find(r=>r.l.sku===id)||all.slice().reverse().find(r=>r.l.sku===id);
+      const total=here.reduce((n,b)=>n+b.qty,0), moves=feed.filter(r=>r.l.sku===id).length;
+      return [`<div class="record-media">${recordPicture(it||{})}<div>${cell(it?.name||'—',it?.code||'')}</div></div>`,esc(skuKind(id)),
+        `<strong class="num ${total<=EPS?'trk-zero':''}">${esc(qfmt(total,it?.unit))}</strong>`,
+        here.length?here.sort((a,b)=>b.qty-a.qty).slice(0,3).map(b=>`<span class="trk-loc">${ic('pin')}${esc(locName(state,b.location))} <b>${esc(qfmt(b.qty))}</b></span>`).join('')+(here.length>3?`<span class="sub">+${here.length-3} more</span>`:''):'<span class="sub">Not held anywhere</span>',
+        last?cell(evType(last.e.type),stamp(last.e.at)):'<span class="sub">No movements</span>',`<span class="co-count">${moves}</span>`,
+        button('Track',`trackItem(${escapeArg(id)})`,'btn-sm btn-view','route')];
+    });
+    const feedRows=feed.slice(0,250).map(r=>{
+      const it=item(state,r.l.sku), linked=eventLinks(state,r.e), out=r.l.delta<0;
+      return [`<span class="num">${esc(stamp(r.e.at))}</span>`,cell(it?.name||'—',it?.code||''),esc(evType(r.e.type)),
+        esc(r.other?(out?locName(state,r.l.location)+' → '+locName(state,r.other):locName(state,r.other)+' → '+locName(state,r.l.location)):locName(state,r.l.location)),
+        `<strong class="num ${out?'trk-out':'trk-in'}">${out?'':'+'}${esc(qfmt(r.l.delta,it?.unit))}</strong>`,`<span class="num">${esc(qfmt(r.bal))}</span>`,
+        esc([linked.company,linked.site].filter(Boolean).join(' / ')||'—'),esc(r.e.note||linked.document||'—'),esc(r.e.by||'—')];
+    });
+    return `<div class="trk-summary">${[['Items shown',items.length],['Movements',feed.length],['In',feed.filter(r=>r.l.delta>0).length],['Out',feed.filter(r=>r.l.delta<0).length]]
+      .map(([k,v])=>`<span>${esc(k)} <b>${v}</b></span>`).join('')}</div>`+
+      panel('Where every item is now',table(['Item','Type','On hand','Locations','Last movement','Moves','Track'],itemRows,
+        q?'No items match these filters.':'No stock movements yet. Search an item name to look up items that never moved.'))+
+      panel('Movement feed'+(feed.length>250?' · newest 250 of '+feed.length:''),table(['When','Item','Movement','Location / route','Change','Balance there','Company / site','Reference','By'],feedRows,
+        'No movements match these filters.'));
+  }
+};
+function trackingPage(){
+  Live.start();
+  const f=Trk.f, opt=(rows,sel,all)=>`<option value="">${esc(all)}</option>`+rows.map(([v,l])=>`<option value="${esc(v)}" ${v===sel?'selected':''}>${esc(l)}</option>`).join('');
+  const types=[...new Set(state.events.map(e=>evType(e.type)))].sort();
+  const locs=state.locations.filter(l=>l.stock||stockRows(state).some(b=>b.location===l.id)).map(l=>[l.id,locName(state,l.id)]);
+  const moving=state.trips.filter(t=>t.status==='On the way'), today=todayISO();
+  const todayMoves=state.events.filter(e=>(e.at||'').slice(0,10)===today);
+  return head('Overview',TITLES.tracking,liveChip(),button('Export movements','trackExport()','','xls'),button('Clear filters','Trk.reset()','','refresh'))+
+    kpiRow([['layers','Items in stock',new Set(stockRows(state).filter(b=>b.qty>EPS).map(b=>b.sku)).size,'Across '+new Set(stockRows(state).map(b=>b.location)).size+' locations','k-ink'],
+      ['swap','Movements today',todayMoves.length,todayMoves.reduce((n,e)=>n+e.lines.length,0)+' item lines','k-ok'],
+      ['truck','Deliveries on the road',moving.length,moving.length?moving.map(t=>t.no).slice(0,2).join(', '):'Nothing moving','k-yellow','drivers'],
+      ['pulse','All-time movements',state.events.length,'Full history kept','k-ink']])+
+    (moving.length?panel('On the road now',table(['Trip','Driver','Customer','To','Left at'],moving.map(t=>[
+      `<button type="button" class="link-btn" onclick="tripView(${escapeArg(t.id)})">${esc(t.no)}</button>`,esc(get(state,'drivers',t.driverId)?.name||'—'),
+      esc(t.customerName||'—'),esc(t.location||'—'),esc(t.departedAt?stamp(t.departedAt):fmtDate(t.date))]))):'')+
+    `<div class="card trk-filters"><div class="toolbar">
+      <div class="search">${ic('search')}<input class="inp" aria-label="Search items" placeholder="Search item, code, reference, company…" value="${esc(f.q)}" oninput="Trk.set('q',this.value)"></div>
+      <select class="sel" aria-label="Item type" onchange="Trk.set('kind',this.value)">${opt(same(['Raw material','Part','Part variant','Product']),f.kind,'All item types')}</select>
+      <select class="sel" aria-label="Location" onchange="Trk.set('location',this.value)">${opt(locs,f.location,'All locations')}</select>
+      <select class="sel" aria-label="Movement type" onchange="Trk.set('type',this.value)">${opt(same(types),f.type,'All movements')}</select>
+      <label class="trk-date">From <input class="inp" type="date" value="${esc(f.from)}" onchange="Trk.set('from',this.value)"></label>
+      <label class="trk-date">To <input class="inp" type="date" value="${esc(f.to)}" onchange="Trk.set('to',this.value)"></label></div></div>
+    <div id="track-results">${Trk.results()}</div>`;
+}
+function trackExport(){
+  const f=Trk.f, rows=ledger().filter(r=>(!f.from||r.e.at.slice(0,10)>=f.from)&&(!f.to||r.e.at.slice(0,10)<=f.to)).reverse();
+  XLSX.save('AMBS_Movements_'+todayISO(),[{name:'Movements',columns:['Date','Time','Item code','Item','Type','Movement','Location','Other location','Change','Unit','Balance there','Company / site','Reference','By'],
+    rows:rows.map(r=>{const it=item(state,r.l.sku), linked=eventLinks(state,r.e);return [r.e.at.slice(0,10),new Date(r.e.at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}),
+      it?.code||'',it?.name||'',skuKind(r.l.sku),evType(r.e.type),locName(state,r.l.location),r.other?locName(state,r.other):'',r.l.delta,it?.unit||'',
+      Number(r.bal.toFixed(6)),[linked.company,linked.site].filter(Boolean).join(' / '),r.e.note||linked.document||'',r.e.by||''];})},
+    {name:'Stock now',columns:['Item code','Item','Type','Location','Balance','Unit'],rows:stockRows(state).map(b=>{const it=item(state,b.sku);
+      return [it?.code||'',it?.name||'',skuKind(b.sku),locName(state,b.location),Number(b.qty.toFixed(6)),it?.unit||''];})}]);
+}
+function trackItem(id){
+  const it=item(state,id), rows=ledger().filter(r=>r.l.sku===id), here=stockRows(state).filter(b=>b.sku===id);
+  let total=0;const points=rows.map(r=>({t:Date.parse(r.e.at),v:(total+=r.l.delta)}));
+  if(points.length)points.push({t:Date.now(),v:total});
+  infoModal('Track · '+label(it),`<div class="co-hero">${recordPicture(it,'thumb-record')}<div class="co-hero-main"><div class="co-hero-name">${esc(it.name)}</div>
+    <div class="co-hero-sub">${esc(it.code)} · ${esc(skuKind(id))} · on hand <b>${esc(qfmt(total,it.unit))}</b></div></div></div>`+
+    (points.length>1?panel('Total balance over time',`<div class="card-body">${sparkline(points)}<div class="viz-x"><span>${esc(fmtDate(rows[0].e.at.slice(0,10)))}</span><span style="margin-left:auto">Today</span></div></div>`):'')+
+    panel('Where it is now',hbars(here.sort((a,b)=>b.qty-a.qty).map(b=>({label:locName(state,b.location),value:b.qty,tip:locName(state,b.location)+': '+qfmt(b.qty,it.unit)})),
+      {empty:'Not held at any location.',fmt:v=>qfmt(v,it.unit)}))+
+    panel('Every movement · '+rows.length,table(['When','Movement','Location / route','Change','Balance there','Reference','By'],rows.slice().reverse().map(r=>[
+      esc(stamp(r.e.at)),esc(evType(r.e.type)),esc(r.other?locName(state,r.l.delta<0?r.l.location:r.other)+' → '+locName(state,r.l.delta<0?r.other:r.l.location):locName(state,r.l.location)),
+      `<strong class="num ${r.l.delta<0?'trk-out':'trk-in'}">${r.l.delta<0?'':'+'}${esc(qfmt(r.l.delta,it.unit))}</strong>`,esc(qfmt(r.bal)),
+      esc(r.e.note||'—'),esc(r.e.by||'—')]),'No movements yet.')),
+    small('Open item',`closeModal();masterView(${escapeArg(get(state,'variants',id)?'variants':get(state,'materials',id)?'materials':get(state,'parts',id)?'parts':'products')},${escapeArg(id)})`));
+}
+
+/* ---------------- Live refresh: dashboard, tracking and drivers pull fresh data every 30 s ---------------- */
+const Live={
+  at:null,timer:null,
+  start(){
+    this.at=new Date();
+    if(this.timer)return;
+    this.timer=setInterval(async()=>{
+      if(!state||_modalStack||document.visibilityState!=='visible'||!['dashboard','tracking','drivers'].includes(App.route))return;
+      if(document.activeElement?.matches?.('input,select,textarea'))return;
+      try{await refreshCloudWorkspace(false);this.at=new Date();const y=scrollY;App.render();scrollTo(0,y);}catch{}
+    },30000);
+  }
+};
+function liveChip(){
+  return `<span class="live-chip" data-tip="Refreshes every 30 seconds while this page is open"><i></i>Live · ${esc((Live.at||new Date()).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}))}</span>`;
+}
+
+/* ---------------- Dashboard ---------------- */
+function dashboard(){
+  Live.start();
+  const today=todayISO(), dayMs=864e5, balances=stockRows(state);
+  const days=Array.from({length:14},(_,i)=>{const d=new Date(Date.now()-(13-i)*dayMs), iso=d.toISOString().slice(0,10);
+    return {iso,label:d.toLocaleDateString('en-GB',{weekday:'short',day:'2-digit',month:'short'}),short:d.toLocaleDateString('en-GB',{day:'2-digit',month:'short'}),in:0,out:0};});
+  const byDay=new Map(days.map(d=>[d.iso,d]));
+  for(const e of state.events){const d=byDay.get((e.at||'').slice(0,10));if(d)for(const l of e.lines)l.delta>0?d.in++:d.out++;}
+  const since30=new Date(Date.now()-30*dayMs).toISOString(), moved=new Map();
+  for(const e of state.events)if((e.at||'')>=since30)for(const l of e.lines)moved.set(l.sku,(moved.get(l.sku)||0)+1);
+  const byLoc=new Map();for(const b of balances)if(b.qty>EPS)byLoc.set(b.location,(byLoc.get(b.location)||0)+1);
+  const month=state.trips.filter(t=>monthKey(t.date)===thisMonth()&&t.status!=='Cancelled');
+  const moving=state.trips.filter(t=>t.status==='On the way'), waiting=state.trips.filter(t=>t.status==='Next');
+  const blocked=state.drivers.filter(d=>d.active!==false&&!papersOk(d)), soon=state.drivers.filter(d=>d.active!==false&&papersOk(d)&&papersSoon(d).length);
+  const openSales=state.sales.filter(o=>SALES_OPEN.includes(o.status)), openJobs=state.jobs.filter(j=>['Open','Partially delivered'].includes(j.status));
+  const used=new Set(state.recipes.flatMap(r=>r.lines.map(l=>l.sku||l.variantId||l.partId)));
+  const out=current(state,'materials').filter(m=>used.has(m.id)&&physical(state,m.id)<=EPS);
+  const warnings=warningRows(), todayMoves=state.events.filter(e=>(e.at||'').slice(0,10)===today);
+  const driverRows=state.drivers.map(d=>{const t=month.filter(x=>x.driverId===d.id);return {label:d.name,value:t.length,sub:nfmt(tripKm(t),0)+' km',
+    tip:d.name+': '+t.length+' trips, '+nfmt(tripKm(t),1)+' km this month',go:`driverView(${escapeArg(d.id)})`};}).filter(r=>r.value).sort((a,b)=>b.value-a.value).slice(0,8);
+  const statusCounts=TRIP_STATUS.map(s=>state.trips.filter(t=>t.status===s).length);
+  return head('Overview','Dashboard',liveChip(),link('tracking','Live tracking'),link('drivers','Drivers'))+
+    kpiRow([['layers','Items in stock',new Set(balances.filter(b=>b.qty>EPS).map(b=>b.sku)).size,byLoc.size+' locations holding stock','k-ink','tracking'],
+      ['swap','Movements today',todayMoves.length,todayMoves.reduce((n,e)=>n+e.lines.length,0)+' item lines moved','k-ok','tracking'],
+      ['truck','On the road',moving.length,waiting.length+' trips waiting to leave','k-yellow','drivers'],
+      ['route','Deliveries this month',month.length,nfmt(tripKm(month),0)+' km driven','k-ink','drivers'],
+      ['invoice','Open sales orders',openSales.length,openJobs.length+' open dispatch jobs','k-ink','sales'],
+      ['wrench','Production in progress',state.orders.filter(o=>['Draft','Released'].includes(o.status)).length,'Draft or released orders','k-ink','production'],
+      ['idcard','Driver papers',blocked.length,blocked.length?'Drivers who cannot deliver':soon.length?soon.length+' expiring within 30 days':'All drivers cleared',blocked.length?'k-red':'k-ok','drivers'],
+      ['alert','Stock alerts',out.length+warnings.length,out.length?out.length+' BOM materials out of stock':'No shortages',out.length+warnings.length?'k-red':'k-ok','materials']])+
+    (blocked.length?note('⛔ Cannot deliver until papers are fixed: '+blocked.map(d=>d.name+' — '+papersIssues(d)[0]).join(' · '),'bad'):'')+
+    (state.reviews.some(r=>!r.resolved)?note('Legacy data is available under Settings & Data for review.','warn'):'')+
+    `<div class="grid cols-2 dash-grid">
+      ${panel('Stock movements · last 14 days',`<div class="card-body">${columns(days,[{key:'in',label:'Stock in',color:VIZ[0]},{key:'out',label:'Stock out',color:VIZ[1]}])}</div>`)}
+      ${panel('Deliveries by status',`<div class="card-body">${segbar(TRIP_STATUS.map((s,i)=>({label:s,value:statusCounts[i],color:['var(--viz-neutral)','var(--viz-1)','var(--viz-ok)','var(--viz-bad)'][i]})))}
+        <h5 class="viz-h">Trips per driver · this month</h5>${hbars(driverRows,{empty:'No trips this month yet.',fmt:v=>v+' trips'})}</div>`)}
+      ${panel('Where stock is held · distinct items',`<div class="card-body">${hbars([...byLoc].sort((a,b)=>b[1]-a[1]).slice(0,8).map(([l,n])=>({label:locName(state,l),value:n,
+        tip:locName(state,l)+': '+n+' different items'})),{empty:'No stock recorded yet.',fmt:v=>nfmt(v,0)+' items'})}</div>`)}
+      ${panel('Most moved items · 30 days',`<div class="card-body">${hbars([...moved].sort((a,b)=>b[1]-a[1]).slice(0,8).map(([id,n])=>({label:item(state,id)?.name||'—',value:n,
+        tip:labelOf(state,id)+': '+n+' movements',go:`trackItem(${escapeArg(id)})`})),{empty:'No movements in the last 30 days.',fmt:v=>nfmt(v,0)+' moves'})}</div>`)}
+    </div>`+
+    `<div class="grid cols-2 dash-grid">
+      ${panel('Live movement feed',table(['When','Movement','Items','Change'],state.events.slice().sort(dateSort).slice(0,8).map(e=>[
+        esc(stamp(e.at)),esc(evType(e.type)),esc([...new Set(e.lines.map(l=>item(state,l.sku)?.name))].join(', ')),
+        e.lines.map(l=>`<span class="num ${l.delta<0?'trk-out':'trk-in'}">${l.delta<0?'':'+'}${esc(qfmt(l.delta,item(state,l.sku)?.unit))}</span>`).join(' ')]),'No movements yet.'))}
+      ${panel('Deliveries to watch',table(['Trip','Driver','Customer','Status'],[...moving,...waiting.sort((a,b)=>(b.priority==='Urgent')-(a.priority==='Urgent'))].slice(0,8).map(t=>[
+        `<button type="button" class="link-btn" onclick="tripView(${escapeArg(t.id)})">${esc(t.no)}</button>`,esc(get(state,'drivers',t.driverId)?.name||'—'),
+        cell(t.customerName||'—',t.location),tripChip(t)]),'No open deliveries.'))}
+    </div>`+
+    (out.length||warnings.length?panel('Stock alerts',textTable(['Item','Alert','Location','Shortfall'],[
+      ...out.map(m=>[label(m),'Out of stock (used in a BOM)','All locations',qfmt(0,m.unit)]),...warnings])):'')+
+    (openSales.length?panel('Open sales orders',table(['Order','Customer','Requested delivery','Delivered','Status','Actions'],
+      openSales.sort((a,b)=>(a.due||'9999').localeCompare(b.due||'9999')).slice(0,8).map(o=>[
+        esc(o.no),esc(get(state,'customers',o.customerId)?.name),esc(o.due?fmtDate(o.due):'—'),
+        `<div class="viz-mini"><span style="width:${salesProgress(o)}%"></span></div>${esc(salesProgress(o)+'%')}`,chip(o.status),
+        small('View',`salesView(${escapeArg(o.id)})`)]))):'')+
+    `<div class="grid cols-2 dash-grid">${panel('Production orders',`<div class="card-body">${segbar(['Draft','Released','Completed','Cancelled'].map((s,i)=>({label:s,
+        value:state.orders.filter(o=>o.status===s).length,color:['var(--viz-neutral)','var(--viz-4)','var(--viz-ok)','var(--viz-bad)'][i]})))}</div>`)}
+      ${panel('Raw material stock by category',materialSummary())}</div>`;
+}
+
 const App={
   route:'dashboard',
   go(r){
@@ -5657,7 +6424,7 @@ const App={
     $('#nav-toggle')?.setAttribute('aria-expanded',String(open));
   },
   top(){
-    const subtitles={materials:'Stock master & safety levels',settings:'Company profile, locations & data'};
+    const subtitles={materials:'Stock master, bundles & rates',tracking:'Every item, every movement — live',drivers:'Drivers, vehicles, papers & trips',settings:'Company profile, locations & data'};
     return `<button type="button" class="erp-nav-shade" aria-label="Close navigation" onclick="App.toggleNavigation(false)"></button><div class="hz hazard"></div><div class="row">
       <button id="nav-toggle" class="menu-btn" aria-label="Toggle navigation" aria-controls="sidebar" aria-expanded="false" onclick="App.toggleNavigation(!document.body.classList.contains('nav-open'))">${ic('layers')}</button>
       <div><div class="page-title">${esc(TITLES[this.route]||'Dashboard')}</div><div class="page-sub">${esc(subtitles[this.route]||'Production Planning & Stock Control')}</div></div>
@@ -5672,7 +6439,7 @@ const App={
   render(){
     $('#sidebar').innerHTML=this.nav();
     $('#topbar').innerHTML=this.top();
-    const screens={dashboard,sales:salesPage,production:productionPage,purchase:purchasingPage,movement:inventoryPage,
+    const screens={dashboard,tracking:trackingPage,drivers:driversPage,sales:salesPage,production:productionPage,purchase:purchasingPage,movement:inventoryPage,
       dispatch:dispatchPage,reports:reportPage,settings:settingsPage,bom:recipePage,tools:toolsPage};
     const utilities={steel:Tools,market:Market,prodcalc:PWC,nesting:Nest};
     const utility=utilities[this.route];
