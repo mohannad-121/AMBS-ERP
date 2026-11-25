@@ -16,6 +16,15 @@ Keywords: vendor, supplier renamed, driver, delivery, trip, papers, tracking, li
 - **Live Tracking** (`#/tracking`): every movement reads **From → To** (vendor → store, store → store, store → production, store → customer site with a **Map** button) with the **trip and driver** that carried it; a **Waiting to be delivered** panel lists open dispatch jobs and sales orders per item with from → to and the assigned trip (or an **Assign driver** button). Also: where every item is now, every movement with the balance left at that location, filters for item type, location, movement type and dates, a **Track** timeline per item, and an Excel export. Dashboard, Live Tracking and Drivers refresh themselves every 30 seconds.
 - **Dashboard**: live KPI cards, stock movements over 14 days, deliveries by status and per driver, where stock is held, most moved items, the live movement feed and deliveries to watch.
 
+## Odoo-style layout (Nov 2026)
+Keywords: menu, top bar, open record, click row, breadcrumb, new button, search
+
+- The menu is a **top bar**: Overview, Contacts & Products, Master Data, Operations, System — hover or click a group to see its pages.
+- **Customers, Vendors and Drivers** open with a big search box in the middle and cards below. Type to filter, click a card to open it.
+- In every list, **click a row** to open the record as a full page. The breadcrumb at the top (e.g. *Customers / Emaar*) goes back to the list.
+- **Edit** and **Delete** (and BOM, Variants, Archive where they apply) are at the top of the record page — no buttons on every row.
+- **New** (top right of a list) adds a record.
+
 ## Navigating the app (sidebar and pages)
 Keywords: menu, sidebar, navigation, pages, where is, find page, القائمة, صفحة
 
