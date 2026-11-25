@@ -65,6 +65,18 @@ AMBS shows only the buttons you need right now (like Odoo):
 
 If a button is not in the menu either, the record's status does not allow it (for example **Delete** disappears after the first delivery or receipt).
 
+## Owner area (super admin): see every employee's work 👑
+Keywords: owner, super admin, manager view, boss, team activity, who did what, employee work, audit, items and stock, owner overview, المالك, المدير, شغل الموظفين
+
+The owner (role **owner**) signs in and lands on **Owner overview** with his own menu:
+- **Owner overview**: items in stock, who is active today, open sales orders, deliveries this month, purchases to receive, production in progress; a card per employee (today / this week / last action) and the latest activity. Click any line to open the record.
+- **Team activity**: every action by every employee — records created or updated and every stock movement — filtered by **person** and **period** (today, 7 days, 30 days, all time) with a search box.
+- **Items & stock**: every raw material, part and product with the quantity on hand, where it is (per store / site) and the last movement with who made it. Click an item to see its full tracking timeline.
+- **Follow the work**: Live Tracking, Deliveries, Sales Orders, Purchasing, Production, Reports.
+- **Open the full ERP menu** (bottom of the menu) switches to all pages; **Back to owner menu** returns.
+
+Every save and stock movement records the signed-in person (their name, or their email). Records saved before this was added show without a name. Administrators see the same three pages under **Owner view** in their menu.
+
 ## Get started: first-day setup checklist ✅
 Keywords: start, getting started, first time, setup, new system, empty system, where do I begin, first steps, begin, onboarding, من وين ابدا, بداية
 
