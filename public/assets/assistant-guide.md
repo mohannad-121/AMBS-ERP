@@ -69,11 +69,11 @@ If a button is not in the menu either, the record's status does not allow it (fo
 Keywords: owner, super admin, manager view, boss, team activity, who did what, employee work, audit, items and stock, owner overview, المالك, المدير, شغل الموظفين
 
 The owner (role **owner**) signs in and lands on **Owner overview** with his own menu:
-- **Owner overview**: items in stock, who is active today, open sales orders, deliveries this month, purchases to receive, production in progress; a card per employee (today / this week / last action) and the latest activity. Click any line to open the record.
+- **Owner overview**, in plain words: 4 big numbers (things done today, deliveries this month, orders waiting for a driver, items in stock), **Needs your attention** (orders waiting for a driver, deliveries on the road, purchases not received, drivers with bad papers, stock warnings), **Who worked today** and **What happened last** written as sentences. Click anything to open it.
 - **Team activity**: every action by every employee — records created or updated and every stock movement — filtered by **person** and **period** (today, 7 days, 30 days, all time) with a search box.
 - **Items & stock**: every raw material, part and product with the quantity on hand, where it is (per store / site) and the last movement with who made it. Click an item to see its full tracking timeline.
 - **Follow the work**: Live Tracking, Deliveries, Sales Orders, Purchasing, Production, Reports.
-- **Open the full ERP menu** (bottom of the menu) switches to all pages; **Back to owner menu** returns.
+- The owner only sees these pages; other pages open the Owner overview instead.
 
 Every save and stock movement records the signed-in person (their name, or their email). Records saved before this was added show without a name. Administrators see the same three pages under **Owner view** in their menu.
 

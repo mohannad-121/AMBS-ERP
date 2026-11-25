@@ -1429,3 +1429,26 @@ tr.o-group td{background:#f8f9fa!important;font-weight:600;cursor:pointer;color:
 #app.cloud-login-mode #main{margin:0!important;padding:0!important;width:100%!important;max-width:none!important;grid-column:1/-1!important}
 #app.cloud-login-mode #sidebar,#app.cloud-login-mode #topbar{display:none!important}
 .auth-card [role=status]:empty{min-height:6px}
+
+/* Owner overview: plain and simple */
+.ow-hello{font-size:22px;font-weight:700;margin:4px 0 2px;color:var(--o-text,#212529)}
+.ow-sub{margin:0 0 16px}
+.ow-bigs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:16px}
+.ow-big{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:18px;border:1px solid var(--o-border,#dee2e6);border-radius:10px;background:#fff;cursor:pointer;font:inherit;text-align:left}
+.ow-big:hover{border-color:var(--o-accent,#9b1c1c);box-shadow:0 6px 16px -10px rgba(0,0,0,.25)}
+.ow-big b{font-size:34px;line-height:1.1;color:var(--o-accent,#9b1c1c)}
+.ow-big span{font-size:15px;font-weight:600;color:var(--o-text,#212529)}
+.ow-big small{font-size:12.5px;color:var(--o-muted,#6c757d)}
+.ow-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}
+.ow-grid>.card{margin:0}
+.ow-list{display:flex;flex-direction:column}
+.ow-line{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;border:0;border-top:1px solid var(--o-border-2,#e9ecef);background:none;font:inherit;font-size:14px;text-align:left;cursor:pointer;color:var(--o-text,#212529)}
+.ow-line:first-child{border-top:0}
+.ow-line:hover:not([disabled]){background:#faf5f5}
+.ow-line[disabled]{cursor:default}
+.ow-line span{display:flex;flex-direction:column;gap:2px;min-width:0}
+.ow-line small{color:var(--o-muted,#6c757d);font-size:12.5px}
+.ow-line em{flex:0 0 auto;font-style:normal;font-size:12.5px;color:var(--o-accent,#9b1c1c);white-space:nowrap}
+.ow-ok{padding:16px;color:var(--o-muted,#6c757d)}
+@media (max-width:900px){.ow-bigs{grid-template-columns:1fr 1fr}.ow-grid{grid-template-columns:1fr}}
+.ow-line .ow-who{display:block}
