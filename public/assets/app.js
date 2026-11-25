@@ -3168,7 +3168,12 @@ const dangerSmall=(text,action)=>button(text,action,'btn-sm btn-danger');
 const openBtn=action=>`<button type="button" class="o-open" onclick="${action}">View</button>`;
 const actionGroup=(...actions)=>`<div class="erp-actions">${actions.join('')}</div>`;
 const link=(r,text=TITLES[r])=>button(text,`App.go(${escapeArg(r)})`,'btn-sm');
-const head=(group,title,...actions)=>`<div class="view-head"><div><div class="eyebrow">${esc(group)}</div><h1 class="h1">${esc(title)}</h1></div><div class="head-actions">${actions.join('')}</div></div>`;
+/* Menu group of the current page, e.g. "Master Data" for Products; tool pages sit under System / Tools. */
+const menuGroup=()=>{const r=typeof App!=='undefined'?App.route:'';
+  if(['steel','market','prodcalc','prodcalc-new','nesting'].includes(r))return 'System / Tools';
+  return GROUPS.find(([,rows])=>rows.some(([x])=>x===r))?.[0]||'';};
+const crumbParent=()=>menuGroup()?`<span class="o-bc-parent">${esc(menuGroup())}</span><span class="o-bc-sep">/</span>`:'';
+const head=(group,title,...actions)=>`<div class="view-head"><div class="o-bc o-bc-list">${crumbParent()}<h1 class="h1">${esc(title)}</h1></div><div class="head-actions">${actions.join('')}</div></div>`;
 const note=(text,kind='info')=>`<div class="note ${kind}" style="margin-bottom:12px">${esc(text)}</div>`;
 const table=(columns,rows,empty='No records yet.',searchTerms=[])=>`<div class="tbl-wrap"><table class="tbl"><thead><tr>${columns.map(c=>`<th>${esc(c)}</th>`).join('')}</tr></thead><tbody>${rows.length?rows.map((r,i)=>`<tr${searchTerms[i]?` data-search="${esc(searchTerms[i])}"`:''}>${r.map(c=>`<td>${c??''}</td>`).join('')}</tr>`).join(''):`<tr><td colspan="${columns.length}">${esc(empty)}</td></tr>`}</tbody></table></div>`;
 const textTable=(columns,rows,empty)=>table(columns,rows.map(r=>r.map(esc)),empty);
@@ -3368,7 +3373,7 @@ function formModal(title,body,save,{text='Save',intro='',danger=false,page}={}){
     const view=$('#view');
     const crumbs=[`<button type="button" class="o-bc-link" onclick="App.discard()">${esc(TITLES[App.route]||'Back')}</button>`];
     if(App.record&&App.recordTitle)crumbs.push(`<button type="button" class="o-bc-link" onclick="App.discard()">${esc(App.recordTitle)}</button>`);
-    view.innerHTML=`<form class="o-form-page erp-form"><div class="o-cp o-cp-record"><div class="o-bc">${crumbs.join('<span class="o-bc-sep">/</span>')}
+    view.innerHTML=`<form class="o-form-page erp-form"><div class="o-cp o-cp-record"><div class="o-bc">${crumbParent()}${crumbs.join('<span class="o-bc-sep">/</span>')}
       <span class="o-bc-sep">/</span><span class="o-bc-cur">${esc(title)}</span></div>
       <div class="o-cp-actions"><button class="btn ${danger?'btn-danger':'btn-primary'}" type="submit">${esc(text)}</button>
       <button type="button" class="btn btn-ghost" onclick="App.discard()">Discard</button></div></div>
@@ -3406,7 +3411,7 @@ function infoModal(title,body,footer=''){
   if(typeof App!=='undefined'&&App.recordRendering){
     const view=$('#view'), history=recordHistory(App.record);
     App.recordTitle=title;
-    view.innerHTML=`<div class="o-cp o-cp-record"><div class="o-bc"><button type="button" class="o-bc-link" onclick="App.back()">${esc(TITLES[App.route]||'Back')}</button>
+    view.innerHTML=`<div class="o-cp o-cp-record"><div class="o-bc">${crumbParent()}<button type="button" class="o-bc-link" onclick="App.back()">${esc(TITLES[App.route]||'Back')}</button>
       <span class="o-bc-sep">/</span><span class="o-bc-cur">${esc(title)}</span></div><div class="o-cp-actions">${footer}</div></div>
       <div class="o-form-wrap"><div class="o-sheet erp-modal-body">${body}</div>${history}</div>`;
     const sheet=$('.o-sheet',view), header=$(':scope > .o-form-header',sheet);
