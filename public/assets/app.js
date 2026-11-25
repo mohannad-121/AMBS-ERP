@@ -3153,8 +3153,8 @@ const TITLES={dashboard:'Dashboard',customers:'Customers',suppliers:'Vendors',pr
   prodcalc:'Product Calculator','prodcalc-new':'Product Take-off',nesting:'Product Nesting',
   'plan-new':'Production','purchase-new':'Purchasing'};
 const GROUPS=[
-  ['Overview',[['dashboard','dashboard'],['tracking','route']]],
-  ['Master Data',[['customers','users'],['suppliers','warehouse'],['products','box'],['bom','tree'],['materials','stack'],['parts','nut'],['drivers','driver'],['processors','factory']]],
+  ['Overview',[['dashboard','dashboard'],['tracking','route'],['customers','users'],['suppliers','warehouse'],['drivers','driver'],['processors','factory']]],
+  ['Master Data',[['materials','stack'],['parts','nut'],['products','box'],['bom','tree']]],
   ['Operations',[['sales','invoice'],['purchase','cart'],['production','wrench'],['movement','swap'],['dispatch','truck'],['deliveries','route']]],
   ['System',[['reports','chart'],['tools','calc'],['settings','gear']]]
 ];
