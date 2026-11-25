@@ -3174,6 +3174,8 @@ const TITLES={owner:'Owner overview',team:'Team activity',items:'Items & stock',
   prodcalc:'Product Calculator','prodcalc-new':'Product Take-off',nesting:'Product Nesting',
   'plan-new':'Production','purchase-new':'Purchasing'};
 /* Owner (super admin) gets his own menu: the team's work, items and tracking. Admins see the same pages under "Owner view". */
+/* Build version: stamped by scripts/bump-version.py together with the ?v= links in index.html. */
+const AMBS_VERSION='2026.11.25-2227';
 const isOwner=()=>typeof CLOUD!=='undefined'&&CLOUD.role==='owner';
 const canSeeOwner=()=>typeof CLOUD!=='undefined'&&['owner','admin'].includes(CLOUD.role);
 const OWNER_GROUPS=[
@@ -7051,7 +7053,7 @@ const App={
       <nav class="o-side-nav" aria-label="Main navigation">${groups.map(([group,rows])=>`<div class="o-side-group"><div class="o-side-head">${esc(group)}</div>
         ${rows.map(([r,i])=>`<a href="#/${r}" class="o-side-link${selected===r?' on':''}"${selected===r?' aria-current="page"':''}
           onclick="event.preventDefault();App.go('${r}')">${ic(i)}<span>${esc(TITLES[r])}</span></a>`).join('')}</div>`).join('')}</nav>
-      <div class="o-side-foot">${esc(SET.company)}${isOwner()?'<br><b class="o-owner-tag">Owner · super admin</b>':''}</div></div>`;
+      <div class="o-side-foot">${esc(SET.company)}${isOwner()?'<br><b class="o-owner-tag">Owner · super admin</b>':''}<br><span class="o-version">Version ${esc(AMBS_VERSION)}</span></div></div>`;
   },
   toggleNavigation(open){
     document.body.classList.toggle('nav-open',open);
