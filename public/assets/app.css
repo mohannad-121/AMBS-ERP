@@ -1359,3 +1359,18 @@ tr.o-group td{background:#f8f9fa!important;font-weight:600;cursor:pointer;color:
 .as-fab .as-fab-label{display:none}
 .as-fab .as-fab-icon{background:none;width:auto;height:auto;font-size:20px}
 .o-gear:not([open]) .o-gear-menu{display:none}
+
+/* Compact image picker: small thumbnail next to the file button (no big preview box) */
+.image-picker.image-compact{margin:0}
+.image-compact .image-label{display:block;font-size:13px;font-weight:600;color:var(--o-text,#212529);margin-bottom:6px}
+.image-compact .image-row{display:flex;align-items:center;gap:10px}
+.image-compact .image-preview{min-height:0;width:44px;height:44px;flex:0 0 44px;padding:0;border-radius:6px;border:1px solid var(--o-border,#dee2e6);background:#f8f9fa}
+.image-compact .image-preview img,.image-compact .thumb.thumb-preview{width:42px;height:42px;border-radius:5px;box-shadow:none;border:0}
+.image-compact .image-preview-empty span,.image-compact .image-preview-name{display:none}
+.image-compact .image-preview-empty svg{width:20px;height:20px}
+.image-compact .image-preview-error{font-size:0}
+.image-compact .image-preview-error::after{content:"!";font-size:14px;color:#b42318;font-weight:700}
+.image-compact .image-row .inp{flex:1;min-width:0}
+.image-compact .chk,.image-compact label:has(input[name=removeImage]){margin-top:6px;font-size:12.5px}
+.map-help{display:flex;align-items:center;gap:4px;margin-top:5px;font-size:11.5px;color:var(--o-muted,#6c757d)}
+.map-help svg{width:12px;height:12px;flex:0 0 12px}
