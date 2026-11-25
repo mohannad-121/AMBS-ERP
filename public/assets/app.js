@@ -3147,16 +3147,15 @@ async function commit(change){
 /* Shared views and editors */
 const TITLES={dashboard:'Dashboard',customers:'Customers',suppliers:'Vendors',processors:'Processing Companies',
   materials:'Raw Materials',parts:'Parts',bom:'Bills of Materials',products:'Products',production:'Production',
-  tracking:'Live Tracking',drivers:'Drivers & Deliveries',
+  tracking:'Live Tracking',drivers:'Drivers',deliveries:'Deliveries',
   sales:'Sales Orders',purchase:'Purchasing',movement:'Inventory & Stock Movements',dispatch:'Packing & Dispatch',reports:'Reports',
   tools:'Tools',settings:'Settings & Data',market:'Market Sections',steel:'Steel Weight Calculator',
   prodcalc:'Product Calculator','prodcalc-new':'Product Take-off',nesting:'Product Nesting',
   'plan-new':'Production','purchase-new':'Purchasing'};
 const GROUPS=[
   ['Overview',[['dashboard','dashboard'],['tracking','route']]],
-  ['Contacts & Products',[['customers','users'],['suppliers','warehouse'],['products','box'],['bom','tree']]],
-  ['Master Data',[['materials','stack'],['parts','nut'],['processors','factory']]],
-  ['Operations',[['sales','invoice'],['production','wrench'],['purchase','cart'],['movement','swap'],['dispatch','truck'],['drivers','driver']]],
+  ['Master Data',[['customers','users'],['suppliers','warehouse'],['products','box'],['bom','tree'],['materials','stack'],['parts','nut'],['drivers','driver'],['processors','factory']]],
+  ['Operations',[['sales','invoice'],['purchase','cart'],['production','wrench'],['movement','swap'],['dispatch','truck'],['deliveries','route']]],
   ['System',[['reports','chart'],['tools','calc'],['settings','gear']]]
 ];
 const ENTITY={customers:'Customer',suppliers:'Vendor',processors:'Processing Company',materials:'Raw Material',parts:'Part',products:'Product'};
@@ -4291,6 +4290,7 @@ function deleteOperation(type,id){
   approval('Delete '+old.no,'Permanently remove this record. Posted stock and delivery history cannot be deleted.',s=>{
     const row=get(s,type,id);
     need(sameCloudRecord(row,old),'This record changed. Reopen it before deleting.');
+    if(['jobs','sales'].includes(type))s.trips=s.trips.filter(t=>!((t.jobId===id||t.salesId===id)&&t.status!=='Delivered'));
     need(!recordIsUsed(s,type,id),'This record has linked history and cannot be deleted.');
     if(type==='orders')need(row.status!=='Completed','Completed production orders cannot be deleted.');
     if(type==='purchases')need(row.lines.every(line=>line.received===0),'A purchase with receipts cannot be deleted.');
@@ -5210,6 +5210,7 @@ function cancelJob(id){
   approval('Cancel remaining delivery','Close the outstanding balance. Confirmed delivery history and posted stock remain recorded.',s=>{
     const job=get(s,'jobs',id);need(['Open','Partially delivered'].includes(job?.status),'This dispatch job is closed.');
     job.status='Cancelled';
+    for(const t of s.trips)if(t.jobId===id&&['Next','On the way'].includes(t.status))t.status='Cancelled';
   });
 }
 function dispatchPage(){
@@ -5280,12 +5281,13 @@ function salesEdit(id){
   form.addEventListener('input',total);form.addEventListener('change',total);total();
 }
 function salesStatus(id,status){
-  const copy={Confirmed:['Confirm Sales Order','Confirm this order so it can be delivered. Lines can still be edited until the first delivery.','Confirm Order'],
+  const copy={Confirmed:['Confirm Sales Order','Confirm this order so it can be delivered. It then appears in Operations → Deliveries, ready to assign a driver. Lines can still be edited until the first delivery.','Confirm Order'],
     Cancelled:['Cancel Sales Order','Close the undelivered balance. Delivered quantities and posted stock stay recorded.','Cancel Order']}[status];
   approval(copy[0],copy[1],s=>{
     const o=get(s,'sales',id);
     need(o&&(status==='Confirmed'?o.status==='Draft':SALES_OPEN.includes(o.status)),'This order status has changed.');
     if(status==='Confirmed'){live(s,'customers',o.customerId);o.lines.forEach(l=>stockItem(s,l.sku));}
+    if(status==='Cancelled')for(const t of s.trips)if(t.salesId===id&&['Next','On the way'].includes(t.status))t.status='Cancelled';
     o.status=status;
   },copy[2]);
 }
@@ -5739,7 +5741,7 @@ function validateState(s){
     ['Open','Partially delivered','Delivered','Cancelled'].includes(j.status),'Invalid dispatch job.');
   for(const d of s.drivers)need(typeof d.name==='string'&&d.name.trim()&&typeof d.hasPapers==='boolean'&&(!d.image||validImage(d.image)),'Invalid driver.');
   for(const t of s.trips)need(typeof t.no==='string'&&get(s,'drivers',t.driverId)&&(!t.customerId||get(s,'customers',t.customerId))&&
-    (!t.jobId||get(s,'jobs',t.jobId))&&Number.isFinite(t.km)&&t.km>=0&&
+    (!t.jobId||get(s,'jobs',t.jobId))&&(!t.salesId||get(s,'sales',t.salesId))&&Number.isFinite(t.km)&&t.km>=0&&
     ['Next','On the way','Delivered','Cancelled'].includes(t.status),'Invalid delivery trip.');
   for(const o of s.sales)need(typeof o.no==='string'&&get(s,'customers',o.customerId)&&linkedSite('customers',o.customerId,o.siteId)&&
     Array.isArray(o.lines)&&o.lines.length&&new Set(o.lines.map(l=>l.sku)).size===o.lines.length&&
@@ -6036,6 +6038,9 @@ function deleteDriver(id){
   },'Delete');
 }
 function tripEdit(id,preset={}){
+  const linked=get(state,'trips',id);
+  if(linked&&(linked.jobId||linked.salesId))return assignDelivery(linked.jobId?'job':'sale',linked.jobId||linked.salesId,id);
+  if(!id&&preset.jobId)return assignDelivery('job',preset.jobId);
   const old=get(state,'trips',id), t=old||{date:todayISO(),from:'AMBS store',priority:'Normal',status:'Next',paperStatus:'Pending',...preset};
   if(!state.drivers.length){
     return infoModal('New delivery trip',note('Add a driver first. Every delivery needs a driver with official papers.','warn'),
@@ -6120,10 +6125,14 @@ function checkTripDriver(driver,status,previous){
 function tripStatus(id,status){
   const t=get(state,'trips',id);
   if(!t)return;
+  const posts=status==='Delivered'&&(t.jobId||t.salesId);
   approval((status==='On the way'?'Start trip ':'Mark delivered · ')+t.no,
-    status==='On the way'?'The driver is leaving now with this delivery.':'The delivery reached the customer. The delivery date is set to today if empty.',s=>{
+    status==='On the way'?'The driver is leaving now with this delivery.':
+      'The delivery reached the customer.'+(posts?' The goods are taken out of '+(t.from||'the store')+' stock now.':'')+' The delivery date is set to today if empty.',s=>{
       const trip=get(s,'trips',id);
       checkTripDriver(get(s,'drivers',trip.driverId),status,trip.status);
+      if(status==='Delivered'&&trip.jobId){const j=get(s,'jobs',trip.jobId);if(j)postJobDelivery(s,j,trip.no);}
+      if(status==='Delivered'&&trip.salesId){const o=get(s,'sales',trip.salesId);if(o)postSalesDelivery(s,o,trip.fromLocation,trip.no);}
       trip.status=status;trip.updated=now();
       if(status==='On the way')trip.departedAt=now();
       if(status==='Delivered'&&!trip.deliveredAt)trip.deliveredAt=todayISO();
@@ -6226,16 +6235,9 @@ const Drv={
   }
 };
 function driversPage(){
-  Live.start();
-  const drivers=state.drivers.slice().sort((a,b)=>a.name.localeCompare(b.name)), month=state.trips.filter(t=>monthKey(t.date)===thisMonth()&&t.status!=='Cancelled');
-  const blocked=drivers.filter(d=>d.active!==false&&!papersOk(d)), moving=state.trips.filter(t=>t.status==='On the way');
-  const f=Drv.f, opt=(rows,sel,all)=>`<option value="">${esc(all)}</option>`+rows.map(([v,l])=>`<option value="${esc(v)}" ${v===sel?'selected':''}>${esc(l)}</option>`).join('');
-  return head('Operations',TITLES.drivers,button('PDF','exportDeliveries(\'pdf\')','','pdf'),button('Excel','exportDeliveries(\'xlsx\')','','xls'),
-      button('New driver','driverEdit()'),button('New trip','tripEdit()','btn-primary'))+
-    kpiRow([['driver','Drivers',drivers.length,drivers.filter(papersOk).length+' with papers OK','k-ink'],
-      ['alert','Cannot deliver',blocked.length,blocked.length?'Papers missing or expired':'All papers in order',blocked.length?'k-red':'k-ok'],
-      ['truck','On the road now',moving.length,moving.length?moving.map(t=>get(state,'drivers',t.driverId)?.name).filter(Boolean).slice(0,2).join(', '):'No trips moving','k-yellow'],
-      ['pulse','This month',month.length+' trips',nfmt(tripKm(month),1)+' km driven','k-ok']])+
+  const drivers=state.drivers.slice().sort((a,b)=>a.name.localeCompare(b.name));
+  const blocked=drivers.filter(d=>d.active!==false&&!papersOk(d));
+  return head('Master Data',TITLES.drivers,button('New','driverEdit()','btn-primary'))+
     (blocked.length?note('⛔ No delivery can go out with: '+blocked.map(d=>d.name+' ('+papersIssues(d)[0]+')').join(' · '),'bad'):'')+
     kanban(drivers.map(d=>{
       const trips=driverTrips(d.id), where=driverWhere(d);
@@ -6245,9 +6247,126 @@ function driversPage(){
           ${d.phone?`<div class="o-card-line">${ic('phone')}${esc(d.phone)}</div>`:''}
           <div class="o-card-tags">${papersChip(d)}<span class="o-tag">${trips.length} trips · ${esc(nfmt(tripKm(trips),0))} km</span></div>
           <div class="o-card-line o-muted">${esc(where.text)}</div></div>`};
-    }),{placeholder:'Search drivers by name, phone or vehicle…',noun:'drivers',empty:'Add your drivers: name, phone, vehicle and official papers.'})+
+    }),{placeholder:'Search drivers by name, phone or vehicle…',noun:'drivers',empty:'Add your drivers: name, phone, vehicle and official papers.'});
+}
+/* ---------------- Deliveries (operations): created from confirmed sales orders and dispatch jobs ----------------
+   The employee only assigns a driver and the km; customer, site, map and items come from the order.
+   "Delivered" on the trip posts the stock out of the store in the same step. */
+const activeTrip=(field,id)=>state.trips.find(t=>t[field]===id&&t.status!=='Cancelled');
+function deliveryQueue(){
+  const jobs=state.jobs.filter(j=>['Open','Partially delivered'].includes(j.status)&&!activeTrip('jobId',j.id)).map(j=>({kind:'job',doc:j}));
+  const sales=state.sales.filter(o=>['Confirmed','Partially delivered'].includes(o.status)&&!activeTrip('salesId',o.id)).map(o=>({kind:'sale',doc:o}));
+  return [...jobs,...sales];
+}
+function deliveryInfo(kind,d,s=state){
+  const customer=get(s,'customers',d.customerId);
+  if(kind==='job'){
+    const site=get(s,'locations',d.destination)||d.destinationSnapshot||{};
+    return {customerId:d.customerId,customerName:customer?.name||'',project:d.name||'',fromLocation:d.location,
+      location:[site.name==='Delivery address'?'':site.name,site.address,site.city].filter(Boolean).join(', '),mapUrl:mapsLink(site)||companyMap('customers',customer),
+      description:labelOf(s,d.productId)+' × '+(d.qty-d.delivered),items:(d.finished?[{sku:d.productId,qty:d.qty-d.delivered}]:d.parts.map(p=>({sku:p.sku,qty:p.qty*(d.qty-d.delivered)/d.qty})))};
+  }
+  const site=get(s,'locations',d.siteId)||deliverySite(s,'customers',d.customerId);
+  const open=d.lines.filter(l=>l.qty-l.delivered>EPS);
+  return {customerId:d.customerId,customerName:customer?.name||'',project:d.reference||d.no,fromLocation:'',
+    location:site?[site.name==='Delivery address'?'':site.name,site.address,site.city].filter(Boolean).join(', '):customer?.address||'',
+    mapUrl:(site&&mapsLink(site))||companyMap('customers',customer),
+    description:open.map(l=>item(s,l.sku)?.name+' × '+qfmt(l.qty-l.delivered)).join(', '),items:open.map(l=>({sku:l.sku,qty:l.qty-l.delivered}))};
+}
+function assignDelivery(kind,docId,tripId=''){
+  const old=tripId?get(state,'trips',tripId):null, doc=get(state,kind==='job'?'jobs':'sales',docId);
+  if(!doc)return toast('This order no longer exists.','warn');
+  if(!state.drivers.length)return infoModal('Assign driver',note('Add a driver first (Master Data → Drivers).','warn'),button('New driver','closeModal();driverEdit()','btn-primary'));
+  const info=deliveryInfo(kind,doc), sources=custody();
+  const drivers=state.drivers.filter(d=>d.active!==false||d.id===old?.driverId);
+  const form=formModal((old?'Delivery '+old.no:'Assign driver')+' · '+doc.no,
+    `<div class="dlv-summary"><div><span>Customer</span><b>${esc(info.customerName||'—')}</b></div>
+      <div><span>Deliver to</span><b>${esc(info.location||'—')}</b> ${mapBtn(info.mapUrl)}</div>
+      <div><span>Items</span><b>${esc(info.description||'—')}</b></div>
+      ${kind==='job'?`<div><span>From</span><b>${esc(locName(state,doc.location))}</b></div>`:''}</div>
+    <div class="trip-papers" data-papers></div><div class="form-grid">
+    ${select('Driver','driverId',drivers.map(d=>[d.id,d.name+(d.vehiclePlate?' · '+d.vehiclePlate:'')+(papersOk(d)?'':'  ⚠ papers missing')]),old?.driverId||'',false,'Choose a driver…')}
+    ${input('Vehicle','vehicle',old?.vehicle||'',{extra:'placeholder="Filled from the driver"'})}
+    ${input('Distance (km)','km',old?.km||'',{type:'number',extra:'min="0" step="0.1" placeholder="e.g. 38"'})}
+    ${input('Trip date','date',old?.date||todayISO(),{type:'date'})}
+    ${kind==='sale'?select('Ship from','fromLocation',locOptions(),old?.fromLocation||(sources.length===1?sources[0].id:''),false,'Choose the store'):''}
+    ${select('Priority','priority',same(['Normal','Urgent']),old?.priority||'Normal',false)}
+    ${old?select('Delivery papers','paperStatus',same(PAPER_STATUS),old.paperStatus||'Pending',false):''}
+    </div>`,async f=>{
+    const driverId=valOf(f,'driverId'), kmRaw=valOf(f,'km');
+    need(driverId,'Choose the driver.');
+    const fromLocation=kind==='job'?doc.location:valOf(f,'fromLocation');
+    need(fromLocation,'Choose the store the goods leave from.');
+    await commit(s=>{
+      need(!old||sameCloudRecord(get(s,'trips',tripId),old),'This delivery changed. Reopen it before saving.');
+      const d=get(s,kind==='job'?'jobs':'sales',docId);need(d,'This order no longer exists.');
+      checkTripDriver(get(s,'drivers',driverId),old?.status||'Next',old?.status);
+      loc(s,fromLocation);
+      const i=deliveryInfo(kind,d,s), date=valOf(f,'date')||todayISO();
+      add(s.trips,{...old,id:tripId||key(),no:old?.no||nextTripNo(s,date),date,driverId,vehicle:valOf(f,'vehicle'),km:kmRaw===''?0:qty(kmRaw,'Distance',true),
+        priority:valOf(f,'priority')||'Normal',[kind==='job'?'jobId':'salesId']:docId,customerId:i.customerId,customerName:i.customerName,
+        project:old?.project||i.project,from:locName(s,fromLocation),fromLocation,location:old?.location||i.location,mapUrl:old?.mapUrl||i.mapUrl,
+        system:old?.system||'',description:old?.description||i.description,status:old?.status||'Next',
+        paperStatus:valOf(f,'paperStatus')||old?.paperStatus||'Pending',by:old?.by||SET.currentUser,at:old?.at||now(),updated:now()});
+    });
+    return old?'Delivery saved.':'Driver assigned — the trip is ready to start.';
+  },{text:old?'Save':'Assign driver'});
+  const showPapers=()=>{
+    const d=get(state,'drivers',form.elements.driverId.value), box=$('[data-papers]',form);
+    if(!d){box.innerHTML='';return;}
+    const issues=papersIssues(d);
+    box.innerHTML=issues.length?note('⛔ '+d.name+' cannot deliver: '+issues.join(' · ')+'.','bad'):'';
+    const v=form.elements.vehicle;if(!v.value||v.dataset.auto){v.value=[d.vehiclePlate,d.vehicleType].filter(Boolean).join(' · ');v.dataset.auto='1';}
+  };
+  form.elements.driverId.addEventListener('change',showPapers);showPapers();
+  form.elements.vehicle.addEventListener('input',e=>delete e.target.dataset.auto);
+}
+function postJobDelivery(s,job,ref){
+  const count=job.qty-job.delivered;
+  if(count<=0||!['Open','Partially delivered'].includes(job.status))return;
+  need(!s.events.some(e=>e.jobId===job.id&&e.reference.toLowerCase()===ref.toLowerCase()),'This job already has a delivery with reference '+ref+'.');
+  if(job.trackAtDestination)loc(s,job.destination);
+  const lines=dispatchRows(s,job,count).flatMap(l=>[{sku:l.sku,location:job.location,delta:-l.qty},
+    ...(job.trackAtDestination?[{sku:l.sku,location:job.destination,delta:l.qty}]:[])]);
+  const eventId=key();
+  event(s,eventId,'Customer delivery',lines,job.no+' · '+ref);
+  Object.assign(get(s,'events',eventId),{jobId:job.id,deliveredQty:count,reference:ref,destination:job.destination,
+    partyType:'customers',partyId:job.customerId,siteId:job.destination});
+  job.delivered+=count;job.status='Delivered';
+}
+function postSalesDelivery(s,r,location,ref){
+  if(!['Confirmed','Partially delivered'].includes(r.status))return;
+  loc(s,location);
+  need(!s.events.some(e=>e.salesId===r.id&&e.reference.toLowerCase()===ref.toLowerCase()),'This order already has a delivery with reference '+ref+'.');
+  const amounts=r.lines.map(l=>{const left=l.qty-l.delivered;return left>EPS?(measured(item(s,l.sku).unit)?roundMeasured(left):left):0;});
+  const stock=r.lines.map((l,i)=>({sku:l.sku,location,delta:-amounts[i]})).filter(l=>l.delta<0);
+  if(!stock.length)return;
+  const eventId=key();
+  event(s,eventId,'Sales delivery',stock,r.no+' · '+ref);
+  Object.assign(get(s,'events',eventId),{salesId:r.id,reference:ref,partyType:'customers',partyId:r.customerId,siteId:r.siteId||''});
+  r.lines.forEach((l,i)=>{l.delivered=measured(item(s,l.sku).unit)?roundMeasured(l.delivered+amounts[i]):l.delivered+amounts[i];});
+  r.status=r.lines.every(l=>l.qty-l.delivered<=EPS)?'Delivered':'Partially delivered';
+}
+function deliveriesPage(){
+  Live.start();
+  const queue=deliveryQueue(), month=state.trips.filter(t=>monthKey(t.date)===thisMonth()&&t.status!=='Cancelled');
+  const moving=state.trips.filter(t=>t.status==='On the way'), ready=state.trips.filter(t=>t.status==='Next');
+  const drivers=state.drivers.slice().sort((a,b)=>a.name.localeCompare(b.name));
+  const f=Drv.f, opt=(rows,sel,all)=>`<option value="">${esc(all)}</option>`+rows.map(([v,l])=>`<option value="${esc(v)}" ${v===sel?'selected':''}>${esc(l)}</option>`).join('');
+  return head('Operations',TITLES.deliveries,button('PDF',"exportDeliveries('pdf')",'','pdf'),button('Excel',"exportDeliveries('xlsx')",'','xls'),
+      button('Other trip','tripEdit()'))+
+    kpiRow([['alert','To deliver',queue.length,queue.length?'Waiting for a driver':'Nothing waiting',queue.length?'k-red':'k-ok'],
+      ['truck','Ready to leave',ready.length,'Driver assigned','k-ink'],
+      ['route','On the road',moving.length,moving.length?moving.map(t=>get(state,'drivers',t.driverId)?.name).filter(Boolean).slice(0,2).join(', '):'Nothing moving','k-yellow'],
+      ['pulse','This month',month.length+' trips',nfmt(tripKm(month),1)+' km driven','k-ok']])+
+    panel('To deliver · confirmed orders waiting for a driver',table(['Order','Customer','Deliver to','Items','Requested',''],queue.map(({kind,doc})=>{
+      const i=deliveryInfo(kind,doc);
+      return [cell(doc.no,kind==='job'?'Dispatch job':'Sales order')+openBtn(kind==='job'?`dispatchView(${escapeArg(doc.id)})`:`salesView(${escapeArg(doc.id)})`),
+        esc(i.customerName||'—'),`<div class="addr-cell"><span>${esc(i.location||'—')}</span>${mapBtn(i.mapUrl)}</div>`,esc(i.description||'—'),
+        esc(doc.due?fmtDate(doc.due):'—'),button('Assign driver',`assignDelivery('${kind}',${escapeArg(doc.id)})`,'btn-sm btn-primary')];
+    }),'Nothing to deliver. Confirmed sales orders and dispatch jobs appear here automatically.'))+
     `<section class="card erp-table"><div class="card-head"><div class="card-title">Delivery trips</div></div>
-      <div class="toolbar trip-filters"><div class="search">${ic('search')}<input class="inp" aria-label="Search trips" placeholder="Search packing no., customer, project, driver…"
+      <div class="toolbar trip-filters"><div class="search">${ic('search')}<input class="inp" aria-label="Search trips" placeholder="Search packing no., customer, driver…"
         value="${esc(f.q)}" oninput="Drv.set('q',this.value)"></div>
         <select class="sel" aria-label="Driver" onchange="Drv.set('driver',this.value)">${opt(drivers.map(d=>[d.id,d.name]),f.driver,'All drivers')}</select>
         <select class="sel" aria-label="Status" onchange="Drv.set('status',this.value)">${opt(same(TRIP_STATUS),f.status,'All statuses')}</select>
@@ -6330,7 +6449,8 @@ function ledger(){
 /* Where a stock line came from and where it went: store → store, vendor → store, store → customer site, production. */
 function moveRoute(e,l,other){
   const here=locName(state,l.location), L=eventLinks(state,e), party=[L.company,L.site].filter(Boolean).join(' · ');
-  const prod=e.orderId||e.id.startsWith('production:'), trip=e.jobId?state.trips.find(t=>t.jobId===e.jobId&&t.status!=='Cancelled'):null;
+  const prod=e.orderId||e.id.startsWith('production:'), trip=e.jobId?state.trips.find(t=>t.jobId===e.jobId&&t.status!=='Cancelled'):
+    e.salesId?state.trips.find(t=>t.salesId===e.salesId&&t.status!=='Cancelled'):null;
   const site=get(state,'locations',e.siteId||e.destination||'');
   const map=trip?.mapUrl||(site?mapsLink(site):'');
   let from=here,to=here;
@@ -6353,10 +6473,10 @@ function pendingDeliveries(sku=''){
       map:trip?.mapUrl||mapsLink(site||j.destinationSnapshot||{}),trip,jobId:j.id});
   }
   for(const o of state.sales.filter(o=>SALES_OPEN.includes(o.status))){
-    const site=get(state,'locations',o.siteId);
+    const site=get(state,'locations',o.siteId), sTrip=activeTrip('salesId',o.id);
     for(const l of o.lines.filter(l=>l.qty-l.delivered>EPS))if(!sku||l.sku===sku)rows.push({doc:o.no,kind:'Sales order',open:`salesView(${escapeArg(o.id)})`,
-      sku:l.sku,qty:l.qty-l.delivered,from:'Chosen when delivering',to:[get(state,'customers',o.customerId)?.name,site?.name].filter(Boolean).join(' · '),
-      map:site?mapsLink(site):companyMap('customers',get(state,'customers',o.customerId)),trip:null});
+      sku:l.sku,qty:l.qty-l.delivered,from:'Chosen when delivering',salesId:o.id,to:[get(state,'customers',o.customerId)?.name,site?.name].filter(Boolean).join(' · '),
+      map:site?mapsLink(site):companyMap('customers',get(state,'customers',o.customerId)),trip:sTrip||null});
   }
   return rows;
 }
@@ -6364,7 +6484,7 @@ function pendingTable(rows,withItem=true){
   return table(['Document',...(withItem?['Item']:[]),'Still to deliver','From → To','Trip / driver'],rows.map(p=>{const it=item(state,p.sku);return [
     `<button type="button" class="link-btn" onclick="${p.open}">${esc(p.doc)}</button><div class="sub">${esc(p.kind)}</div>`,
     ...(withItem?[cell(it?.name||'—',it?.code||'')]:[]),`<strong class="num">${esc(qfmt(p.qty,it?.unit))}</strong>`,
-    routeCell(p),p.trip?tripCell(p.trip):p.jobId?small('Assign driver',`tripEdit('',{jobId:${escapeArg(p.jobId)}})`):'<span class="sub">No trip yet</span>'];}),
+    routeCell(p),p.trip?tripCell(p.trip):p.jobId?small('Assign driver',`assignDelivery('job',${escapeArg(p.jobId)})`):p.salesId?small('Assign driver',`assignDelivery('sale',${escapeArg(p.salesId)})`):'<span class="sub">No trip yet</span>'];}),
     'Nothing is waiting to be delivered.');
 }
 const Trk={
@@ -6416,7 +6536,7 @@ function trackingPage(){
   return head('Overview',TITLES.tracking,liveChip(),button('Export movements','trackExport()','','xls'),button('Clear filters','Trk.reset()','','refresh'))+
     kpiRow([['layers','Items in stock',new Set(stockRows(state).filter(b=>b.qty>EPS).map(b=>b.sku)).size,'Across '+new Set(stockRows(state).map(b=>b.location)).size+' locations','k-ink'],
       ['swap','Movements today',todayMoves.length,todayMoves.reduce((n,e)=>n+e.lines.length,0)+' item lines','k-ok'],
-      ['truck','Deliveries on the road',moving.length,moving.length?moving.map(t=>t.no).slice(0,2).join(', '):'Nothing moving','k-yellow','drivers'],
+      ['truck','Deliveries on the road',moving.length,moving.length?moving.map(t=>t.no).slice(0,2).join(', '):'Nothing moving','k-yellow','deliveries'],
       ['pulse','All-time movements',state.events.length,'Full history kept','k-ink']])+
     (moving.length?panel('On the road now',table(['Trip','Driver','Customer','To','Left at'],moving.map(t=>[
       `<button type="button" class="link-btn" onclick="tripView(${escapeArg(t.id)})">${esc(t.no)}</button>`,esc(get(state,'drivers',t.driverId)?.name||'—'),
@@ -6465,7 +6585,7 @@ const Live={
     this.at=new Date();
     if(this.timer)return;
     this.timer=setInterval(async()=>{
-      if(!state||_modalStack||document.visibilityState!=='visible'||!['dashboard','tracking','drivers'].includes(App.route))return;
+      if(!state||_modalStack||document.visibilityState!=='visible'||!['dashboard','tracking','deliveries'].includes(App.route))return;
       if(document.activeElement?.matches?.('input,select,textarea'))return;
       try{await refreshCloudWorkspace(false);this.at=new Date();const y=scrollY;App.render();scrollTo(0,y);}catch{}
     },30000);
@@ -6496,11 +6616,11 @@ function dashboard(){
   const driverRows=state.drivers.map(d=>{const t=month.filter(x=>x.driverId===d.id);return {label:d.name,value:t.length,sub:nfmt(tripKm(t),0)+' km',
     tip:d.name+': '+t.length+' trips, '+nfmt(tripKm(t),1)+' km this month',go:`driverView(${escapeArg(d.id)})`};}).filter(r=>r.value).sort((a,b)=>b.value-a.value).slice(0,8);
   const statusCounts=TRIP_STATUS.map(s=>state.trips.filter(t=>t.status===s).length);
-  return head('Overview','Dashboard',liveChip(),link('tracking','Live tracking'),link('drivers','Drivers'))+
+  return head('Overview','Dashboard',liveChip(),link('tracking','Live tracking'),link('deliveries','Deliveries'))+
     kpiRow([['layers','Items in stock',new Set(balances.filter(b=>b.qty>EPS).map(b=>b.sku)).size,byLoc.size+' locations holding stock','k-ink','tracking'],
       ['swap','Movements today',todayMoves.length,todayMoves.reduce((n,e)=>n+e.lines.length,0)+' item lines moved','k-ok','tracking'],
-      ['truck','On the road',moving.length,waiting.length+' trips waiting to leave','k-yellow','drivers'],
-      ['route','Deliveries this month',month.length,nfmt(tripKm(month),0)+' km driven','k-ink','drivers'],
+      ['truck','On the road',moving.length,waiting.length+' trips waiting to leave','k-yellow','deliveries'],
+      ['route','Deliveries this month',month.length,nfmt(tripKm(month),0)+' km driven','k-ink','deliveries'],
       ['invoice','Open sales orders',openSales.length,openJobs.length+' open dispatch jobs','k-ink','sales'],
       ['wrench','Production in progress',state.orders.filter(o=>['Draft','Released'].includes(o.status)).length,'Draft or released orders','k-ink','production'],
       ['idcard','Driver papers',blocked.length,blocked.length?'Drivers who cannot deliver':soon.length?soon.length+' expiring within 30 days':'All drivers cleared',blocked.length?'k-red':'k-ok','drivers'],
@@ -6551,7 +6671,7 @@ function searchIndex(){
   ].flatMap(([type,title,keys])=>state[type].map(r=>({kind:'record',path:[title,r.name],extra:keys(r).filter(Boolean).join(' '),
     go:()=>{App.go(type);masterView(type,r.id);}})));
   for(const d of state.drivers)records.push({kind:'record',path:['Drivers',d.name],extra:[d.phone,d.vehiclePlate].join(' '),go:()=>{App.go('drivers');driverView(d.id);}});
-  for(const t of state.trips)records.push({kind:'record',path:['Trips',t.no+(t.customerName?' · '+t.customerName:'')],extra:[t.project,t.location].join(' '),go:()=>{App.go('drivers');tripView(t.id);}});
+  for(const t of state.trips)records.push({kind:'record',path:['Trips',t.no+(t.customerName?' · '+t.customerName:'')],extra:[t.project,t.location].join(' '),go:()=>{App.go('deliveries');tripView(t.id);}});
   return {menus,records};
 }
 function searchMatch(entry,words){
@@ -6643,7 +6763,7 @@ const App={
   render(){
     $('#sidebar').innerHTML=this.nav();
     $('#topbar').innerHTML=this.top();wireGlobalSearch();
-    const screens={dashboard,tracking:trackingPage,drivers:driversPage,sales:salesPage,production:productionPage,purchase:purchasingPage,movement:inventoryPage,
+    const screens={dashboard,tracking:trackingPage,drivers:driversPage,deliveries:deliveriesPage,sales:salesPage,production:productionPage,purchase:purchasingPage,movement:inventoryPage,
       dispatch:dispatchPage,reports:reportPage,settings:settingsPage,bom:recipePage,tools:toolsPage};
     const utilities={steel:Tools,market:Market,prodcalc:PWC,nesting:Nest};
     const utility=utilities[this.route];
