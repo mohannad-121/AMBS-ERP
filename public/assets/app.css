@@ -1200,3 +1200,73 @@ td.stock-low,td.stock-watch,td.stock-good{background:none!important}
 .dlv-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px 18px;margin:0 0 14px;padding:12px 14px;background:#f8f9fa;border:1px solid var(--o-border);border-radius:4px}
 .dlv-summary span{display:block;font-size:11.5px;color:var(--o-muted);text-transform:uppercase;letter-spacing:.3px}
 .dlv-summary b{font-weight:600;color:var(--o-text)}
+
+/* ===== Odoo form view: header + status bar, two-column fields, notebook tabs, history (chatter) ===== */
+.o-form-header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;max-width:1560px;margin:0 auto 12px;padding:8px 12px;background:#fff;border:1px solid var(--o-border);border-radius:4px}
+.o-sheet>.o-form-header{margin:0 0 14px}
+.o-fh-actions{display:flex;gap:6px;flex-wrap:wrap}
+.o-statusbar{display:flex;align-items:stretch;flex-wrap:wrap;margin-left:auto}
+.o-statusbar span{position:relative;padding:5px 14px 5px 20px;font-size:12.5px;color:var(--o-muted);background:#f1f3f5;border:1px solid var(--o-border);margin-left:-1px;white-space:nowrap;clip-path:polygon(0 0,calc(100% - 8px) 0,100% 50%,calc(100% - 8px) 100%,0 100%,8px 50%)}
+.o-statusbar span:first-child{padding-left:14px;clip-path:polygon(0 0,calc(100% - 8px) 0,100% 50%,calc(100% - 8px) 100%,0 100%);border-radius:3px 0 0 3px}
+.o-statusbar span.done{color:var(--o-text-2);background:#fff}
+.o-statusbar span.on{color:#fff;background:var(--o-accent);border-color:var(--o-accent);font-weight:600}
+.o-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:2px 32px;margin:0 0 16px}
+.o-field{display:grid;grid-template-columns:minmax(120px,38%) 1fr;gap:10px;padding:6px 0;border-bottom:1px solid var(--o-border-2);font-size:13.5px}
+.o-label{color:var(--o-text-2);font-weight:600}
+.o-value{color:var(--o-text);word-break:break-word}
+.o-notebook-nav{display:flex;flex-wrap:wrap;gap:0;margin:8px 0 0;border-bottom:1px solid var(--o-border)}
+.o-tab{border:1px solid transparent;border-bottom:0;background:none;font:inherit;font-size:13.5px;color:var(--o-text-2);padding:8px 16px;cursor:pointer;border-radius:4px 4px 0 0;margin-bottom:-1px}
+.o-tab:hover{color:var(--o-text);background:var(--o-hover)}
+.o-tab.on{color:var(--o-text);font-weight:600;background:#fff;border-color:var(--o-border)}
+.o-pane{border-top:0!important;border-radius:0 0 4px 4px!important;margin-top:0!important}
+.o-pane>.card-head{display:none!important}
+.co-section.o-pane{border:1px solid var(--o-border);border-top:0;padding:0}
+.co-section.o-pane>section.card{border:0!important;margin:0!important}
+.co-section.o-pane>section.card>.card-head{display:none!important}
+.o-form-wrap{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:16px;max-width:1560px;margin:0 auto;align-items:start}
+.o-form-wrap>.o-sheet{max-width:none;margin:0;min-width:0}
+.o-chatter{position:sticky;top:60px;max-height:calc(100vh - 80px);overflow:auto;background:#fff;border:1px solid var(--o-border);border-radius:4px;padding:12px 14px}
+.o-chatter-head{font-weight:600;font-size:14px;margin:0 0 10px;padding-bottom:8px;border-bottom:1px solid var(--o-border-2)}
+.o-msg{display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--o-border-2);font-size:13px}
+.o-msg:last-child{border-bottom:0}
+.o-msg-avatar{flex:0 0 28px;width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:#e9ecef;color:#495057;font-size:11px;font-weight:700}
+.o-msg-meta{color:var(--o-muted);font-size:12px}.o-msg-meta b{color:var(--o-text);font-weight:600}
+.o-msg-text{color:var(--o-text-2)}
+.o-msg-empty{color:var(--o-muted);font-size:13px}
+/* edit on the page */
+.o-form-page .o-sheet{max-width:1100px}
+.o-sheet-edit{padding-top:20px}
+.o-more{border:1px solid var(--o-border);border-radius:4px;padding:0 12px;margin:4px 0}
+.o-more>summary{cursor:pointer;padding:10px 0;color:var(--o-text-2);font-weight:600;font-size:13px}
+.o-more[open]>summary{border-bottom:1px solid var(--o-border-2);margin-bottom:12px}
+.o-more>.form-grid{padding-bottom:12px}
+/* ===== lists: sort, filters, group by, pager ===== */
+th.o-sortable{cursor:pointer;user-select:none;white-space:nowrap}
+th.o-sortable:hover{background:var(--o-hover)!important}
+th.o-sortable.sorted::after{content:" ▲";font-size:10px;color:var(--o-accent)}
+th.o-sortable.sorted.desc::after{content:" ▼"}
+.o-list-tools{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.o-facets{display:flex;flex-wrap:wrap;gap:4px}
+.o-facet{border:1px solid var(--o-border);background:#fff;border-radius:999px;padding:3px 10px;font:inherit;font-size:12.5px;color:var(--o-text-2);cursor:pointer}
+.o-facet:hover{background:var(--o-hover)}
+.o-facet.on{background:var(--o-accent);border-color:var(--o-accent);color:#fff}
+.o-groupby{width:auto!important;min-width:130px;height:30px!important;font-size:12.5px!important}
+tr.o-group td{background:#f8f9fa!important;font-weight:600;cursor:pointer;color:var(--o-text)}
+.o-group-n{color:var(--o-muted);font-weight:400}
+.o-caret{display:inline-block;width:12px;color:var(--o-muted)}
+.pill-legend{display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
+.o-pg{border:1px solid var(--o-border);background:#fff;border-radius:4px;width:26px;height:24px;cursor:pointer;font:inherit;line-height:1}
+.o-pg:hover{background:var(--o-hover)}
+@media(max-width:1100px){.o-form-wrap{grid-template-columns:1fr}.o-chatter{position:static;max-height:none}.o-fields{grid-template-columns:1fr}}
+/* phones: list rows become stacked cards */
+@media(max-width:700px){
+  .tbl{min-width:0!important}
+  .tbl thead{display:none}
+  .tbl tbody tr{display:block;border:1px solid var(--o-border);border-radius:4px;margin:0 0 8px;background:#fff}
+  .tbl tbody tr.o-group{border:0;background:none}
+  .tbl td{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:6px 10px!important;border-bottom:1px solid var(--o-border-2)!important;text-align:right;white-space:normal!important}
+  .tbl td:last-child{border-bottom:0!important}
+  .tbl td[data-label]::before{content:attr(data-label);font-weight:600;color:var(--o-text-2);text-align:left;flex:0 0 40%}
+  .tbl td[colspan]{display:block}
+  .o-statusbar{margin-left:0}
+}
