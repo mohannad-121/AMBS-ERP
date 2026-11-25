@@ -145,7 +145,12 @@ function componentQty(value,unit,label='Quantity',zero=false){
   need(zero||n>0,label+' must be at least 0.000001.');
   return n;
 }
-const add=(list,obj)=>{const i=list.findIndex(x=>x.id===obj.id); if(i<0)list.push(obj); else list[i]=obj;};
+/* The person working now: their name/email in the cloud, the operator name in the browser demo. */
+const whoami=()=>typeof CLOUD!=='undefined'&&!CLOUD.demo?(CLOUD.name||CLOUD.email||'—'):(typeof SET!=='undefined'&&SET.currentUser||'This browser');
+const add=(list,obj)=>{const i=list.findIndex(x=>x.id===obj.id), t=new Date().toISOString(), who=whoami();
+  if(i<0){obj.createdBy??=who;obj.createdAt??=t;} else{obj.createdBy??=list[i].createdBy;obj.createdAt??=list[i].createdAt;}
+  obj.editedBy=who;obj.editedAt=t;
+  if(i<0)list.push(obj); else list[i]=obj;};
 const escapeArg=x=>esc(JSON.stringify(x));
 function operationNo(prefix){return prefix+'-'+key().slice(0,8).toUpperCase();}
 function label(row){return row ? [row.code,row.name,...(row.packingQuantities?[row.category]:[row.size,row.color])].filter(Boolean).join(' · ') : '—';}
@@ -205,7 +210,7 @@ function event(s,id,type,lines,note=''){
     need(Number.isFinite(balance+delta) && balance+delta>=-EPS,
       'Insufficient stock for '+label(item(s,sku))+' at '+locName(s,location)+'. Available '+nfmt(balance,6)+' '+item(s,sku).unit+'.');
   }
-  s.events.push({id,type,lines,note,at:now(),by:s.settings.currentUser});
+  s.events.push({id,type,lines,note,at:now(),by:whoami()});
 }
 function stockEventContext(s,lines,rawParty='',selectedSite=''){
   const explicit=rawParty?JSON.parse(rawParty):null;
@@ -2832,6 +2837,7 @@ const CLOUD = {
     const remote = await this.api();
     this.email = remote.identity;
     this.role = remote.role;
+    this.name = remote.name || '';
     if (!remote.snapshot) {
       const data=emptyStateData();
       addWorkbookParts(data);
@@ -2867,8 +2873,7 @@ const CLOUD = {
   },
   showLogin(message = '') {
     $('#app').classList.add('cloud-login-mode');
-    $('#view').innerHTML=`<section class="card card-pad startup-card">
-      <div class="eyebrow">AM Building Solutions</div><h1 class="h1">Sign in to AMBS</h1>
+    $('#view').innerHTML=authShell(`<h1 class="h1">Sign in to AMBS</h1>
       <form id="ambs-login">
         ${input('Email','email','',{type:'email',required:true,extra:'autocomplete="username"'})}
         ${input('Password','password','',{type:'password',required:true,extra:'autocomplete="current-password"'})}
@@ -2876,7 +2881,7 @@ const CLOUD = {
         <button type="submit" class="btn btn-primary">Sign in</button>
         <button type="button" class="btn" id="ambs-create-account">Create account</button>
         <button type="button" class="btn" id="ambs-forgot-password">Forgot password?</button>
-      </form></section>`;
+      </form>`);
     const form=$('#ambs-login'), status=$('#ambs-login-status');
     $('#ambs-create-account').addEventListener('click',()=>this.showSignup());
     $('#ambs-forgot-password').addEventListener('click',()=>this.showPasswordRecovery());
@@ -2899,8 +2904,7 @@ const CLOUD = {
   },
   showSignup(message = '') {
     $('#app').classList.add('cloud-login-mode');
-    $('#view').innerHTML=`<section class="card card-pad startup-card">
-      <div class="eyebrow">AM Building Solutions</div><h1 class="h1">Create your AMBS account</h1>
+    $('#view').innerHTML=authShell(`<h1 class="h1">Create your AMBS account</h1>
       <ol><li>Enter your authorized email and a password.</li>
         <li>Open Gmail and find the AMBS confirmation code.</li>
         <li>Enter the code here to confirm your email and sign in.</li></ol>
@@ -2911,7 +2915,7 @@ const CLOUD = {
         <p id="ambs-signup-status" role="status">${esc(message)}</p>
         <button type="submit" class="btn btn-primary">Email me a code</button>
         <button type="button" class="btn" id="ambs-back-to-login">Back to sign in</button>
-      </form></section>`;
+      </form>`);
     const form=$('#ambs-signup'), status=$('#ambs-signup-status');
     $('#ambs-back-to-login').addEventListener('click',()=>this.showLogin());
     form.addEventListener('submit',async e=>{
@@ -2927,15 +2931,14 @@ const CLOUD = {
     });
   },
   showConfirmation(email,message='Check your Gmail inbox for your confirmation code.') {
-    $('#view').innerHTML=`<section class="card card-pad startup-card">
-      <div class="eyebrow">AM Building Solutions</div><h1 class="h1">Confirm your email</h1>
+    $('#view').innerHTML=authShell(`<h1 class="h1">Confirm your email</h1>
       <p>We sent a confirmation code to <strong>${esc(email)}</strong>. Check Gmail, including Spam, then enter the code below.</p>
       <form id="ambs-confirmation">
         ${input('Confirmation code','code','',{required:true,extra:'inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6,8}" minlength="6" maxlength="8"'})}
         <p id="ambs-confirmation-status" role="status">${esc(message)}</p>
         <button type="submit" class="btn btn-primary">Confirm and sign in</button>
         <button type="button" class="btn" id="ambs-start-again">Start again</button>
-      </form></section>`;
+      </form>`);
     const form=$('#ambs-confirmation'), status=$('#ambs-confirmation-status');
     $('#ambs-start-again').addEventListener('click',()=>this.showSignup());
     form.addEventListener('submit',async e=>{
@@ -2955,15 +2958,14 @@ const CLOUD = {
   },
   showPasswordRecovery(message = '') {
     $('#app').classList.add('cloud-login-mode');
-    $('#view').innerHTML=`<section class="card card-pad startup-card">
-      <div class="eyebrow">AM Building Solutions</div><h1 class="h1">Reset your password</h1>
+    $('#view').innerHTML=authShell(`<h1 class="h1">Reset your password</h1>
       <p>Enter your AMBS email. We will send a reset code to that inbox.</p>
       <form id="ambs-recovery-request">
         ${input('Email','email','',{type:'email',required:true,extra:'autocomplete="email"'})}
         <p id="ambs-recovery-status" role="status">${esc(message)}</p>
         <button type="submit" class="btn btn-primary">Send reset code</button>
         <button type="button" class="btn" id="ambs-recovery-back">Back to sign in</button>
-      </form></section>`;
+      </form>`);
     const form=$('#ambs-recovery-request'), status=$('#ambs-recovery-status');
     $('#ambs-recovery-back').addEventListener('click',()=>this.showLogin());
     form.addEventListener('submit',async e=>{
@@ -2979,15 +2981,14 @@ const CLOUD = {
     });
   },
   showRecoveryCode(email) {
-    $('#view').innerHTML=`<section class="card card-pad startup-card">
-      <div class="eyebrow">AM Building Solutions</div><h1 class="h1">Enter your reset code</h1>
+    $('#view').innerHTML=authShell(`<h1 class="h1">Enter your reset code</h1>
       <p>If an account exists for <strong>${esc(email)}</strong>, check its inbox, including Spam, for the reset code.</p>
       <form id="ambs-recovery-code">
         ${input('Reset code','code','',{required:true,extra:'inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6,8}" minlength="6" maxlength="8"'})}
         <p id="ambs-recovery-code-status" role="status"></p>
         <button type="submit" class="btn btn-primary">Verify code</button>
         <button type="button" class="btn" id="ambs-recovery-retry">Request another code</button>
-      </form></section>`;
+      </form>`);
     const form=$('#ambs-recovery-code'), status=$('#ambs-recovery-code-status');
     $('#ambs-recovery-retry').addEventListener('click',()=>this.showPasswordRecovery());
     form.addEventListener('submit',async e=>{
@@ -3004,13 +3005,12 @@ const CLOUD = {
     });
   },
   showNewPassword(session) {
-    $('#view').innerHTML=`<section class="card card-pad startup-card">
-      <div class="eyebrow">AM Building Solutions</div><h1 class="h1">Choose a new password</h1>
+    $('#view').innerHTML=authShell(`<h1 class="h1">Choose a new password</h1>
       <form id="ambs-new-password">
         ${input('New password','password','',{type:'password',required:true,extra:'minlength="12" maxlength="72" autocomplete="new-password"'})}
         <p id="ambs-new-password-status" role="status"></p>
         <button type="submit" class="btn btn-primary">Save new password</button>
-      </form></section>`;
+      </form>`);
     const form=$('#ambs-new-password'), status=$('#ambs-new-password-status');
     form.addEventListener('submit',async e=>{
       e.preventDefault();
@@ -3082,9 +3082,20 @@ async function refreshCloudWorkspace(render = false){
   }
 }
 
+/* Sign-in pages: brand panel on the left, the form card on the right. */
+function authShell(inner){
+  return `<div class="auth"><aside class="auth-brand"><div class="auth-brand-top"><span class="auth-mark">AM</span><span class="auth-name">AMBS</span></div>
+    <div class="auth-pitch"><h2>Production &amp; stock,<br>one place for the whole team.</h2>
+      <ul><li>${ic('box')}Raw materials, parts and products in every store</li>
+        <li>${ic('wrench')}Purchasing, production and packing lists</li>
+        <li>${ic('truck')}Deliveries with drivers and live tracking</li></ul></div>
+    <div class="auth-foot">AM Building Solutions DWC LLC</div></aside>
+    <section class="auth-card"><div class="auth-card-mark"><span class="auth-mark">AM</span></div>${inner}</section></div>`;
+}
 function renderConnectedApp(){
   $('#app').classList.remove('cloud-login-mode');
   const route=location.hash.slice(2);
+  if(isOwner()&&(!route||route==='dashboard'))return App.go('owner');
   if(TITLES[route])App.go(route);else App.render();
 }
 
@@ -3154,13 +3165,20 @@ async function commit(change){
 }
 
 /* Shared views and editors */
-const TITLES={dashboard:'Dashboard',customers:'Customers',suppliers:'Vendors',processors:'Processing Companies',
+const TITLES={owner:'Owner overview',team:'Team activity',items:'Items & stock',dashboard:'Dashboard',customers:'Customers',suppliers:'Vendors',processors:'Processing Companies',
   materials:'Raw Materials',parts:'Parts',bom:'Bills of Materials',products:'Products',production:'Production',
   tracking:'Live Tracking',drivers:'Drivers',deliveries:'Deliveries',
   sales:'Sales Orders',purchase:'Purchasing',movement:'Inventory & Stock Movements',dispatch:'Packing & Dispatch',reports:'Reports',
   tools:'Tools',settings:'Settings & Data',market:'Market Sections',steel:'Steel Weight Calculator',
   prodcalc:'Product Calculator','prodcalc-new':'Product Take-off',nesting:'Product Nesting',
   'plan-new':'Production','purchase-new':'Purchasing'};
+/* Owner (super admin) gets his own menu: the team's work, items and tracking. Admins see the same pages under "Owner view". */
+const isOwner=()=>typeof CLOUD!=='undefined'&&CLOUD.role==='owner';
+const canSeeOwner=()=>typeof CLOUD!=='undefined'&&['owner','admin'].includes(CLOUD.role);
+const OWNER_GROUPS=[
+  ['Owner',[['owner','chart'],['team','users'],['items','box']]],
+  ['Follow the work',[['tracking','route'],['deliveries','truck'],['sales','invoice'],['purchase','cart'],['production','wrench'],['reports','pdf']]]
+];
 const GROUPS=[
   ['Overview',[['dashboard','dashboard'],['tracking','route'],['customers','users'],['suppliers','warehouse'],['drivers','driver'],['processors','factory']]],
   ['Master Data',[['materials','stack'],['parts','nut'],['products','box'],['bom','tree']]],
@@ -3180,6 +3198,7 @@ const link=(r,text=TITLES[r])=>button(text,`App.go(${escapeArg(r)})`,'btn-sm');
 /* Menu group of the current page, e.g. "Master Data" for Products; tool pages sit under System / Tools. */
 const menuGroup=()=>{const r=typeof App!=='undefined'?App.route:'';
   if(['steel','market','prodcalc','prodcalc-new','nesting'].includes(r))return 'System / Tools';
+  if(['owner','team','items'].includes(r))return 'Owner';
   return GROUPS.find(([,rows])=>rows.some(([x])=>x===r))?.[0]||'';};
 const crumbParent=()=>menuGroup()?`<span class="o-bc-parent">${esc(menuGroup())}</span><span class="o-bc-sep">/</span>`:'';
 const head=(group,title,...actions)=>`<div class="view-head"><div class="o-bc o-bc-list">${crumbParent()}<h1 class="h1">${esc(title)}</h1></div><div class="head-actions">${actions.join('')}</div></div>`;
@@ -6252,7 +6271,7 @@ function tripEdit(id,preset={}){
       customerId,customerName:customerId?get(state,'customers',customerId)?.name||'':valOf(f,'customerSearch'),
       project:valOf(f,'project'),from:valOf(f,'from'),location:valOf(f,'location'),mapUrl:readMapUrl(f,'mapUrl'),km,priority:valOf(f,'priority')||'Normal',
       system:valOf(f,'system'),description:valOf(f,'description'),status,deliveredAt:valOf(f,'deliveredAt'),
-      paperStatus:valOf(f,'paperStatus')||'Pending',jobId:valOf(f,'jobId'),notes:valOf(f,'notes'),by:old?.by||SET.currentUser};
+      paperStatus:valOf(f,'paperStatus')||'Pending',jobId:valOf(f,'jobId'),notes:valOf(f,'notes'),by:old?.by||whoami()};
     need(driverId,'Choose the driver for this trip.');
     if(status==='Delivered'&&!data.deliveredAt)data.deliveredAt=todayISO();
     await commit(s=>{
@@ -6499,7 +6518,7 @@ function assignDelivery(kind,docId,tripId=''){
         priority:valOf(f,'priority')||'Normal',[kind==='job'?'jobId':'salesId']:docId,customerId:i.customerId,customerName:i.customerName,
         project:old?.project||i.project,from:locName(s,fromLocation),fromLocation,location:old?.location||i.location,mapUrl:old?.mapUrl||i.mapUrl,
         system:old?.system||'',description:old?.description||i.description,status:old?.status||'Next',
-        paperStatus:valOf(f,'paperStatus')||old?.paperStatus||'Pending',by:old?.by||SET.currentUser,at:old?.at||now(),updated:now()});
+        paperStatus:valOf(f,'paperStatus')||old?.paperStatus||'Pending',by:old?.by||whoami(),at:old?.at||now(),updated:now()});
     });
     return old?'Delivery saved.':'Driver assigned — the trip is ready to start.';
   },{text:old?'Save':'Assign driver'});
@@ -6574,6 +6593,88 @@ function deliveriesPage(){
       <div id="trip-results" class="card-body-flush">${Drv.results()}</div></section>`;
 }
 
+
+/* ---------------- Owner area: what every employee did, items, tracking ---------------- */
+const ACT_TABLES=[['customers','customer',r=>r.name,'masterView'],['suppliers','vendor',r=>r.name,'masterView'],['processors','processing company',r=>r.name,'masterView'],
+  ['drivers','driver',r=>r.name,'driverView'],['materials','raw material',r=>r.name,'masterView'],['parts','part',r=>r.name,'masterView'],['products','product',r=>r.name,'masterView'],
+  ['recipes','BOM',r=>label(item(state,r.id)),''],['sales','sales order',r=>r.no,'salesView'],['purchases','purchase',r=>r.no,'purchaseView'],['jobs','dispatch job',r=>r.no+' · '+(r.name||''),'dispatchView'],
+  ['orders','production order',r=>r.no,'orderView'],['plans','production plan',r=>r.no,'planView'],['trips','delivery trip',r=>r.no,'tripView']];
+function activity(){
+  const out=[], op=(view,t,id)=>!view?'':view==='masterView'?`masterView(${escapeArg(t)},${escapeArg(id)})`:`${view}(${escapeArg(id)})`;
+  for(const [t,kind,name,view] of ACT_TABLES)for(const r of state[t]||[]){
+    const open=op(view,t,r.id), ref=String(name(r)||'—');
+    if(r.createdAt)out.push({at:r.createdAt,by:r.createdBy,what:'Created '+kind,ref,open,kind:'create'});
+    else if(r.at)out.push({at:r.at,by:r.by,what:(['sales','purchases','jobs','orders','plans','trips'].includes(t)?'Created ':'Saved ')+kind,ref,open,kind:'create'});
+    if(r.editedAt&&r.createdAt&&Date.parse(r.editedAt)-Date.parse(r.createdAt)>5000)
+      out.push({at:r.editedAt,by:r.editedBy,what:'Updated '+kind,ref,open,kind:'edit'});
+  }
+  for(const e of state.events)out.push({at:e.at,by:e.by,what:evType(e.type),kind:'stock',open:`eventView(${escapeArg(e.id)})`,
+    ref:e.note||e.lines.slice(0,2).map(l=>labelOf(state,l.sku)).join(', ')});
+  return out.filter(x=>x.at).map(x=>({...x,by:x.by||'—'})).sort((x,y)=>String(y.at).localeCompare(String(x.at)));
+}
+const agoText=at=>{const m=Math.round((Date.now()-Date.parse(at))/6e4);
+  return m<1?'just now':m<60?m+' min ago':m<1440?Math.round(m/60)+' h ago':Math.round(m/1440)+' d ago';};
+function teamSummary(rows){
+  const day=todayISO(), week=Date.now()-7*864e5, by=new Map();
+  for(const r of rows){if(r.by==='—')continue;const p=by.get(r.by)||{name:r.by,today:0,week:0,total:0,last:r,stock:0};
+    p.total++;if(String(r.at).slice(0,10)===day)p.today++;if(Date.parse(r.at)>=week)p.week++;if(r.kind==='stock')p.stock++;by.set(r.by,p);}
+  return [...by.values()].sort((x,y)=>String(y.last.at).localeCompare(String(x.last.at)));
+}
+function activityRow(r){
+  return [`<span class="sub">${esc(stamp(r.at))}</span><div class="sub">${esc(agoText(r.at))}</div>`,`<b>${esc(r.by)}</b>`,
+    esc(r.what),esc(r.ref)+(r.open?openBtn(r.open):'')];
+}
+function ownerPage(){
+  Live.start();
+  const rows=activity(), team=teamSummary(rows.filter(r=>Date.parse(r.at)>=Date.now()-30*864e5));
+  const held=aggregate(stockRows(state)).filter(b=>b.qty>EPS).length;
+  const openSales=state.sales.filter(o=>SALES_OPEN.includes(o.status));
+  const month=state.trips.filter(t=>t.status==='Delivered'&&monthKey(t.deliveredAt||t.date)===thisMonth());
+  let queue=0;try{queue=deliveryQueue().length;}catch{}
+  return head('Owner','Overview',liveChip())+
+    `<p class="sub owner-hello">Welcome${CLOUD.name?', '+esc(CLOUD.name.split(' ')[0]):''}. Everything your team did is below — click any line to open it.</p>`+
+    kpiRow([['box','Items in stock',held,'distinct items with stock','k-ink','items'],
+      ['users','Active today',team.filter(p=>p.today).length,team.filter(p=>p.today).map(p=>p.name).slice(0,3).join(', ')||'Nobody yet today','k-ok','team'],
+      ['invoice','Open sales orders',openSales.length,queue?queue+' waiting for a driver':'none waiting for a driver',queue?'k-red':'k-ink','sales'],
+      ['truck','Delivered this month',month.length,nfmt(tripKm(month),0)+' km','k-ok','deliveries'],
+      ['cart','Purchases to receive',state.purchases.filter(p=>p.status==='Ordered').length,'ordered, not yet received','k-yellow','purchase'],
+      ['wrench','Production in progress',state.orders.filter(o=>o.status==='Released').length,'released orders','k-ink','production']])+
+    `<section class="card"><div class="card-head"><div class="card-title">Team · last 30 days</div><button type="button" class="link-btn" onclick="App.go('team')">All activity →</button></div>
+      <div class="owner-team">${team.length?team.map(p=>`<button type="button" class="owner-person" onclick="Team.f.who=${escapeArg(p.name)};App.go('team')">
+        <span class="co-avatar co-avatar-md">${esc(String(p.name).slice(0,2).toUpperCase())}</span><span class="owner-person-main"><b>${esc(p.name)}</b>
+        <small>${p.today} today · ${p.week} this week · ${p.total} in 30 days</small><em>Last: ${esc(p.last.what)} · ${esc(agoText(p.last.at))}</em></span></button>`).join(''):
+        '<div class="viz-empty">No activity yet. When employees save records or move stock, they appear here.</div>'}</div></section>`+
+    panel('Latest activity',table(['When','Who','What','Record'],rows.slice(0,25).map(activityRow),'No activity yet.'));
+}
+const Team={f:{who:'',days:'7',q:''}};
+function teamPage(){
+  const all=activity(), f=Team.f, since=f.days?Date.now()-Number(f.days)*864e5:0;
+  const people=[...new Set(all.map(r=>r.by))].filter(p=>p!=='—').sort();
+  const rows=all.filter(r=>(!f.who||r.by===f.who)&&(!since||Date.parse(r.at)>=since));
+  const opt=(list,sel,first)=>`<option value="">${esc(first)}</option>`+list.map(([v,l])=>`<option value="${esc(v)}"${v===sel?' selected':''}>${esc(l)}</option>`).join('');
+  return head('Owner','Team activity')+
+    `<div class="card"><div class="toolbar">
+      <select class="sel" aria-label="Person" onchange="Team.f.who=this.value;App.render()">${opt(people.map(p=>[p,p]),f.who,'Everyone')}</select>
+      <select class="sel" aria-label="Period" onchange="Team.f.days=this.value;App.render()">${opt([['1','Today'],['7','Last 7 days'],['30','Last 30 days']],f.days,'All time')}</select>
+      <span class="pill-legend">${rows.length} actions</span></div></div>`+
+    panel('Per person',table(['Person','Actions','Records saved','Stock movements','Last active'],teamSummary(rows).map(p=>[`<b>${esc(p.name)}</b>`,esc(p.total),
+      esc(p.total-p.stock),esc(p.stock),esc(agoText(p.last.at)+' · '+p.last.what)]),'No activity in this period.'))+
+    searchableTable(['When','Who','What','Record'],rows.slice(0,500).map(activityRow),'No activity in this period.',
+      rows.slice(0,500).map(r=>[r.by,r.what,r.ref].join(' ')),{placeholder:'Search activity…',noun:'actions'});
+}
+function itemsPage(){
+  const rows=stockRows(state), last=new Map();
+  for(const e of state.events)for(const l of e.lines){const p=last.get(l.sku);if(!p||String(e.at)>String(p.at))last.set(l.sku,e);}
+  const items=[...current(state,'materials').map(r=>['Raw material',r]),...current(state,'parts').map(r=>['Part',r]),...current(state,'products').map(r=>['Product',r])];
+  return head('Owner','Items & stock')+
+    searchableTable(['Item','Type','On hand','Where it is','Last movement'],items.map(([kind,r])=>{
+      const here=rows.filter(b=>b.sku===r.id&&Math.abs(b.qty)>EPS), total=here.reduce((n,b)=>n+b.qty,0), e=last.get(r.id);
+      return [`<div class="record-media">${recordPicture(r,'thumb-kanban')}<div>${cell(r.name,r.code)}</div></div>`+openBtn(`trackItem(${escapeArg(r.id)})`),esc(kind),
+        `<strong class="num">${esc(qfmt(total,r.unit))}</strong>`,
+        here.length?here.map(b=>`<div class="sub">${esc(locName(state,b.location))}: <b>${esc(qfmt(b.qty))}</b></div>`).join(''):'<span class="sub">Not in stock</span>',
+        e?`${esc(evType(e.type))}<div class="sub">${esc(e.by||'—')} · ${esc(agoText(e.at))}</div>`:'<span class="sub">—</span>'];
+    }),'No items yet.',items.map(([kind,r])=>[kind,r.name,r.code,r.category].join(' ')),{placeholder:'Search items by name, code or type…',noun:'items'});
+}
 /* ---------------- Charts (inline HTML/SVG, hover tooltips via data-tip) ---------------- */
 const VIZ=['var(--viz-1)','var(--viz-2)','var(--viz-3)','var(--viz-4)'];
 function kpiRow(items){
@@ -6937,11 +7038,14 @@ const App={
   },
   nav(){
     const selected=['market','steel','prodcalc','prodcalc-new','nesting'].includes(this.route)?'tools':this.route;
-    return `<div class="o-side"><button type="button" class="o-brand o-side-brand" onclick="App.go('dashboard')"><span class="o-brand-mark">AM</span><span>AMBS</span></button>
-      <nav class="o-side-nav" aria-label="Main navigation">${GROUPS.map(([group,rows])=>`<div class="o-side-group"><div class="o-side-head">${esc(group)}</div>
+    const ownerMenu=isOwner()&&!this.fullMenu;
+    const groups=ownerMenu?OWNER_GROUPS:canSeeOwner()?[...GROUPS,['Owner view',OWNER_GROUPS[0][1]]]:GROUPS;
+    return `<div class="o-side"><button type="button" class="o-brand o-side-brand" onclick="App.go('${ownerMenu?'owner':'dashboard'}')"><span class="o-brand-mark">AM</span><span>AMBS</span></button>
+      <nav class="o-side-nav" aria-label="Main navigation">${groups.map(([group,rows])=>`<div class="o-side-group"><div class="o-side-head">${esc(group)}</div>
         ${rows.map(([r,i])=>`<a href="#/${r}" class="o-side-link${selected===r?' on':''}"${selected===r?' aria-current="page"':''}
           onclick="event.preventDefault();App.go('${r}')">${ic(i)}<span>${esc(TITLES[r])}</span></a>`).join('')}</div>`).join('')}</nav>
-      <div class="o-side-foot">${esc(SET.company)}</div></div>`;
+      ${isOwner()?`<button type="button" class="o-side-switch" onclick="App.fullMenu=!App.fullMenu;App.go(App.fullMenu?'dashboard':'owner')">${ic(this.fullMenu?'chart':'list')}${this.fullMenu?'Back to owner menu':'Open the full ERP menu'}</button>`:''}
+      <div class="o-side-foot">${esc(SET.company)}${isOwner()?'<br><b class="o-owner-tag">Owner · super admin</b>':''}</div></div>`;
   },
   toggleNavigation(open){
     document.body.classList.toggle('nav-open',open);
@@ -6968,7 +7072,9 @@ const App={
     $('#sidebar').innerHTML=this.nav();
     $('#topbar').innerHTML=this.top();wireGlobalSearch();
     const screens={dashboard,tracking:trackingPage,drivers:driversPage,deliveries:deliveriesPage,sales:salesPage,production:productionPage,purchase:purchasingPage,movement:inventoryPage,
-      dispatch:dispatchPage,reports:reportPage,settings:settingsPage,bom:recipePage,tools:toolsPage};
+      dispatch:dispatchPage,reports:reportPage,settings:settingsPage,bom:recipePage,tools:toolsPage,
+      owner:ownerPage,team:teamPage,items:itemsPage};
+    if(['owner','team','items'].includes(this.route)&&!canSeeOwner())this.route='dashboard';
     const utilities={steel:Tools,market:Market,prodcalc:PWC,nesting:Nest};
     const utility=utilities[this.route];
     const view=$('#view');

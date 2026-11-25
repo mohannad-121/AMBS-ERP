@@ -40,8 +40,8 @@ app = patch(app, """      const data=emptyStateData();
       addWorkbookParts(data);
       data.deletedWorkbookParts=data.parts.map(p=>p.id);data.parts=[];
       data.locations=""" + json.dumps(STORES, ensure_ascii=False) + """;""", 'first-start seed')
-app = patch(app, """<div class="o-side-foot">${esc(SET.company)}</div>""",
-            """<div class="o-side-foot">${esc(SET.company)}<br><b style="color:#9b1c1c">Test copy</b></div>""", 'sidebar label')
+app = patch(app, """<div class="o-side-foot">${esc(SET.company)}""",
+            """<div class="o-side-foot">${esc(SET.company)}<br><b style="color:#9b1c1c">Test copy</b>""", 'sidebar label')
 js['app.js'] = app
 js['assistant.js'] = patch(js['assistant.js'], "const text=await (await fetch(GUIDE_URL,{cache:'no-store'})).text();",
                            "const text=document.getElementById('ambs-guide').textContent;", 'assistant guide')

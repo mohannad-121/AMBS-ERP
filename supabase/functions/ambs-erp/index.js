@@ -94,13 +94,14 @@ Deno.serve(async request => {
     try { data = await readBody(request); }
     catch { return answer({ message: 'Invalid workspace data or payload is too large.' }, 400); }
     if (data.revision !== current.revision) return answer({ message: 'Another employee saved a change. Reload before saving again.' }, 409);
-    if (!current.snapshot && current.role !== 'admin') return answer({ message: 'An administrator needs to initialize AMBS.' }, 403);
+    const boss = ['admin', 'owner'].includes(current.role);
+    if (!current.snapshot && !boss) return answer({ message: 'An administrator needs to initialize AMBS.' }, 403);
     try {
       validateSnapshot(data.snapshot);
       const prior = current.snapshot?.state;
       if (prior) {
         const candidate = data.snapshot.state;
-        if (current.role !== 'admin' && (canonical(prior.settings) !== canonical(candidate.settings) ||
+        if (!boss && (canonical(prior.settings) !== canonical(candidate.settings) ||
           Object.keys(current.snapshot.legacy).some(name => name !== 'weighDocs' &&
             canonical(current.snapshot.legacy[name]) !== canonical(data.snapshot.legacy[name])))) {
           return answer({ message: 'Only an administrator can edit company settings or import the archive.' }, 403);
