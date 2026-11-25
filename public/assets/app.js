@@ -46,7 +46,8 @@ const IP = {
   idcard:'M3 5h18v14H3V5zm5 4a2 2 0 100 4 2 2 0 000-4zm-3 8a3 3 0 016 0m3-7h5m-5 4h4',
   pin:'M12 22s7-6.2 7-12a7 7 0 10-14 0c0 5.8 7 12 7 12zm0-9a3 3 0 100-6 3 3 0 000 6z',
   alert:'M12 3l10 18H2L12 3zm0 7v5m0 3v.5',
-  xls:'M6 2h9l5 5v15H6V2zm8 0v6h6M9 11l5 6m0-6l-5 6'
+  xls:'M6 2h9l5 5v15H6V2zm8 0v6h6M9 11l5 6m0-6l-5 6',
+  phone:'M5 4h4l2 5-2.5 1.5a11 11 0 005 5L15 13l5 2v4a2 2 0 01-2 2A16 16 0 013 6a2 2 0 012-2'
 };
 function ic(name,cls){return `<svg class="${cls||''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="${IP[name]||''}"/></svg>`;}
 
@@ -3165,6 +3166,7 @@ const stamp=x=>fmtDate(x)+' '+(x?new Date(x).toLocaleTimeString('en-GB',{hour:'2
 const button=(text,action,style='',icon='')=>`<button type="button" class="btn ${style}" onclick="${action}">${icon?ic(icon):''}${esc(text)}</button>`;
 const small=(text,action)=>button(text,action,'btn-sm');
 const dangerSmall=(text,action)=>button(text,action,'btn-sm btn-danger');
+const openBtn=action=>`<button type="button" class="o-open" onclick="${action}">View</button>`;
 const actionGroup=(...actions)=>`<div class="erp-actions">${actions.join('')}</div>`;
 const link=(r,text=TITLES[r])=>button(text,`App.go(${escapeArg(r)})`,'btn-sm');
 const head=(group,title,...actions)=>`<div class="view-head"><div><div class="eyebrow">${esc(group)}</div><h1 class="h1">${esc(title)}</h1></div><div class="head-actions">${actions.join('')}</div></div>`;
@@ -3326,6 +3328,13 @@ function formModal(title,body,save,{text='Save',intro='',danger=false}={}){
   return form;
 }
 function infoModal(title,body,footer=''){
+  if(typeof App!=='undefined'&&App.recordRendering){
+    const view=$('#view');
+    view.innerHTML=`<div class="o-cp o-cp-record"><div class="o-bc"><button type="button" class="o-bc-link" onclick="App.back()">${esc(TITLES[App.route]||'Back')}</button>
+      <span class="o-bc-sep">/</span><span class="o-bc-cur">${esc(title)}</span></div><div class="o-cp-actions">${footer}</div></div>
+      <div class="o-sheet erp-modal-body">${body}</div>`;
+    return view;
+  }
   return openModal(`<div class="modal-head"><h3>${esc(title)}</h3><button class="x" aria-label="Close" onclick="closeModal()">${ic('x')}</button></div>
     <div class="modal-body erp-modal-body">${body}</div><div class="modal-foot">${footer}<button class="btn btn-ghost" onclick="closeModal()">Close</button></div>`,'lg');
 }
@@ -4109,7 +4118,8 @@ function companyView(type,id){
     section('co-stock',panel('Stock at this company’s sites',textTable(['Item / SKU','Location','Balance'],stock.map(b=>[
       labelOf(state,b.sku),locName(state,b.location),qfmt(b.qty,item(state,b.sku)?.unit)]),'No stock is held at this company’s sites.')))+
     section('co-moves',panel('Recent stock movements',events.length?eventsTable(events.slice(0,15)):table(['Movement'],[],'No stock movements linked to this company yet.'))),
-    small('Edit',`closeModal();masterEdit(${escapeArg(type)},${escapeArg(id)})`));
+    actionGroup(button('Edit',`closeModal();masterEdit(${escapeArg(type)},${escapeArg(id)})`,'btn-sm btn-primary'),
+      dangerSmall('Delete',`closeModal();deleteMaster(${escapeArg(type)},${escapeArg(id)})`)));
 }
 function masterEdit(type,id){
   if(COMPANIES.includes(type))return companyEdit(type,id);
@@ -4339,7 +4349,12 @@ function masterView(type,id){
     ['Type',type==='products'?packingCategory(r.category)?.type:''],['Default order quantity',r.orderQty],['Size',type==='products'?'':r.size],['Color',type==='products'?'':r.color],['Unit',r.unit],['Source',r.source],['Contact person',r.contact],['Email',r.email],['Phone',r.phone],['Services / supply',r.details],['Notes',r.notes]])+
     (locations.length?panel('Linked locations',table(['Name','Address','City','Notes','Status','Map'],
       locations.map(l=>[esc(l.name),esc(l.address),esc(l.city),esc(l.notes),chip(l.active===false?'Archived':'Active'),mapAction(l)]))):'')+
-    (packing?packingParts(packing.rows,packing.quantities,false,r.orderQty??1):'')+connectedPanels(type,r));
+    (packing?packingParts(packing.rows,packing.quantities,false,r.orderQty??1):'')+connectedPanels(type,r),
+    actionGroup(button('Edit',`masterEdit(${escapeArg(type)},${escapeArg(id)})`,'btn-sm btn-primary'),
+      type==='parts'?small('Variants',`variantsView(${escapeArg(id)})`):'',
+      ['parts','products'].includes(type)?small(get(state,'recipes',id)?'BOM':'Create BOM',`recipeEdit(${escapeArg(type)},${escapeArg(id)})`):'',
+      type!=='materials'||r.active===false?small(r.active===false?'Restore':'Archive',`masterArchive(${escapeArg(type)},${escapeArg(id)})`):'',
+      dangerSmall('Delete',`deleteMaster(${escapeArg(type)},${escapeArg(id)})`)));
 
 }
 function searchableTable(columns,rows,empty,searchTerms=[],options={}){
@@ -4367,7 +4382,7 @@ function searchDistance(a,b){
 function filterTable(el){
   const query=searchKey(el.value).split(' ').filter(Boolean), card=el.closest('.card');
   let matches=0;
-  card.querySelectorAll('tbody tr').forEach(tr=>{
+  card.querySelectorAll('tbody tr, .o-card').forEach(tr=>{
     const text=searchKey(tr.dataset.search||tr.textContent), words=text.split(' ');
     tr.hidden=!query.every(token=>text.includes(token)||words.some(word=>word.startsWith(token)||
       (token.length>=4&&searchDistance(token,word)<=(token.length>=8?2:1))));
@@ -4392,14 +4407,11 @@ function materialPage(){
       `<span class="num">${esc(qfmt(material.bundle??0))}</span>`,
       `<span class="num">${esc(qfmt(onOrder))}</span>`,
       `<span class="num">${esc(qfmt(onHand+onOrder))}</span>`,
-      statusChip(health.kind,health.label),chip(material.active===false?'Archived':'Active'),
-      actionGroup(small('View',`masterView(${args})`),small('Edit',`masterEdit(${args})`),
-        material.active===false?small('Restore',`masterArchive(${args})`):'',
-        dangerSmall('Delete',`deleteMaster(${args})`))];
+      statusChip(health.kind,health.label)+openBtn(`masterView(${args})`)];
   });
   return head('Master Data','Raw Materials',button('Stock report',"App.go('reports')",'','pdf'),
-    button('Add raw material',"masterEdit('materials')",'btn-primary','plus'))+
-    searchableTable(['Code','Material','Opening','On hand','Bundle','On order','Avail. after','Status','State','Actions'],
+    button('New',"masterEdit('materials')",'btn-primary'))+
+    searchableTable(['Code','Material','Opening','On hand','Bundle','On order','Avail. after','Status'],
       values,'Add your first raw material.',[],{className:'material-table',placeholder:'Search code, name, category…',noun:'materials'});
 }
 function simpleCompanyPage(type){
@@ -4407,21 +4419,27 @@ function simpleCompanyPage(type){
   const openCount=r=>vendor?state.purchases.filter(p=>p.supplierId===r.id&&['Draft','Ordered'].includes(p.status)).length:
     state.sales.filter(o=>o.customerId===r.id&&SALES_OPEN.includes(o.status)).length;
   const address=r=>r.address||deliverySite(state,type,r.id)?.address||companyLocations(state,type,r.id)[0]?.address||'';
-  return head('Contacts',TITLES[type],button('Add '+title,`masterEdit(${escapeArg(type)})`,'btn-primary','plus'))+
-    searchableTable(['Code','Name',...(vendor?[]:['Position']),'Phone',vendor?'Address':'Delivery address',...(vendor?['Materials']:[]),vendor?'Open purchases':'Open sales','Actions'],
-    state[type].map(r=>{
-      const args=`${escapeArg(type)},${escapeArg(r.id)}`, open=openCount(r), supplies=vendorSupplies(r);
-      return [esc(r.code),`<div class="record-media co-media">${logoUploader(type,r)}<div>${cell(r.name)}${r.active===false?chip('Archived'):''}</div></div>`,
-        ...(vendor?[]:[esc(r.position||companyContacts(r)[0]?.job||'—')]),
-        r.phone?`<a class="co-link" href="tel:${esc(r.phone.replace(/[^\d+]/g,''))}">${esc(r.phone)}</a>`:'—',
-        `<div class="addr-cell"><span>${esc(address(r)||'—')}${vendor&&r.address2?`<span class="sub" style="display:block">${esc(r.address2)}</span>`:''}</span>${mapBtn(companyMap(type,r))}</div>`,
-        ...(vendor?[supplies.length?`<span class="co-count">${supplies.length}</span> <span class="sub">${esc(nfmt(supplies.reduce((n,x)=>n+x.bundles,0),2))} bundles</span>`:'<span class="sub">0</span>']:[]),
-        open?`<span class="co-count">${open}</span>`:'<span class="sub">0</span>',
-        actionGroup(button('View',`masterView(${args})`,'btn-sm btn-view','search'),small('Edit',`masterEdit(${args})`),
-          dangerSmall('Delete',`deleteMaster(${args})`))];
-    }),'Add your first '+title.toLowerCase()+'.',
-    state[type].map(r=>[r.code,r.name,r.position,r.phone,address(r),r.address2,...vendorSupplies(r).map(x=>label(get(state,'materials',x.sku)))].filter(Boolean).join(' ')),
-    {placeholder:vendor?'Search by name, code, phone, address or material…':'Search by name, code, phone, position or address…',noun:vendor?'vendors':'customers'});
+  const rows=state[type].slice().sort((a,b)=>a.name.localeCompare(b.name));
+  return head('Contacts',TITLES[type],button('New','masterEdit('+escapeArg(type)+')','btn-primary'))+
+    kanban(rows.map(r=>{
+      const supplies=vendorSupplies(r), open=openCount(r);
+      return {open:`masterView(${escapeArg(type)},${escapeArg(r.id)})`,
+        search:[r.code,r.name,r.position,r.phone,address(r),r.address2,...supplies.map(x=>label(get(state,'materials',x.sku)))].filter(Boolean).join(' '),
+        html:`${companyAvatar(r,'co-avatar-md')}<div class="o-card-main"><div class="o-card-title">${esc(r.name)}</div>
+          ${!vendor&&r.position?`<div class="o-card-line">${esc(r.position)}</div>`:''}
+          ${r.phone?`<div class="o-card-line">${ic('phone')}${esc(r.phone)}</div>`:''}
+          ${address(r)?`<div class="o-card-line o-muted">${esc(address(r))}</div>`:''}
+          <div class="o-card-tags">${vendor&&supplies.length?`<span class="o-tag">${supplies.length} materials</span>`:''}${open?`<span class="o-tag">${open} open ${vendor?'purchases':'orders'}</span>`:''}${r.active===false?'<span class="o-tag">Archived</span>':''}</div></div>`};
+    }),{placeholder:vendor?'Search vendors by name, phone, address or material…':'Search customers by name, phone, position or address…',
+      noun:vendor?'vendors':'customers',empty:'No '+title.toLowerCase()+'s yet. Click New to add the first one.'});
+}
+/* Odoo-style kanban: a big centered search and clickable cards. */
+function kanban(cards,{placeholder='Search…',noun='records',empty='Nothing here yet.'}={}){
+  return `<div class="card o-kanban-wrap" data-noun="${esc(noun)}"><div class="o-search-hero"><div class="search">${ic('search')}
+    <input class="inp" aria-label="Search" placeholder="${esc(placeholder)}" oninput="filterTable(this)" autocomplete="off"></div>
+    <span class="pill-legend">${cards.length} ${esc(noun)}</span></div>
+    <div class="o-kanban">${cards.length?cards.map(c=>`<div class="o-card" role="button" tabindex="0" data-search="${esc(c.search)}"
+      onclick="${c.open}" onkeydown="if(event.key==='Enter')this.click()">${c.html}</div>`).join(''):`<div class="o-empty">${esc(empty)}</div>`}</div></div>`;
 }
 function companyPage(type){
   if(type!=='processors')return simpleCompanyPage(type);
@@ -4431,16 +4449,14 @@ function companyPage(type){
     type==='suppliers'?state.purchases.filter(p=>p.supplierId===r.id&&['Draft','Ordered'].includes(p.status)).length:
     state.orders.filter(o=>o.processorId===r.id&&['Draft','Released'].includes(o.status)).length;
   return head('Overview',TITLES[type],button('Add '+title,`masterEdit(${escapeArg(type)})`,'btn-primary','plus'))+
-    searchableTable(['Code','Company','Contact person','Phone','Locations',openLabel,'Status','Actions'],state[type].map(r=>{
+    searchableTable(['Code','Company','Contact person','Phone','Locations',openLabel,'Status'],state[type].map(r=>{
       const args=`${escapeArg(type)},${escapeArg(r.id)}`, open=openCount(r), contacts=companyContacts(r);
       return [esc(r.code),
         `<div class="record-media co-media">${companyAvatar(r)}<div>${cell(r.name,[r.city,r.details].filter(Boolean).join(' · '))}${tagChips(r.tags)}</div></div>`,
         cell(contacts[0]?.name||'—',contacts[0]?.job||(contacts.length>1?'+'+(contacts.length-1)+' more':'')),
         esc(r.phone||contacts[0]?.phone||'—'),esc(companyLocations(state,type,r.id).length),
         open?`<span class="co-count">${open}</span>`:'<span class="sub">0</span>',
-        chip(r.active===false?'Archived':'Active'),
-        actionGroup(small('View',`masterView(${args})`),small('Edit',`masterEdit(${args})`),
-          small(r.active===false?'Restore':'Archive',`masterArchive(${args})`),dangerSmall('Delete',`deleteMaster(${args})`))];
+        chip(r.active===false?'Archived':'Active')+openBtn(`masterView(${args})`)];
     }),'Add your first '+title.toLowerCase()+'.',
     state[type].map(r=>[r.code,r.name,r.trn,r.email,r.phone,r.city,r.details,...(r.tags||[]),...companyContacts(r).flatMap(c=>[c.name,c.phone,c.email])].filter(Boolean).join(' ')),
     {placeholder:'Search by name, code, contact, phone, tag or TRN…',noun:type==='customers'?'customers':type==='suppliers'?'suppliers':'companies'});
@@ -4453,8 +4469,8 @@ function masterPage(type){
   for(const variant of isParts?state.variants:[]){
     balances.set(variant.partId,(balances.get(variant.partId)??0)+(balances.get(variant.id)??0));
   }
-  return head(company?'Overview':'Master Data',TITLES[type],button('Add '+title,`masterEdit(${escapeArg(type)})`,'btn-primary','plus'))+
-    searchableTable(company?['Code','Company','Contact person','Locations','Status','Actions']:['Code','Item','Category','Stock unit','Quantity on hand','Status','Actions'],
+  return head(company?'Overview':'Master Data',TITLES[type],button('New',`masterEdit(${escapeArg(type)})`,'btn-primary'))+
+    searchableTable(company?['Code','Company','Contact person','Locations','Status']:['Code','Item','Category','Stock unit','Quantity on hand','Status'],
       rows.map(r=>{
         const args=`${escapeArg(type)},${escapeArg(r.id)}`;
         return [esc(r.code),company?cell(r.name,[r.size,r.color,r.dimensions||r.details].filter(Boolean).join(' · ')):
@@ -4462,11 +4478,7 @@ function masterPage(type){
           esc(company?r.contact:r.category),
           company?String(companyLocations(state,type,r.id).length):esc(r.unit),
           ...(company?[]:[esc(qfmt(balances.get(r.id)??0,r.unit))]),
-          chip(r.active===false?'Archived':'Active'),actionGroup(small('View',`masterView(${args})`),small('Edit',`masterEdit(${args})`),
-            type==='parts'?small('Variants',`variantsView(${escapeArg(r.id)})`):'',
-            ['parts','products'].includes(type)?small('BOM',`recipeEdit(${escapeArg(type)},${escapeArg(r.id)})`):'',
-            small(r.active===false?'Restore':'Archive',`masterArchive(${args})`),
-            dangerSmall('Delete',`deleteMaster(${args})`))];
+          chip(r.active===false?'Archived':'Active')+openBtn(`masterView(${args})`)];
       }),'Add your first '+title.toLowerCase()+'.',
       isParts?rows.map(r=>[r.code,r.name,r.packingName,r.category,r.unit,r.size,r.color,r.dimensions].filter(Boolean).join(' ')):[]);
 }
@@ -6182,7 +6194,7 @@ function driverView(id){
       cell(t.customerName||'—',t.project),esc((t.from||'—')+' → '+(t.location||'—')),esc(t.km?nfmt(t.km,1):'—'),tripChip(t),esc(t.paperStatus||'—')]),
       'No trips yet.'))+(d.notes?note(d.notes):''),
     actionGroup(button('PDF',`exportDeliveries('pdf',${escapeArg(id)})`,'btn-sm','pdf'),button('Excel',`exportDeliveries('xlsx',${escapeArg(id)})`,'btn-sm','xls'),
-      small('Edit',`closeModal();driverEdit(${escapeArg(id)})`),
+      button('Edit',`closeModal();driverEdit(${escapeArg(id)})`,'btn-sm btn-primary'),dangerSmall('Delete',`closeModal();deleteDriver(${escapeArg(id)})`),
       issues.length?'':button('New trip',`closeModal();tripEdit('',{driverId:${escapeArg(id)}})`,'btn-sm btn-primary','plus')));
 }
 const tripChip=t=>(t.priority==='Urgent'&&!['Delivered','Cancelled'].includes(t.status)?statusChip('bad','Urgent')+' ':'')+
@@ -6207,7 +6219,7 @@ const Drv={
           `<div class="addr-cell"><span>${esc(t.location||'—')}</span>${mapBtn(t.mapUrl)}</div>`,`<span class="num">${esc(t.km?nfmt(t.km,1):'—')}</span>`,
           tripChip(t)+(t.deliveredAt?`<div class="sub">${esc(fmtDate(t.deliveredAt))}</div>`:''),
           t.paperStatus==='Signed & returned'?statusChip('ok','Signed'):t.paperStatus==='Missing'?statusChip('bad','Missing'):statusChip('warn','Pending'),
-          actionGroup(small('View',`tripView(${args})`),small('Edit',`tripEdit(${args})`),
+          actionGroup(openBtn(`tripView(${args})`),
             t.status==='Next'?small('Start',`tripStatus(${args},'On the way')`):'',
             t.status==='On the way'?small('Delivered',`tripStatus(${args},'Delivered')`):'')];
       }),'No trips match. Create a delivery trip to start tracking.');
@@ -6219,20 +6231,21 @@ function driversPage(){
   const blocked=drivers.filter(d=>d.active!==false&&!papersOk(d)), moving=state.trips.filter(t=>t.status==='On the way');
   const f=Drv.f, opt=(rows,sel,all)=>`<option value="">${esc(all)}</option>`+rows.map(([v,l])=>`<option value="${esc(v)}" ${v===sel?'selected':''}>${esc(l)}</option>`).join('');
   return head('Operations',TITLES.drivers,button('PDF','exportDeliveries(\'pdf\')','','pdf'),button('Excel','exportDeliveries(\'xlsx\')','','xls'),
-      button('Add driver','driverEdit()','','plus'),button('New delivery trip','tripEdit()','btn-primary','truck'))+
+      button('New driver','driverEdit()'),button('New trip','tripEdit()','btn-primary'))+
     kpiRow([['driver','Drivers',drivers.length,drivers.filter(papersOk).length+' with papers OK','k-ink'],
       ['alert','Cannot deliver',blocked.length,blocked.length?'Papers missing or expired':'All papers in order',blocked.length?'k-red':'k-ok'],
       ['truck','On the road now',moving.length,moving.length?moving.map(t=>get(state,'drivers',t.driverId)?.name).filter(Boolean).slice(0,2).join(', '):'No trips moving','k-yellow'],
       ['pulse','This month',month.length+' trips',nfmt(tripKm(month),1)+' km driven','k-ok']])+
     (blocked.length?note('⛔ No delivery can go out with: '+blocked.map(d=>d.name+' ('+papersIssues(d)[0]+')').join(' · '),'bad'):'')+
-    panel('Drivers',table(['Driver','Vehicle','Official papers','Where now','Trips','Actions'],drivers.map(d=>{
-      const trips=driverTrips(d.id), last=trips.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''))[0], where=driverWhere(d), args=escapeArg(d.id);
-      return [`<div class="record-media co-media">${logoUploader('drivers',d)}<div>${cell(d.name,[d.phone,d.kind].filter(Boolean).join(' · '))}</div></div>`,
-        cell(d.vehiclePlate||'—',d.vehicleType),papersChip(d),`<div class="addr-cell">${statusChip(where.kind,where.text)}${mapBtn(where.trip?.mapUrl)}</div>`,
-        `<span class="co-count">${trips.length}</span> <span class="num">${esc(nfmt(tripKm(trips),1))} km</span><div class="sub">${esc(last?'Last: '+fmtDate(last.date)+' · '+last.no:'No trips yet')}</div>`,
-        actionGroup(button('View',`driverView(${args})`,'btn-sm btn-view','search'),small('Edit',`driverEdit(${args})`),
-          papersOk(d)?small('New trip',`tripEdit('',{driverId:${args}})`):'',dangerSmall('Delete',`deleteDriver(${args})`))];
-    }),'Add your drivers: name, phone, vehicle and official papers.'))+
+    kanban(drivers.map(d=>{
+      const trips=driverTrips(d.id), where=driverWhere(d);
+      return {open:`driverView(${escapeArg(d.id)})`,search:[d.name,d.phone,d.kind,d.vehiclePlate,d.vehicleType].filter(Boolean).join(' '),
+        html:`${companyAvatar(d,'co-avatar-md')}<div class="o-card-main"><div class="o-card-title">${esc(d.name)}</div>
+          <div class="o-card-line">${esc([d.vehiclePlate,d.vehicleType].filter(Boolean).join(' · ')||d.kind||'')}</div>
+          ${d.phone?`<div class="o-card-line">${ic('phone')}${esc(d.phone)}</div>`:''}
+          <div class="o-card-tags">${papersChip(d)}<span class="o-tag">${trips.length} trips · ${esc(nfmt(tripKm(trips),0))} km</span></div>
+          <div class="o-card-line o-muted">${esc(where.text)}</div></div>`};
+    }),{placeholder:'Search drivers by name, phone or vehicle…',noun:'drivers',empty:'Add your drivers: name, phone, vehicle and official papers.'})+
     `<section class="card erp-table"><div class="card-head"><div class="card-title">Delivery trips</div></div>
       <div class="toolbar trip-filters"><div class="search">${ic('search')}<input class="inp" aria-label="Search trips" placeholder="Search packing no., customer, project, driver…"
         value="${esc(f.q)}" oninput="Drv.set('q',this.value)"></div>
@@ -6524,9 +6537,9 @@ function dashboard(){
 }
 
 const App={
-  route:'dashboard',
+  route:'dashboard',record:null,
   go(r){
-    const previous=this.route;
+    const previous=this.route;this.record=null;
     this.route=r==='purchase-new'?'purchase':r==='plan-new'?'production':r;
     location.hash='#/'+this.route;
     this.toggleNavigation(false);
@@ -6535,31 +6548,27 @@ const App={
     if(r==='plan-new')planEdit();
     if(r==='purchase-new')purchaseEdit();
   },
-  nav(){
-    const selected=['market','steel','prodcalc','prodcalc-new','nesting'].includes(this.route)?'tools':this.route;
-    return `<div class="brand"><div class="mark">AM</div><div><div class="bt">AM Building Solutions</div><div class="bs">Production &amp; Stock</div></div></div>
-      <nav class="nav" aria-label="Main navigation">${GROUPS.map(([group,rows])=>`<div class="nav-group">${group}</div>`+
-      rows.map(([r,i])=>`<a href="#/${r}" class="${selected===r?'active':''}" ${selected===r?'aria-current="page"':''}
-        onclick="event.preventDefault();App.go('${r}')">${ic(i)}<span>${esc(TITLES[r])}</span></a>`).join('')).join('')}</nav>
-      <div class="side-foot"><b>${esc(SET.company)}</b><br>${CLOUD.demo?'Browser workspace':'Cloud workspace'}</div>`;
-  },
+  nav(){return '';},
   toggleNavigation(open){
     document.body.classList.toggle('nav-open',open);
     $('#nav-toggle')?.setAttribute('aria-expanded',String(open));
   },
   top(){
-    const subtitles={materials:'Stock master, bundles & rates',tracking:'Every item, every movement — live',drivers:'Drivers, vehicles, papers & trips',settings:'Company profile, locations & data'};
-    return `<button type="button" class="erp-nav-shade" aria-label="Close navigation" onclick="App.toggleNavigation(false)"></button><div class="hz hazard"></div><div class="row">
-      <button id="nav-toggle" class="menu-btn" aria-label="Toggle navigation" aria-controls="sidebar" aria-expanded="false" onclick="App.toggleNavigation(!document.body.classList.contains('nav-open'))">${ic('layers')}</button>
-      <div><div class="page-title">${esc(TITLES[this.route]||'Dashboard')}</div><div class="page-sub">${esc(subtitles[this.route]||'Production Planning & Stock Control')}</div></div>
-      <div class="topbar-spacer"></div>
-      <button class="btn btn-sm erp-shortcut" onclick="App.go('purchase-new')">${ic('cart')}Purchase</button>
-      <button class="btn btn-sm" onclick="refreshCloudWorkspace(true)">Refresh</button>
-      ${CLOUD.demo?'<span class="chip info">Saved in this browser</span>':'<button class="btn btn-sm" onclick="CLOUD.signOut()">Sign out</button>'}
-      <div class="clock" id="clock"></div>
-      <div class="user"><div class="avatar">${esc((CLOUD.email||'U').slice(0,1).toUpperCase())}</div>
-        <b style="font-size:12px">${esc(CLOUD.email)}</b></div></div>`;
+    const selected=['market','steel','prodcalc','prodcalc-new','nesting'].includes(this.route)?'tools':this.route;
+    return `<nav class="o-navbar" aria-label="Main navigation">
+      <button type="button" class="o-brand" onclick="App.go('dashboard')"><span class="o-brand-mark">AM</span><span>AMBS</span></button>
+      <div class="o-menus">${GROUPS.map(([group,rows])=>`<div class="o-menu${rows.some(([r])=>r===selected)?' on':''}">
+        <button type="button" class="o-menu-btn">${esc(group)}</button><div class="o-dd">${rows.map(([r])=>
+          `<a href="#/${r}" class="${selected===r?'active':''}" onclick="event.preventDefault();App.go('${r}')">${esc(TITLES[r])}</a>`).join('')}</div></div>`).join('')}</div>
+      <div class="o-nav-right">
+        <button class="o-nav-btn" onclick="App.go('purchase-new')">Purchase</button>
+        <button class="o-nav-btn" onclick="refreshCloudWorkspace(true)" title="Refresh">${ic('refresh')}</button>
+        ${CLOUD.demo?'':'<button class="o-nav-btn" onclick="CLOUD.signOut()">Sign out</button>'}
+        <div class="clock" id="clock"></div>
+        <div class="avatar" title="${esc(CLOUD.email||'')}">${esc((CLOUD.email||'U').slice(0,1).toUpperCase())}</div>
+      </div></nav>`;
   },
+  back(){this.record=null;this.render();window.scrollTo(0,0);},
   render(){
     $('#sidebar').innerHTML=this.nav();
     $('#topbar').innerHTML=this.top();
@@ -6571,9 +6580,40 @@ const App={
     if(this.route==='prodcalc-new'){view.innerHTML=PWC.builder();PWC.wire();}
     else if(utility){view.innerHTML=utility.render();utility.after?.();}
     else view.innerHTML=ENTITY[this.route]?masterPage(this.route):(screens[this.route]||dashboard)();
+    if(this.record){
+      // Odoo-style record page: the list stays one breadcrumb click away
+      this.recordRendering=true;
+      try{window[this.record.fn].orig.apply(null,this.record.args);}catch(e){this.record=null;view.innerHTML=ENTITY[this.route]?masterPage(this.route):(screens[this.route]||dashboard)();}
+      finally{this.recordRendering=false;}
+    }
+    document.body.classList.toggle('o-record',!!this.record);
     startClock();
   }
 };
+/* Views opened from a page become full record pages (breadcrumb back to the list); from inside a dialog they stay dialogs. */
+for(const fn of ['masterView','companyView','driverView','tripView','recipeView','trackItem','salesView','purchaseView','dispatchView',
+  'orderView','planView','eventView','variantsView','locationView']){
+  const orig=window[fn];
+  if(typeof orig!=='function')continue;
+  window[fn]=function(...args){
+    if(App.recordRendering||_modalStack)return orig.apply(this,args);
+    App.record={fn,args};App.render();window.scrollTo(0,0);
+  };
+  window[fn].orig=orig;
+}
+/* Odoo-style lists: click anywhere on a row to open it. The row's own "View" button is hidden. */
+const ROW_OPEN=/^(?:closeModal\(\);)?(?:masterView|companyView|driverView|tripView|recipeView|trackItem|salesView|purchaseView|dispatchView|orderView|planView|eventView|locationView|variantsView)\(/;
+function enhanceRows(root){
+  root.querySelectorAll?.('tbody tr:not([data-open])').forEach(tr=>{
+    const b=[...tr.querySelectorAll('button[onclick]')].find(x=>ROW_OPEN.test(x.getAttribute('onclick'))&&/^(View|Track|Open)\b/.test(x.textContent.trim()));
+    tr.dataset.open=b?'1':'0';
+    if(!b)return;
+    tr.classList.add('o-row');b.classList.add('o-open');
+    tr.addEventListener('click',e=>{if(!e.target.closest('a,button,label,input,select,textarea'))b.click();});
+  });
+}
+new MutationObserver(list=>{for(const m of list)for(const n of m.addedNodes)if(n.nodeType===1)enhanceRows(n);})
+  .observe(document.documentElement,{childList:true,subtree:true});
 window.addEventListener('DOMContentLoaded',()=>CLOUD.start());
 window.addEventListener('hashchange',()=>{
   const r=location.hash.slice(2);

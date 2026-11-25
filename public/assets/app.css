@@ -946,3 +946,224 @@ body[data-page="tracking"]{--pc:#06b6d4} body[data-page="drivers"]{--pc:#f97316}
 .route-cell b{color:var(--muted-2);font-weight:700}
 .route-cell span:first-child{color:var(--muted)}
 .route-cell span:nth-of-type(2){font-weight:600;color:var(--ink)}
+
+/* =====================================================================
+   Odoo-style theme (Nov 2026, owner request): neutral white / gray UI,
+   one purple accent, top menu bar, flat lists, record pages, kanban cards.
+   Loaded last so it overrides the earlier colourful theme.
+   ===================================================================== */
+:root{
+  --o-accent:#714b67; --o-accent-d:#5d3d55; --o-accent-soft:#f4eff3;
+  --o-text:#212529; --o-text-2:#4b5563; --o-muted:#6c757d; --o-border:#dee2e6; --o-border-2:#e9ecef;
+  --o-bg:#f9fafb; --o-hover:#f2f4f6; --o-head:#ffffff;
+  --red:#714b67; --red-d:#5d3d55; --red-l:#8f6a86; --red-soft:#f4eff3;
+  --yellow:#ced4da; --yellow-d:#adb5bd; --yellow-soft:#f8f9fa;
+  --ink:#212529; --ink-2:#374151; --paper:#f9fafb; --line:#dee2e6; --line-2:#e9ecef; --muted:#6c757d; --muted-2:#8a929a;
+  --ok:#28a745; --ok-bg:#eef7f0; --ok-bd:#cfe8d6; --warn:#a8741a; --warn-bg:#fbf6ea; --warn-bd:#efe2c2;
+  --bad:#c0392b; --bad-bg:#fbefee; --bad-bd:#f0d2ce; --info:#017e84; --info-bg:#eef6f7; --info-bd:#cfe5e7;
+  --ring:0 0 0 3px rgba(113,75,103,.15);
+  --radius:4px; --radius-lg:6px;
+  --sh-xs:none; --sh-sm:0 1px 2px rgba(0,0,0,.04); --sh-md:0 2px 6px rgba(0,0,0,.08); --sh-lg:0 8px 28px rgba(0,0,0,.18);
+  --viz-1:#714b67; --viz-2:#adb5bd; --viz-3:#9c7c94; --viz-4:#6c757d; --viz-ok:#5f9e6e; --viz-bad:#c0392b; --viz-neutral:#ced4da; --viz-grid:#eef0f2;
+}
+body[data-page][data-page]{--pc:#714b67}
+body{background:#fff!important;color:var(--o-text);font-size:13.5px}
+body::before,body::after{display:none!important}
+::selection{background:rgba(113,75,103,.15)}
+.hazard,.hz{display:none!important}
+
+/* ---------- shell: top menu bar, no sidebar ---------- */
+#sidebar,.erp-nav-shade,.menu-btn{display:none!important}
+#main{margin-left:0!important}
+#topbar{position:sticky;top:0;z-index:50;background:#fff!important;border-bottom:1px solid var(--o-border);box-shadow:none!important;backdrop-filter:none!important}
+.o-navbar{display:flex;align-items:center;gap:6px;height:46px;padding:0 16px}
+.o-brand{display:flex;align-items:center;gap:8px;border:0;background:none;font:inherit;font-weight:700;font-size:15px;color:var(--o-text);cursor:pointer;padding:0 8px 0 0}
+.o-brand-mark{display:grid;place-items:center;width:26px;height:26px;border-radius:4px;background:var(--o-accent);color:#fff;font-size:11px;font-weight:800;letter-spacing:.5px}
+.o-menus{display:flex;align-items:stretch;height:100%;min-width:0;overflow-x:auto;scrollbar-width:none}
+.o-menus::-webkit-scrollbar{display:none}
+.o-menu{position:relative;display:flex}
+.o-menu-btn{border:0;background:none;font:inherit;font-size:13.5px;color:var(--o-text-2);padding:0 12px;cursor:pointer;white-space:nowrap}
+.o-menu:hover .o-menu-btn,.o-menu:focus-within .o-menu-btn{background:var(--o-hover);color:var(--o-text)}
+.o-menu.on .o-menu-btn{color:var(--o-text);font-weight:600;box-shadow:inset 0 -2px 0 var(--o-accent)}
+.o-dd{display:none;position:fixed;margin-top:46px;min-width:220px;padding:6px 0;background:#fff;border:1px solid var(--o-border);border-radius:4px;box-shadow:var(--sh-md);z-index:60}
+.o-menu:hover .o-dd,.o-menu:focus-within .o-dd{display:block}
+.o-dd a{display:block;padding:7px 18px;color:var(--o-text);font-size:13.5px;white-space:nowrap}
+.o-dd a:hover{background:var(--o-hover)}
+.o-dd a.active{font-weight:600;color:var(--o-accent)}
+.o-nav-right{margin-left:auto;display:flex;align-items:center;gap:6px;flex:0 0 auto}
+.o-nav-btn{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 10px;border:0;border-radius:4px;background:none;font:inherit;font-size:13px;color:var(--o-text-2);cursor:pointer}
+.o-nav-btn:hover{background:var(--o-hover);color:var(--o-text)}
+.o-nav-btn svg{width:15px;height:15px}
+#topbar .clock{font-size:12px;color:var(--o-muted);text-align:right;line-height:1.2}
+#topbar .clock b{display:block;font-weight:600;color:var(--o-text-2)}
+#topbar .avatar{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:#e9ecef;color:var(--o-text);font-size:12px;font-weight:700;border:0;box-shadow:none}
+
+/* ---------- page + control panel ---------- */
+#view{padding:14px 20px 40px!important;max-width:none!important;animation:none!important}
+.view-head{align-items:center!important;margin:0 0 12px!important;padding:0 0 12px;border-bottom:1px solid var(--o-border-2);gap:12px}
+.view-head>div:first-child{display:flex;align-items:center;gap:12px}
+.eyebrow{display:none!important}
+.h1{font-size:20px!important;font-weight:600!important;letter-spacing:0!important;margin:0!important;color:var(--o-text)!important;background:none!important;-webkit-text-fill-color:currentColor!important}
+.head-actions{display:flex;gap:6px;flex-wrap:wrap}
+
+/* ---------- buttons: flat, small radius ---------- */
+.btn,.btn-sm{border-radius:4px!important;box-shadow:none!important;text-shadow:none!important;animation:none!important;transform:none!important;
+  background:#e9ecef!important;border:1px solid transparent!important;color:var(--o-text)!important;font-weight:500!important}
+.btn:hover{background:#dee2e6!important}
+.btn svg{color:currentColor!important}
+.btn-primary,body[data-page] .head-actions .btn-primary,.btn.btn-view{background:var(--o-accent)!important;color:#fff!important;border-color:var(--o-accent)!important}
+.btn-primary:hover,body[data-page] .head-actions .btn-primary:hover,.btn.btn-view:hover{background:var(--o-accent-d)!important}
+.btn-danger,.btn.btn-danger{background:#fff!important;color:var(--bad)!important;border-color:var(--o-border)!important}
+.btn-danger:hover{background:var(--bad-bg)!important}
+.btn-ghost{background:#fff!important;border-color:var(--o-border)!important}
+.btn.btn-map{background:#fff!important;color:var(--info)!important;border-color:var(--o-border)!important}
+.o-open{display:none!important}
+.link-btn{color:var(--info)!important}
+
+/* ---------- cards, tables: flat Odoo list view ---------- */
+.card,section.card,.erp-table{border:1px solid var(--o-border)!important;border-radius:4px!important;box-shadow:none!important;background:#fff!important}
+.card::before,.card::after{display:none!important}
+.card-head{padding:10px 14px!important;border-bottom:1px solid var(--o-border-2)!important;background:#fff!important}
+.card-title{font-size:14px!important;font-weight:600!important;color:var(--o-text)!important}
+.card-head>.card-title:first-child::before{display:none!important}
+.tbl{font-size:13.5px}
+.tbl thead th{background:#fff!important;color:var(--o-text)!important;font-size:13px!important;font-weight:600!important;text-transform:none!important;letter-spacing:0!important;
+  border-bottom:1px solid var(--o-border)!important;padding:8px 12px!important;position:sticky;top:46px;z-index:1}
+.tbl td{padding:8px 12px!important;border-bottom:1px solid var(--o-border-2)!important;vertical-align:middle}
+.tbl tbody tr:hover td{background:var(--o-hover)!important}
+.tbl tbody tr:nth-child(even) td{background:transparent}
+tr.o-row{cursor:pointer}
+.toolbar{border-bottom:1px solid var(--o-border-2)!important;background:#fff!important;padding:10px 14px!important}
+.toolbar .search{flex:1 1 420px;max-width:640px;margin:0 auto}
+.search .inp,.toolbar .inp{border-radius:4px!important}
+.pill-legend{color:var(--o-muted)!important;background:none!important;border:0!important;font-size:12.5px}
+.sub{color:var(--o-muted)!important}
+
+/* ---------- inputs ---------- */
+.inp,.sel,textarea.inp{border-radius:4px!important;border:1px solid var(--o-border)!important;background-color:#fff!important;box-shadow:none!important;color:var(--o-text)}
+.inp:focus,.sel:focus,textarea.inp:focus{border-color:var(--o-accent)!important;box-shadow:var(--ring)!important;outline:0}
+.modal-body .field>label,.field>label{color:var(--o-text-2)!important;font-weight:600}
+.modal-body .erp-line,.erp-line{border:1px solid var(--o-border)!important;border-radius:4px!important;box-shadow:none!important;background:#fff!important}
+.erp-line legend{background:#f1f3f5!important;color:var(--o-text)!important;border-radius:3px!important}
+.erp-options button:hover,.erp-options button:focus{background:var(--o-hover)!important;color:var(--o-text)!important}
+.phone-in .phone-cc{border-radius:4px 0 0 4px!important;background:#f1f3f5!important}
+.phone-in .inp{border-radius:0 4px 4px 0!important}
+
+/* ---------- dialogs ---------- */
+.modal-back{background:rgba(0,0,0,.35)!important;backdrop-filter:none!important}
+.modal{border-radius:6px!important;box-shadow:var(--sh-lg)!important;animation:none!important}
+.modal-head{background:#fff!important;border-bottom:1px solid var(--o-border)!important;padding:14px 20px!important}
+.modal-head::before,.modal::before{display:none!important}
+.modal-head h3{font-size:17px!important;font-weight:600!important}
+.modal-foot{background:#fff!important;border-top:1px solid var(--o-border)!important}
+.modal .x{border-radius:4px!important;background:none!important;color:var(--o-muted)!important}
+
+/* ---------- status badges: muted ---------- */
+.chip{border-radius:999px!important;font-weight:500!important;box-shadow:none!important;border:0!important}
+.chip .dot{display:none!important}
+.chip.neutral{background:#e9ecef!important;color:#495057!important}
+.chip.ok{background:#e6f2e9!important;color:#256c37!important}
+.chip.warn{background:#f8f0dc!important;color:#7d5b12!important}
+.chip.bad{background:#f8e5e3!important;color:#9b2c21!important}
+.chip.info{background:#e6f1f2!important;color:#01656a!important}
+.note{border-radius:4px!important;box-shadow:none!important;border-left-width:3px!important}
+
+/* ---------- KPI tiles: plain ---------- */
+.kpi{border:1px solid var(--o-border)!important;border-radius:4px!important;box-shadow:none!important;background:#fff!important;min-height:0!important;padding:12px 14px!important}
+.kpi::before,.kpi::after{display:none!important}
+.kpi .kl{color:var(--o-muted)!important}
+.kpi .kl svg{color:var(--o-muted)!important}
+.kpi .kv,.kpi.k-red .kv,.kpi.k-ok .kv,.kpi.k-yellow .kv{color:var(--o-text)!important;font-family:var(--sans)!important;font-size:24px!important;letter-spacing:0!important;font-weight:600!important;margin-top:4px!important}
+.kpi.k-red .kv{color:var(--bad)!important}
+.kpis,.kpis-live{gap:10px!important;margin-bottom:14px!important}
+button.kpi:hover{background:var(--o-hover)!important}
+
+/* ---------- record page (form view): gray canvas, white sheet ---------- */
+body.o-record #view{background:var(--o-bg);min-height:calc(100vh - 46px)}
+.o-cp{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:-14px -20px 16px;padding:10px 20px;background:#fff;border-bottom:1px solid var(--o-border)}
+.o-bc{display:flex;align-items:center;gap:8px;font-size:18px;min-width:0}
+.o-bc-link{border:0;background:none;font:inherit;color:var(--info);cursor:pointer;padding:0}
+.o-bc-link:hover{text-decoration:underline}
+.o-bc-sep{color:var(--o-muted)}
+.o-bc-cur{color:var(--o-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.o-cp-actions{display:flex;gap:6px;flex-wrap:wrap}
+.o-cp-actions .erp-actions{display:flex;gap:6px;flex-wrap:wrap}
+.o-sheet{max-width:1180px;margin:0 auto;background:#fff;border:1px solid var(--o-border);border-radius:4px;padding:24px 28px 28px;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+.o-sheet .card{margin-bottom:14px}
+
+/* ---------- kanban (customers, vendors, drivers): big centered search + cards ---------- */
+.o-kanban-wrap{border:0!important;background:none!important}
+.o-search-hero{display:flex;flex-direction:column;align-items:center;gap:6px;padding:18px 0 22px}
+.o-search-hero .search{position:relative;width:min(720px,100%)}
+.o-search-hero .search svg{position:absolute;left:16px;top:50%;transform:translateY(-50%);width:20px;height:20px;color:var(--o-muted)}
+.o-search-hero .search .inp{width:100%;height:52px;padding:0 18px 0 48px!important;font-size:17px;border-radius:26px!important;border:1px solid var(--o-border)!important}
+.o-kanban{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:12px}
+.o-card{display:flex;gap:12px;align-items:flex-start;padding:12px;background:#fff;border:1px solid var(--o-border);border-radius:4px;cursor:pointer;min-width:0}
+.o-card:hover{box-shadow:var(--sh-md);border-color:#ced4da}
+.o-card:focus-visible{outline:2px solid var(--o-accent);outline-offset:1px}
+.o-card[hidden]{display:none}
+.o-card-main{min-width:0;flex:1}
+.o-card-title{font-weight:600;font-size:14.5px;color:var(--o-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.o-card-line{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--o-text-2);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.o-card-line svg{width:13px;height:13px;color:var(--o-muted);flex:0 0 auto}
+.o-muted{color:var(--o-muted)!important}
+.o-card-tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+.o-tag{display:inline-block;padding:1px 8px;border-radius:999px;background:#e9ecef;color:#495057;font-size:11.5px}
+.o-empty{grid-column:1/-1;padding:40px;text-align:center;color:var(--o-muted)}
+.co-avatar-md{width:64px;height:64px;font-size:20px;border-radius:4px!important}
+.co-avatar,.co-initials{background:#e9ecef!important;color:#495057!important;border:1px solid var(--o-border)!important;box-shadow:none!important}
+img.co-avatar{background:#fff!important}
+.co-avatar-cam{background:var(--o-accent)!important}
+
+/* ---------- company/driver profile pieces ---------- */
+.co-hero{border:0!important;background:none!important;box-shadow:none!important;padding:0 0 14px!important}
+.co-hero-name{font-size:24px!important;font-weight:600!important}
+.co-smart{border:1px solid var(--o-border)!important;border-radius:4px!important;box-shadow:none!important;background:#fff!important}
+.co-smart:hover{background:var(--o-hover)!important}
+.co-smart svg,body[data-page] .co-smart svg{color:var(--o-muted)!important;background:none!important}
+.co-details{border:1px solid var(--o-border-2)!important;border-radius:4px!important;box-shadow:none!important}
+.co-count{background:#e9ecef!important;color:#495057!important}
+.co-tag{background:#e9ecef!important;color:#495057!important}
+
+/* ---------- misc colourful bits made neutral ---------- */
+.material-balance,.stock-low,.stock-watch,.stock-good{background:none!important}
+td.stock-low,td.stock-watch,td.stock-good{background:none!important}
+.live-chip{background:#fff!important;border:1px solid var(--o-border)!important;color:var(--o-text-2)!important}
+.trk-in{color:#256c37!important}.trk-out{color:#9b2c21!important}
+.viz-hrow:hover{background:var(--o-hover)!important}
+.papers-confirm label{background:#f8f9fa!important;border-color:var(--o-border)!important}
+.papers-confirm:has(input:checked) label{background:#eef7f0!important;border-color:#cfe8d6!important}
+.toast{background:#fff!important;color:var(--o-text)!important;border:1px solid var(--o-border)!important;border-left:4px solid var(--ok)!important;border-radius:4px!important;box-shadow:var(--sh-md)!important}
+.toast.bad{border-left-color:var(--bad)!important}.toast.warn{border-left-color:var(--warn)!important}
+.toast svg{color:var(--ok)!important}.toast.bad svg{color:var(--bad)!important}
+.as-fab{background:var(--o-accent)!important;box-shadow:var(--sh-md)!important;height:44px!important;border-radius:22px!important;animation:none!important}
+.as-fab *{animation:none!important}
+.image-picker,.image-preview{border-radius:4px!important}
+.sales-progress span,.viz-mini span{background:var(--o-accent)!important}
+.co-tab.on{color:var(--o-accent)!important;box-shadow:inset 0 -2px 0 var(--o-accent)!important}
+
+@media(max-width:780px){
+  .o-navbar{padding:0 8px}
+  .o-nav-right .o-nav-btn:first-child,#topbar .clock{display:none}
+  .o-dd{left:8px!important;right:8px}
+  #view{padding:10px 12px 32px!important}
+  .o-cp{margin:-10px -12px 12px;padding:8px 12px}
+  .o-sheet{padding:16px}
+  .o-kanban{grid-template-columns:1fr}
+}
+/* Odoo polish: static list headers, one font, small list thumbnails, no tinted columns */
+:root{--mono:var(--sans)}
+.num,.tbl td,.kpi .kv{font-variant-numeric:tabular-nums}
+.tbl thead th{position:static!important}
+.material-table .tbl td:nth-child(4){background:none!important;color:inherit!important}
+.material-table .tbl td:first-child{font-weight:500!important}
+.tbl .thumb.thumb-record,.tbl .thumb-ph.thumb-record{width:40px!important;height:40px!important;flex:0 0 40px!important;border-radius:4px!important}
+.tbl .photo-up .co-avatar-cam{width:16px;height:16px;right:-4px;bottom:-4px}
+.tbl .photo-up .co-avatar-cam svg{width:9px;height:9px}
+.thumb-ph.thumb-record{background:#f1f3f5!important;border:1px solid var(--o-border)!important}
+.co-details{background:#fff!important}
+.co-details>div{background:#fff!important}
+.co-smart b,.co-smart small{font-family:var(--sans)!important}
+.viz-hv{font-family:var(--sans)!important}
+.material-table .tbl td:nth-child(4):has(.stock-good),.material-table .tbl td:nth-child(4):has(.stock-watch),.material-table .tbl td:nth-child(4):has(.stock-low){background:none!important;color:inherit!important}
+.o-kanban-wrap{margin-bottom:18px}
