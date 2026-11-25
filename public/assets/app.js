@@ -4105,7 +4105,7 @@ function masterEdit(type,id){
       (product?number('Default order quantity','orderQty',row.orderQty??1,1,1):
         input('Dimensions / specifications','dimensions',row.dimensions,{full:true}))+
       (type==='parts'?select('Part source','source',same(['Manufactured','Purchased','Stocked']),row.source||'Manufactured'):'')+
-      imageField(row.image));
+      imageField(row.image,product?'Product photo':type==='parts'?'Part photo':'Image'));
   const list=[...new Set([...(type==='materials'?['Tubes','Steel sections','Sheets','Accessories']:type==='parts'?
     ['Safety net','Aluminium','Steel / fabricated parts','Fasteners / accessories']:[]),...state[type].map(x=>x.category).filter(Boolean)])];
   const form=formModal((old?'Edit ':'Add ')+title,`<div class="form-grid ${type==='materials'?'material-form':''}">${core}${area('Notes','notes',row.notes)}</div>
@@ -4313,7 +4313,7 @@ function masterView(type,id){
   const r=get(state,type,id);
   const locations=COMPANIES.includes(type)?companyLocations(state,type,id,false):[];
   const packing=type==='products'?productPacking(state,r,get(state,'recipes',id)):null;
-  infoModal(label(r),(!COMPANIES.includes(type)?`<div class="record-detail-image">${type==='materials'?photoUploader(type,r,'thumb-detail'):recordPicture(r,'thumb-detail')}</div>`:'')+
+  infoModal(label(r),(!COMPANIES.includes(type)?`<div class="record-detail-image">${['materials','parts','products'].includes(type)?photoUploader(type,r,'thumb-detail'):recordPicture(r,'thumb-detail')}</div>`:'')+
     kv([['Status',r.active===false?'Archived':'Active'],['Category',r.category],['Specifications',r.dimensions],
     ['Type',type==='products'?packingCategory(r.category)?.type:''],['Default order quantity',r.orderQty],['Size',type==='products'?'':r.size],['Color',type==='products'?'':r.color],['Unit',r.unit],['Source',r.source],['Contact person',r.contact],['Email',r.email],['Phone',r.phone],['Services / supply',r.details],['Notes',r.notes]])+
     (locations.length?panel('Linked locations',table(['Name','Address','City','Notes','Status','Map'],
@@ -4437,7 +4437,7 @@ function masterPage(type){
       rows.map(r=>{
         const args=`${escapeArg(type)},${escapeArg(r.id)}`;
         return [esc(r.code),company?cell(r.name,[r.size,r.color,r.dimensions||r.details].filter(Boolean).join(' · ')):
-          `<div class="record-media">${recordPicture(r)}<div>${cell(r.name,[r.size,r.color,r.dimensions||r.details].filter(Boolean).join(' · '))}</div></div>`,
+          `<div class="record-media">${photoUploader(type,r)}<div>${cell(r.name,[r.size,r.color,r.dimensions||r.details].filter(Boolean).join(' · '))}</div></div>`,
           esc(company?r.contact:r.category),
           company?String(companyLocations(state,type,r.id).length):esc(r.unit),
           ...(company?[]:[esc(qfmt(balances.get(r.id)??0,r.unit))]),
