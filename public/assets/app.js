@@ -3530,11 +3530,10 @@ async function imageValue(form,existing=''){
   return value;
 }
 function imageField(old,title='Image'){
-  return `<div class="image-picker full" data-image-picker><div class="image-preview" role="status">
-    ${validImage(old)?thumb(old,'Current image','thumb-preview'):
+  return `<div class="field image-picker image-compact" data-image-picker><span class="image-label">${esc(title)}</span>
+    <div class="image-row"><div class="image-preview" role="status">${validImage(old)?thumb(old,'Current image','thumb-preview'):
       `<div class="image-preview-empty">${ic('box')}<span>No image selected</span></div>`}</div>
-    ${input(title,'photo','',{type:'file',full:true,extra:'accept="image/png,image/jpeg,image/webp,image/gif"'})}
-    <div class="image-hint">PNG, JPEG, WebP or GIF · The image is optimized when you save.</div>
+    <input class="inp" name="photo" type="file" aria-label="${esc(title)}" accept="image/png,image/jpeg,image/webp,image/gif"></div>
     ${old?tick('Remove saved image','removeImage'):''}</div>`;
 }
 function wireImagePreviews(form){
@@ -4039,9 +4038,9 @@ function mapBtn(url,text='Map'){
     `<a class="o-pin o-pin-text" href="${esc(url)}" target="_blank" rel="noopener noreferrer" title="${tip}">${ic('pin')}${esc(text)}</a>`;
 }
 const companyMap=(type,r)=>r?r.mapUrl||deliverySite(state,type,r.id)?.url||'':'';
-function mapField(title,value,hint){
-  return input(title,'mapUrl',value,{full:true,extra:`placeholder="${esc(hint)}"`})+
-    `<p class="sub full map-help">${ic('pin')} In Google Maps open the place, tap <b>Share → Copy link</b> and paste it here. Coordinates like <b>25.2048, 55.2708</b> also work.</p>`;
+function mapField(title,value,hint,full=true){
+  return `<div class="field ${full?'full':''}"><label>${esc(title)}<input class="inp" name="mapUrl" type="text" value="${esc(value)}" placeholder="${esc(hint)}"></label>
+    <span class="map-help">${ic('pin')} Google Maps → <b>Share → Copy link</b>, then paste. Coordinates also work.</span></div>`;
 }
 function deliverySite(s,type,id){return s.locations.find(l=>l.ownerType===type&&l.ownerId===id&&l.delivery);}
 /* Customers: name, code, phone, position, delivery address. Vendors: name, code, phone, address, materials supplied.
@@ -4050,20 +4049,21 @@ function simpleCompanyEdit(type,id){
   const old=get(state,type,id), row=old||{}, vendor=type==='suppliers', proc=type==='processors', title=ENTITY[type];
   const address=row.address||deliverySite(state,type,id)?.address||'';
   const form=formModal((old?'Edit ':'Add ')+title,`<div class="form-grid">
-    ${input('Name','name',row.name,{full:true,extra:`placeholder="${proc?'e.g. Gulf Galvanizing Factory':vendor?'e.g. Metal Solution Trading':'e.g. Emaar Construction LLC'}"`})}
-    ${input('Code','code',row.code||nextCode(state,type),{extra:'placeholder="Left empty, a code is given automatically"'})}
+    ${input('Name','name',row.name,{extra:`placeholder="${proc?'e.g. Gulf Galvanizing Factory':vendor?'e.g. Metal Solution Trading':'e.g. Emaar Construction LLC'}"`})}
+    ${input('Code','code',row.code||nextCode(state,type),{extra:'placeholder="Given automatically"'})}
     ${phoneField('Phone number','phone',row.phone)}
-    ${proc?input('Email','email',row.email,{type:'email',extra:'placeholder="e.g. orders@gulfgalv.ae"'}):vendor?'':input('Position','position',row.position,{extra:'placeholder="e.g. Project Manager"'})}
-    ${input(vendor||proc?'Address':'Delivery address','address',address,{full:true,extra:`placeholder="${proc?'e.g. Jebel Ali Industrial Area 1, Dubai':vendor?'e.g. Al Quoz Industrial Area 3, Dubai':'e.g. Dubai Hills, Building 3, Gate 2'}"`})}
-    ${vendor?input('Address 2','address2',row.address2,{full:true,extra:'placeholder="e.g. Warehouse 12, Jebel Ali Free Zone (second branch or store)"'}):''}
-    ${mapField(vendor||proc?'Google Maps location':'Customer location (Google Maps link)',companyMap(type,row),'e.g. https://maps.app.goo.gl/…')}
+    ${input('Email','email',row.email,{type:'email',extra:`placeholder="${proc?'e.g. orders@gulfgalv.ae':vendor?'e.g. sales@vendor.ae':'e.g. pm@emaar.ae'}"`})}
+    ${vendor||proc?'':input('Position','position',row.position,{extra:'placeholder="e.g. Project Manager"'})}
+    ${input(vendor||proc?'Address':'Delivery address','address',address,{extra:`placeholder="${proc?'e.g. Jebel Ali Industrial Area 1':vendor?'e.g. Al Quoz Industrial Area 3':'e.g. Dubai Hills, Building 3, Gate 2'}"`})}
+    ${vendor?input('Address 2','address2',row.address2,{extra:'placeholder="Second branch or store (optional)"'}):''}
+    ${mapField('Google Maps location',companyMap(type,row),'Paste the Google Maps link',false)}
     ${proc?'':imageField(row.image,'Logo / photo')}
     </div>`+(vendor?`<h4 class="erp-sub-head">Materials this vendor supplies</h4>
     <p class="sub" style="margin:-4px 0 10px">Pick a material and how many bundles. A new line appears by itself when you fill the last one.</p>
     <div data-supplies></div>`:''),async f=>{
     const data={...old,id:id||key(),name:valOf(f,'name'),code:valOf(f,'code'),phone:readPhone(f,'phone'),
       position:vendor||proc?old?.position||'':valOf(f,'position'),address:valOf(f,'address'),mapUrl:readMapUrl(f,'mapUrl'),active:old?.active!==false};
-    if(proc){data.email=valOf(f,'email');need(!data.email||/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(data.email),'Enter a valid email address.');}
+    data.email=valOf(f,'email');need(!data.email||/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(data.email),'Enter a valid email address.');
     if(vendor)data.address2=valOf(f,'address2');
     data.image=proc?old?.image||'':await imageValue(f,old?.image);
     if(vendor){
@@ -4128,7 +4128,7 @@ function companyView(type,id){
   if(simple)for(let i=smart.length-1;i>=0;i--)if(!smart[i][2]||smart[i][2]==='—')smart.splice(i,1);
   const details=simple?[['Code',esc(r.code)],...(type==='customers'?[['Position',esc(r.position||'—')]]:[]),
     ['Phone',r.phone?link('tel:'+r.phone.replace(/[^\d+]/g,''),r.phone):'—'],
-    ...(type==='processors'?[['Email',r.email?link('mailto:'+r.email,r.email):'—']]:[]),
+    ['Email',r.email?link('mailto:'+r.email,r.email):'—'],
     [type==='customers'?'Delivery address':'Address',esc(r.address||deliverySite(state,type,id)?.address||'—')],
     ...(type==='suppliers'?[['Address 2',esc(r.address2||'—')]]:[]),
     ['Location on map',companyMap(type,r)?mapBtn(companyMap(type,r),'Open in Google Maps'):'<span class="sub">No Google Maps link yet — click Edit to add it</span>']]:[
