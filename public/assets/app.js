@@ -3908,6 +3908,7 @@ function simpleCompanyEdit(type,id){
     ${phoneField('Phone number','phone',row.phone)}
     ${vendor?'':input('Position','position',row.position,{extra:'placeholder="e.g. Project Manager"'})}
     ${input(vendor?'Address':'Delivery address','address',address,{full:true,extra:`placeholder="${vendor?'e.g. Al Quoz Industrial Area 3, Dubai':'e.g. Dubai Hills, Building 3, Gate 2'}"`})}
+    ${vendor?input('Address 2','address2',row.address2,{full:true,extra:'placeholder="e.g. Warehouse 12, Jebel Ali Free Zone (second branch or store)"'}):''}
     ${mapField(vendor?'Google Maps location':'Customer location (Google Maps link)',companyMap(type,row),'e.g. https://maps.app.goo.gl/…')}
     ${imageField(row.image,'Logo / photo')}
     </div>`+(vendor?`<h4 class="erp-sub-head">Materials this vendor supplies</h4>
@@ -3915,6 +3916,7 @@ function simpleCompanyEdit(type,id){
     <div data-supplies></div>`:''),async f=>{
     const data={...old,id:id||key(),name:valOf(f,'name'),code:valOf(f,'code'),phone:readPhone(f,'phone'),
       position:vendor?old?.position||'':valOf(f,'position'),address:valOf(f,'address'),mapUrl:readMapUrl(f,'mapUrl'),active:old?.active!==false};
+    if(vendor)data.address2=valOf(f,'address2');
     data.image=await imageValue(f,old?.image);
     if(vendor){
       data.supplies=supplyLines().map(l=>({sku:fieldValue(l,'sku'),bundles:qty(fieldValue(l,'bundles')||0,'Bundles',true)}));
@@ -4045,6 +4047,7 @@ function companyView(type,id){
   const details=simple?[['Code',esc(r.code)],...(type==='customers'?[['Position',esc(r.position||'—')]]:[]),
     ['Phone',r.phone?link('tel:'+r.phone.replace(/[^\d+]/g,''),r.phone):'—'],
     [type==='customers'?'Delivery address':'Address',esc(r.address||deliverySite(state,type,id)?.address||'—')],
+    ...(type==='suppliers'?[['Address 2',esc(r.address2||'—')]]:[]),
     ['Location on map',companyMap(type,r)?mapBtn(companyMap(type,r),'Open in Google Maps'):'<span class="sub">No Google Maps link yet — click Edit to add it</span>']]:[
     ['TRN / VAT',esc(r.trn||'—')],['Email',r.email?link('mailto:'+r.email,r.email):'—'],['Phone',r.phone?link('tel:'+r.phone.replace(/[^\d+]/g,''),r.phone):'—'],
     ['Website',r.website&&/^https?:\/\//i.test(r.website)?link(r.website,r.website.replace(/^https?:\/\//i,'')):'—'],
@@ -4393,13 +4396,13 @@ function simpleCompanyPage(type){
       return [esc(r.code),`<div class="record-media co-media">${logoUploader(type,r)}<div>${cell(r.name)}${r.active===false?chip('Archived'):''}</div></div>`,
         ...(vendor?[]:[esc(r.position||companyContacts(r)[0]?.job||'—')]),
         r.phone?`<a class="co-link" href="tel:${esc(r.phone.replace(/[^\d+]/g,''))}">${esc(r.phone)}</a>`:'—',
-        `<div class="addr-cell"><span>${esc(address(r)||'—')}</span>${mapBtn(companyMap(type,r))}</div>`,
+        `<div class="addr-cell"><span>${esc(address(r)||'—')}${vendor&&r.address2?`<span class="sub" style="display:block">${esc(r.address2)}</span>`:''}</span>${mapBtn(companyMap(type,r))}</div>`,
         ...(vendor?[supplies.length?`<span class="co-count">${supplies.length}</span> <span class="sub">${esc(nfmt(supplies.reduce((n,x)=>n+x.bundles,0),2))} bundles</span>`:'<span class="sub">0</span>']:[]),
         open?`<span class="co-count">${open}</span>`:'<span class="sub">0</span>',
         actionGroup(button('View',`masterView(${args})`,'btn-sm btn-view','search'),small('Edit',`masterEdit(${args})`),
           dangerSmall('Delete',`deleteMaster(${args})`))];
     }),'Add your first '+title.toLowerCase()+'.',
-    state[type].map(r=>[r.code,r.name,r.position,r.phone,address(r),...vendorSupplies(r).map(x=>label(get(state,'materials',x.sku)))].filter(Boolean).join(' ')),
+    state[type].map(r=>[r.code,r.name,r.position,r.phone,address(r),r.address2,...vendorSupplies(r).map(x=>label(get(state,'materials',x.sku)))].filter(Boolean).join(' ')),
     {placeholder:vendor?'Search by name, code, phone, address or material…':'Search by name, code, phone, position or address…',noun:vendor?'vendors':'customers'});
 }
 function companyPage(type){
