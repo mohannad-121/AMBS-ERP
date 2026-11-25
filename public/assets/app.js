@@ -3819,6 +3819,26 @@ const PAYMENT_TERMS=['Advance payment','Cash on delivery','Immediate payment','7
 const COMPANY_KIND={customers:'Customer',suppliers:'Vendor',processors:'Processing company'};
 const companyContacts=r=>Array.isArray(r?.contacts)&&r.contacts.length?r.contacts:(r?.contact?[{name:r.contact,job:'',phone:'',email:''}]:[]);
 const initials=name=>String(name||'?').trim().split(/\s+/).slice(0,2).map(w=>w[0]).join('').toUpperCase()||'?';
+/* Click a customer / vendor avatar to upload (or replace) its logo or photo straight away. */
+function logoUploader(type,r,size='co-avatar-sm'){
+  return `<label class="co-avatar-up" data-tip="${validImage(r.image)?'Change logo / photo':'Upload a logo or photo'}" onclick="event.stopPropagation()">
+    ${companyAvatar(r,size)}<span class="co-avatar-cam" aria-hidden="true">${ic('plus')}</span>
+    <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden aria-label="Upload logo for ${esc(r.name)}"
+      onchange="uploadCompanyLogo(${escapeArg(type)},${escapeArg(r.id)},this)"></label>`;
+}
+async function uploadCompanyLogo(type,id,inputEl){
+  if(!inputEl.files[0])return;
+  const holder=document.createElement('form'), viewing=!!inputEl.closest('.modal');
+  holder.append(Object.assign(inputEl.cloneNode(),{name:'photo'}));
+  holder.elements.photo.files=inputEl.files;
+  try{
+    const image=await imageValue(holder,'');
+    await commit(s=>{const row=get(s,type,id);need(row,'This record no longer exists.');row.image=image;row.at=now();});
+    if(viewing){closeModal();masterView(type,id);}
+    App.render();toast('Logo saved.','ok');
+  }catch(e){toast(e.message,'bad');}
+  finally{inputEl.value='';}
+}
 function companyAvatar(r,size='co-avatar-sm'){
   return validImage(r.image)?`<img class="thumb co-avatar ${size}" src="${esc(r.image)}" alt="${esc(r.name)}" loading="lazy">`:
     `<span class="co-avatar co-initials ${size}" aria-hidden="true">${esc(initials(r.name))}</span>`;
@@ -3881,11 +3901,13 @@ function simpleCompanyEdit(type,id){
     ${input('Position','position',row.position,{extra:`placeholder="${vendor?'e.g. Sales Manager':'e.g. Project Manager'}"`})}
     ${input(vendor?'Address':'Delivery address','address',address,{full:true,extra:`placeholder="${vendor?'e.g. Al Quoz Industrial Area 3, Dubai':'e.g. Dubai Hills, Building 3, Gate 2'}"`})}
     ${mapField(vendor?'Google Maps location':'Customer location (Google Maps link)',companyMap(type,row),'e.g. https://maps.app.goo.gl/…')}
+    ${imageField(row.image).replace('>Image</label>','>Logo / photo</label>')}
     </div>`+(vendor?`<h4 class="erp-sub-head">Materials this vendor supplies</h4>
     <p class="sub" style="margin:-4px 0 10px">Pick a material and how many bundles. A new line appears by itself when you fill the last one.</p>
     <div data-supplies></div>`:''),async f=>{
     const data={...old,id:id||key(),name:valOf(f,'name'),code:valOf(f,'code'),phone:readPhone(f,'phone'),
       position:valOf(f,'position'),address:valOf(f,'address'),mapUrl:readMapUrl(f,'mapUrl'),active:old?.active!==false};
+    data.image=await imageValue(f,old?.image);
     if(vendor){
       data.supplies=supplyLines().map(l=>({sku:fieldValue(l,'sku'),bundles:qty(fieldValue(l,'bundles')||0,'Bundles',true)}));
       need(new Set(data.supplies.map(x=>x.sku)).size===data.supplies.length,'Each material can be listed once per vendor.');
@@ -4025,7 +4047,7 @@ function companyView(type,id){
       [['Lead time',r.leadTime!=null?esc(r.leadTime+' days'):'—']]),
     [type==='customers'?'Account manager':'Buyer / manager',esc(r.manager||'—')]];
   const section=(anchor,html)=>html?`<div id="${anchor}" class="co-section">${html}</div>`:'';
-  infoModal(r.name,`<div class="co-hero">${companyAvatar(r,'co-avatar-lg')}<div class="co-hero-main">
+  infoModal(r.name,`<div class="co-hero">${logoUploader(type,r,'co-avatar-lg')}<div class="co-hero-main">
       <div class="co-hero-name">${esc(r.name)}</div>
       <div class="co-hero-sub">${esc(r.code)} · ${esc(COMPANY_KIND[type])} ${chip(r.active===false?'Archived':'Active')}</div>${tagChips(r.tags)}</div></div>`+
     (over?note('Open sales orders ('+nfmt(openValue,2)+' AED) are above this customer’s credit limit ('+nfmt(r.creditLimit,2)+' AED).','warn'):'')+
@@ -4360,7 +4382,7 @@ function simpleCompanyPage(type){
     searchableTable(['Code','Name','Position','Phone',vendor?'Address':'Delivery address',...(vendor?['Materials']:[]),vendor?'Open purchases':'Open sales','Actions'],
     state[type].map(r=>{
       const args=`${escapeArg(type)},${escapeArg(r.id)}`, open=openCount(r), supplies=vendorSupplies(r);
-      return [esc(r.code),`<div class="record-media co-media">${companyAvatar(r)}<div>${cell(r.name)}${r.active===false?chip('Archived'):''}</div></div>`,
+      return [esc(r.code),`<div class="record-media co-media">${logoUploader(type,r)}<div>${cell(r.name)}${r.active===false?chip('Archived'):''}</div></div>`,
         esc(r.position||companyContacts(r)[0]?.job||'—'),
         r.phone?`<a class="co-link" href="tel:${esc(r.phone.replace(/[^\d+]/g,''))}">${esc(r.phone)}</a>`:'—',
         `<div class="addr-cell"><span>${esc(address(r)||'—')}</span>${mapBtn(companyMap(type,r))}</div>`,
