@@ -1321,3 +1321,16 @@ tr.o-group td{background:#f8f9fa!important;font-weight:600;cursor:pointer;color:
   body.nav-open::after{content:"";display:block!important;position:fixed;inset:0;background:rgba(0,0,0,.3);z-index:44}
   .o-nav-toggle{display:inline-flex}
 }
+
+/* Raw material cards: photo + on-hand quantity */
+.o-card-photo{flex:0 0 72px}
+.thumb.thumb-kanban,.thumb-ph.thumb-kanban{display:grid;place-items:center;width:72px;height:72px;border-radius:4px;object-fit:contain;background:#fff;border:1px solid var(--o-border);box-shadow:none}
+.thumb-ph.thumb-kanban{background:#f1f3f5;color:var(--o-muted)}
+.thumb-ph.thumb-kanban svg{width:24px;height:24px}
+.o-card-qty{margin-top:4px;font-size:13px;color:var(--o-text)}
+.o-card-qty b{font-size:16px;font-weight:600}
+
+/* record page photo: small, top-right (Odoo form image) */
+.o-sheet .record-detail-image{float:right;margin:0 0 12px 20px;padding:0!important;background:none!important;border:0!important}
+.o-sheet .record-detail-image .thumb-detail,.o-sheet .record-detail-image .thumb-ph.thumb-detail{width:140px!important;height:140px!important;border-radius:4px!important}
+.o-sheet .o-notebook-nav,.o-sheet>section.card{clear:both}

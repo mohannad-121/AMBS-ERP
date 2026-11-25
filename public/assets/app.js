@@ -4437,11 +4437,20 @@ function masterView(type,id){
   const locations=COMPANIES.includes(type)?companyLocations(state,type,id,false):[];
   const packing=type==='products'?productPacking(state,r,get(state,'recipes',id)):null;
   infoModal(label(r),(!COMPANIES.includes(type)?`<div class="record-detail-image">${['materials','parts','products'].includes(type)?photoUploader(type,r,'thumb-detail'):recordPicture(r,'thumb-detail')}</div>`:'')+
+    (type==='materials'?(()=>{const on=physical(state,r.id), ord=state.purchases.filter(p=>p.status==='Ordered').reduce((t,p)=>t+
+        p.lines.filter(l=>l.sku===r.id).reduce((s,l)=>s+Math.max(0,l.qty-l.received),0),0);
+      return kv([['On hand',qfmt(on,r.unit)],['On order',ord>EPS?qfmt(ord,r.unit):''],['Opening stock',qfmt(materialOpening(state,r.id),r.unit)],
+        ['Bundle',r.bundle?qfmt(r.bundle,r.unit)+' per bundle':''],['Stock length',r.stockLen?nfmt(r.stockLen,2)+' m':''],
+        ['Rate per kg',r.rateKg?nfmt(r.rateKg,2)+' AED':''],['Rate per piece',r.ratePc?nfmt(r.ratePc,2)+' AED':''],['Code',r.code]]);})():'')+
     kv([['Status',r.active===false?'Archived':'Active'],['Category',r.category],['Specifications',r.dimensions],
     ['Type',type==='products'?packingCategory(r.category)?.type:''],['Default order quantity',r.orderQty],['Size',type==='products'?'':r.size],['Color',type==='products'?'':r.color],['Unit',r.unit],['Source',r.source],['Contact person',r.contact],['Email',r.email],['Phone',r.phone],['Services / supply',r.details],['Notes',r.notes]])+
     (locations.length?panel('Linked locations',table(['Name','Address','City','Notes','Status','Map'],
       locations.map(l=>[esc(l.name),esc(l.address),esc(l.city),esc(l.notes),chip(l.active===false?'Archived':'Active'),mapAction(l)]))):'')+
-    (packing?packingParts(packing.rows,packing.quantities,false,r.orderQty??1):'')+connectedPanels(type,r),
+    (packing?packingParts(packing.rows,packing.quantities,false,r.orderQty??1):'')+
+    (type==='materials'?panel('Vendors',table(['Vendor','Bundles','Units','Phone','Address'],state.suppliers.flatMap(v=>vendorSupplies(v).filter(x=>x.sku===r.id).map(x=>[
+      `<div class="record-media co-media">${companyAvatar(v)}<div>${cell(v.name)}</div></div>`+openBtn(`masterView('suppliers',${escapeArg(v.id)})`),
+      esc(nfmt(x.bundles,2)),esc(r.bundle?qfmt(r.bundle*x.bundles,r.unit):'—'),esc(v.phone||'—'),esc(v.address||'—')])),'No vendor lists this material yet.')):'')+
+    connectedPanels(type,r),
     actionGroup(button('Edit',`masterEdit(${escapeArg(type)},${escapeArg(id)})`,'btn-sm btn-primary'),
       type==='parts'?small('Variants',`variantsView(${escapeArg(id)})`):'',
       ['parts','products'].includes(type)?small(get(state,'recipes',id)?'BOM':'Create BOM',`recipeEdit(${escapeArg(type)},${escapeArg(id)})`):'',
@@ -4493,24 +4502,31 @@ function materialHealth(material,onHand){
   return {label:'In stock',kind:'ok',cell:'stock-good'};
 }
 function materialPage(){
-  const rows=state.materials;
-  const values=rows.map(material=>{
+  const rows=state.materials.slice().sort((x,y)=>x.name.localeCompare(y.name));
+  const info=rows.map(material=>{
     const onHand=physical(state,material.id);
     const onOrder=state.purchases.filter(p=>p.status==='Ordered').reduce((total,p)=>total+
       p.lines.filter(line=>line.sku===material.id).reduce((sum,line)=>sum+Math.max(0,line.qty-line.received),0),0);
-    const health=materialHealth(material,onHand),args=`'materials',${escapeArg(material.id)}`;
-    return [esc(material.code),`<div class="record-media">${photoUploader('materials',material)}<div>${cell(material.name,material.category)}</div></div>`,
-      `<span class="num">${esc(qfmt(materialOpening(state,material.id)))}</span>`,
-      `<span class="material-balance ${health.cell}"><strong class="num">${esc(qfmt(onHand))}</strong> <span>${esc(material.unit)}</span></span>`,
-      `<span class="num">${esc(qfmt(material.bundle??0))}</span>`,
-      `<span class="num">${esc(qfmt(onOrder))}</span>`,
-      `<span class="num">${esc(qfmt(onHand+onOrder))}</span>`,
-      statusChip(health.kind,health.label)+openBtn(`masterView(${args})`)];
+    const vendors=state.suppliers.filter(v=>vendorSupplies(v).some(x=>x.sku===material.id));
+    return {material,onHand,onOrder,vendors,health:materialHealth(material,onHand),open:`masterView('materials',${escapeArg(material.id)})`};
   });
   return head('Master Data','Raw Materials',button('Stock report',"App.go('reports')",'','pdf'),
     button('New',"masterEdit('materials')",'btn-primary'))+
-    searchableTable(['Code','Material','Opening','On hand','Bundle','On order','Avail. after','Status'],
-      values,'Add your first raw material.',[],{className:'material-table',placeholder:'Search code, name, category…',noun:'materials'});
+    kanban(info.map(({material:m,onHand,onOrder,vendors,health,open})=>({open,
+      search:[m.code,m.name,m.category,m.dimensions,m.unit,...vendors.map(v=>v.name)].filter(Boolean).join(' '),
+      html:`<span class="o-card-photo">${recordPicture(m,'thumb-kanban')}</span><div class="o-card-main"><div class="o-card-title">${esc(m.name)}</div>
+        <div class="o-card-line o-muted">${esc([m.code,m.category].filter(Boolean).join(' · '))}</div>
+        <div class="o-card-qty"><b>${esc(qfmt(onHand))}</b> ${esc(m.unit)} <span class="o-muted">on hand</span></div>
+        <div class="o-card-tags">${statusChip(health.kind,health.label)}${m.bundle?`<span class="o-tag">${esc(qfmt(m.bundle))} / bundle</span>`:''}
+          ${onOrder>EPS?`<span class="o-tag">${esc(qfmt(onOrder))} on order</span>`:''}${vendors.length?`<span class="o-tag">${vendors.length} vendor${vendors.length===1?'':'s'}</span>`:''}
+          ${m.active===false?'<span class="o-tag">Archived</span>':''}</div></div>`})),
+    {placeholder:'Search raw materials by name, code, category or vendor…',noun:'materials',empty:'Add your first raw material.',
+      list:{columns:['Code','Material','Category','Opening','On hand','Bundle','On order','Avail. after','Status'],
+        rows:info.map(({material:m,onHand,onOrder,health,open})=>[esc(m.code)+openBtn(open),
+          `<div class="record-media">${photoUploader('materials',m)}<div>${cell(m.name,m.dimensions||'')}</div></div>`,esc(m.category||'—'),
+          `<span class="num">${esc(qfmt(materialOpening(state,m.id)))}</span>`,`<strong class="num">${esc(qfmt(onHand))}</strong> <span class="sub">${esc(m.unit)}</span>`,
+          `<span class="num">${esc(qfmt(m.bundle??0))}</span>`,`<span class="num">${esc(qfmt(onOrder))}</span>`,
+          `<span class="num">${esc(qfmt(onHand+onOrder))}</span>`,statusChip(health.kind,health.label)])}});
 }
 function simpleCompanyPage(type){
   const title=ENTITY[type], vendor=type==='suppliers';
