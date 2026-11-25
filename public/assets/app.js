@@ -3851,6 +3851,24 @@ function readPhone(form,name){
   return '+971 '+(digits.length===9?digits.slice(0,2)+' '+digits.slice(2,5)+' '+digits.slice(5):digits.slice(0,1)+' '+digits.slice(1,4)+' '+digits.slice(4));
 }
 const vendorSupplies=r=>(Array.isArray(r?.supplies)?r.supplies:[]).filter(x=>get(state,'materials',x.sku));
+/* Google Maps location of a customer / vendor / trip. Accepts a Google Maps share link or "lat, lng" coordinates. */
+function readMapUrl(form,name){
+  const v=valOf(form,name);
+  if(!v)return '';
+  const xy=v.match(/^(-?\d{1,3}(?:\.\d+)?)\s*,\s*(-?\d{1,3}(?:\.\d+)?)$/);
+  if(xy&&Math.abs(+xy[1])<=90&&Math.abs(+xy[2])<=180)return mapsLink({lat:+xy[1],lng:+xy[2]});
+  const url=mapsLink({url:/^https?:\/\//i.test(v)?v:'https://'+v});
+  need(url,'Paste a Google Maps link (in Google Maps: open the place → Share → Copy link), or coordinates like 25.2048, 55.2708.');
+  return url;
+}
+function mapBtn(url,text='Map'){
+  return url?`<a class="btn btn-sm btn-map" href="${esc(url)}" target="_blank" rel="noopener noreferrer" data-tip="Open in Google Maps">${ic('pin')}${esc(text)}</a>`:'';
+}
+const companyMap=(type,r)=>r?r.mapUrl||deliverySite(state,type,r.id)?.url||'':'';
+function mapField(title,value,hint){
+  return input(title,'mapUrl',value,{full:true,extra:`placeholder="${esc(hint)}"`})+
+    `<p class="sub full map-help">${ic('pin')} In Google Maps open the place, tap <b>Share → Copy link</b> and paste it here. Coordinates like <b>25.2048, 55.2708</b> also work.</p>`;
+}
 function deliverySite(s,type,id){return s.locations.find(l=>l.ownerType===type&&l.ownerId===id&&l.delivery);}
 /* Customers and vendors: one short form — name, code, phone, position and (delivery) address. */
 function simpleCompanyEdit(type,id){
@@ -3862,11 +3880,12 @@ function simpleCompanyEdit(type,id){
     ${phoneField('Phone number','phone',row.phone)}
     ${input('Position','position',row.position,{extra:`placeholder="${vendor?'e.g. Sales Manager':'e.g. Project Manager'}"`})}
     ${input(vendor?'Address':'Delivery address','address',address,{full:true,extra:`placeholder="${vendor?'e.g. Al Quoz Industrial Area 3, Dubai':'e.g. Dubai Hills, Building 3, Gate 2'}"`})}
+    ${mapField(vendor?'Google Maps location':'Customer location (Google Maps link)',companyMap(type,row),'e.g. https://maps.app.goo.gl/…')}
     </div>`+(vendor?`<h4 class="erp-sub-head">Materials this vendor supplies</h4>
     <p class="sub" style="margin:-4px 0 10px">Pick a material and how many bundles. A new line appears by itself when you fill the last one.</p>
     <div data-supplies></div>`:''),async f=>{
     const data={...old,id:id||key(),name:valOf(f,'name'),code:valOf(f,'code'),phone:readPhone(f,'phone'),
-      position:valOf(f,'position'),address:valOf(f,'address'),active:old?.active!==false};
+      position:valOf(f,'position'),address:valOf(f,'address'),mapUrl:readMapUrl(f,'mapUrl'),active:old?.active!==false};
     if(vendor){
       data.supplies=supplyLines().map(l=>({sku:fieldValue(l,'sku'),bundles:qty(fieldValue(l,'bundles')||0,'Bundles',true)}));
       need(new Set(data.supplies.map(x=>x.sku)).size===data.supplies.length,'Each material can be listed once per vendor.');
@@ -3879,8 +3898,8 @@ function simpleCompanyEdit(type,id){
       add(s[type],{...data,at:now()});
       if(type!=='customers')return;
       const site=deliverySite(s,type,data.id);
-      if(data.address)add(s.locations,{...(site||{id:key(),name:'Delivery address',city:'',url:'',notes:'',lat:null,lng:null}),
-        address:data.address,stock:site?.stock??false,active:true,delivery:true,ownerType:type,ownerId:data.id});
+      if(data.address||data.mapUrl)add(s.locations,{...(site||{id:key(),name:'Delivery address',city:'',url:'',notes:'',lat:null,lng:null}),
+        address:data.address,url:data.mapUrl,stock:site?.stock??false,active:true,delivery:true,ownerType:type,ownerId:data.id});
       else if(site&&!locationUsed(s,site.id))site.active=false;
     });
     return old?'Saved.':title+' added.';
@@ -3995,7 +4014,8 @@ function companyView(type,id){
   if(simple)for(let i=smart.length-1;i>=0;i--)if(['Contacts','Locations'].includes(smart[i][1])&&!smart[i][2])smart.splice(i,1);
   const details=simple?[['Code',esc(r.code)],['Position',esc(r.position||'—')],
     ['Phone',r.phone?link('tel:'+r.phone.replace(/[^\d+]/g,''),r.phone):'—'],
-    [type==='customers'?'Delivery address':'Address',esc(r.address||deliverySite(state,type,id)?.address||'—')]]:[
+    [type==='customers'?'Delivery address':'Address',esc(r.address||deliverySite(state,type,id)?.address||'—')],
+    ['Location on map',companyMap(type,r)?mapBtn(companyMap(type,r),'Open in Google Maps'):'<span class="sub">No Google Maps link yet — click Edit to add it</span>']]:[
     ['TRN / VAT',esc(r.trn||'—')],['Email',r.email?link('mailto:'+r.email,r.email):'—'],['Phone',r.phone?link('tel:'+r.phone.replace(/[^\d+]/g,''),r.phone):'—'],
     ['Website',r.website&&/^https?:\/\//i.test(r.website)?link(r.website,r.website.replace(/^https?:\/\//i,'')):'—'],
     ['Address',esc([r.address,r.city,r.country].filter(Boolean).join(', ')||'—')],
@@ -4343,7 +4363,7 @@ function simpleCompanyPage(type){
       return [esc(r.code),`<div class="record-media co-media">${companyAvatar(r)}<div>${cell(r.name)}${r.active===false?chip('Archived'):''}</div></div>`,
         esc(r.position||companyContacts(r)[0]?.job||'—'),
         r.phone?`<a class="co-link" href="tel:${esc(r.phone.replace(/[^\d+]/g,''))}">${esc(r.phone)}</a>`:'—',
-        esc(address(r)||'—'),
+        `<div class="addr-cell"><span>${esc(address(r)||'—')}</span>${mapBtn(companyMap(type,r))}</div>`,
         ...(vendor?[supplies.length?`<span class="co-count">${supplies.length}</span> <span class="sub">${esc(nfmt(supplies.reduce((n,x)=>n+x.bundles,0),2))} bundles</span>`:'<span class="sub">0</span>']:[]),
         open?`<span class="co-count">${open}</span>`:'<span class="sub">0</span>',
         actionGroup(button('View',`masterView(${args})`,'btn-sm btn-view','search'),small('Edit',`masterEdit(${args})`),
@@ -5962,6 +5982,7 @@ function tripEdit(id,preset={}){
     ${input('Project','project',t.project,{extra:'placeholder="e.g. Skyflame 2"'})}
     ${input('From','from',t.from,{extra:'placeholder="e.g. AMBS store, DIP"'})}
     ${input('Delivery location','location',t.location,{extra:'placeholder="e.g. Dubai Hills, Building 3, Gate 2"'})}
+    ${mapField('Delivery location (Google Maps link)',t.mapUrl,'Filled from the customer, or paste https://maps.app.goo.gl/…')}
     ${input('Distance (km)','km',t.km??'',{type:'number',extra:'min="0" step="0.1" placeholder="e.g. 38"'})}
     ${input('Packing no.','no',t.no||nextTripNo(state,t.date),{extra:'placeholder="e.g. PL2026-11-001"'})}
     ${input('Trip date','date',t.date,{type:'date'})}
@@ -5977,7 +5998,7 @@ function tripEdit(id,preset={}){
     const kmRaw=valOf(f,'km'), km=kmRaw===''?0:qty(kmRaw,'Distance',true);
     const data={...old,id:id||key(),no:valOf(f,'no'),date:valOf(f,'date')||todayISO(),driverId,vehicle:valOf(f,'vehicle'),
       customerId,customerName:customerId?get(state,'customers',customerId)?.name||'':valOf(f,'customerSearch'),
-      project:valOf(f,'project'),from:valOf(f,'from'),location:valOf(f,'location'),km,priority:valOf(f,'priority')||'Normal',
+      project:valOf(f,'project'),from:valOf(f,'from'),location:valOf(f,'location'),mapUrl:readMapUrl(f,'mapUrl'),km,priority:valOf(f,'priority')||'Normal',
       system:valOf(f,'system'),description:valOf(f,'description'),status,deliveredAt:valOf(f,'deliveredAt'),
       paperStatus:valOf(f,'paperStatus')||'Pending',jobId:valOf(f,'jobId'),notes:valOf(f,'notes'),by:old?.by||SET.currentUser};
     need(driverId,'Choose the driver for this trip.');
@@ -6008,6 +6029,7 @@ function tripEdit(id,preset={}){
   form.elements.customer.addEventListener('change',e=>{
     const c=get(state,'customers',e.target.value), place=form.elements.location;
     if(c&&!place.value)place.value=c.address||deliverySite(state,'customers',c.id)?.address||'';
+    if(c&&!form.elements.mapUrl.value)form.elements.mapUrl.value=companyMap('customers',c);
   });
   form.elements.date.addEventListener('change',()=>{if(!old)form.elements.no.value=nextTripNo(state,form.elements.date.value);});
   form.elements.jobId?.addEventListener('change',e=>{
@@ -6015,6 +6037,7 @@ function tripEdit(id,preset={}){
     const c=get(state,'customers',j.customerId);
     if(c){form.elements.customer.value=c.id;form.elements.customerSearch.value=c.name+(c.code?' · '+c.code:'');}
     if(!form.elements.location.value)form.elements.location.value=[j.destinationSnapshot?.name,j.destinationSnapshot?.address].filter(Boolean).join(', ');
+    if(!form.elements.mapUrl.value)form.elements.mapUrl.value=mapsLink(get(state,'locations',j.destination)||{})||companyMap('customers',c);
     if(!form.elements.description.value)form.elements.description.value=labelOf(state,j.productId)+' × '+j.qty;
   });
 }
@@ -6048,7 +6071,7 @@ function tripView(id){
     ['Status',chip(t.status==='Next'?'Open':t.status==='On the way'?'In progress':t.status)+' '+(t.priority==='Urgent'?statusChip('bad','Urgent'):'')],
     ['Driver',d?`${esc(d.name)} ${papersChip(d)}`:'—'],['Driver phone',esc(d?.phone||'—')],['Vehicle',esc(t.vehicle||'—')],
     ['Customer',esc(t.customerName||get(state,'customers',t.customerId)?.name||'—')],['Project',esc(t.project||'—')],
-    ['Route',esc((t.from||'—')+' → '+(t.location||'—'))],['Distance',esc(t.km?nfmt(t.km,1)+' km':'—')],
+    ['Route',esc((t.from||'—')+' → '+(t.location||'—'))],['Delivery location on map',mapBtn(t.mapUrl,'Open in Google Maps')||'—'],['Distance',esc(t.km?nfmt(t.km,1)+' km':'—')],
     ['Trip date',esc(fmtDate(t.date))],['Delivery date',esc(t.deliveredAt?fmtDate(t.deliveredAt):'—')],
     ['System',esc(t.system||'—')],['Short description',esc(t.description||'—')],['Delivery papers',esc(t.paperStatus||'—')],
     ['Dispatch job',esc(get(state,'jobs',t.jobId)?.no||'—')],['Recorded by',esc(t.by||'—')]
@@ -6057,10 +6080,10 @@ function tripView(id){
     dangerSmall('Delete trip',`closeModal();deleteTrip(${escapeArg(id)})`)));
 }
 const TRIP_EXPORT_COLUMNS=['Customer','Project','Packing No.','Date','Status','Priority','System','Short description','Driver name','Driver phone',
-  'Vehicle','From','Delivery location','Distance (km)','Delivery date','Paper status','Driver papers'];
+  'Vehicle','From','Delivery location','Google Maps link','Distance (km)','Delivery date','Paper status','Driver papers'];
 function tripExportRows(trips){
   return trips.map(t=>{const d=get(state,'drivers',t.driverId);return [t.customerName||get(state,'customers',t.customerId)?.name||'',t.project||'',t.no,
-    t.date||'',t.status,t.priority||'',t.system||'',t.description||'',d?.name||'',d?.phone||'',t.vehicle||'',t.from||'',t.location||'',
+    t.date||'',t.status,t.priority||'',t.system||'',t.description||'',d?.name||'',d?.phone||'',t.vehicle||'',t.from||'',t.location||'',t.mapUrl||'',
     Number(t.km)||0,t.deliveredAt||'',t.paperStatus||'',d?(papersIssues(d).join('; ')||'OK'):''];});
 }
 const DRIVER_EXPORT_COLUMNS=['Driver','Type','Phone','Vehicle plate','Vehicle type','Licence no.','Licence expiry','Emirates ID','ID expiry',
@@ -6124,7 +6147,7 @@ const Drv={
         const d=get(state,'drivers',t.driverId), args=escapeArg(t.id);
         return [cell(t.no,fmtDate(t.date)),cell(t.customerName||'—',t.project),cell(t.system||'—',t.description),
           d?`<button type="button" class="link-btn" onclick="driverView(${escapeArg(d.id)})">${esc(d.name)}</button>${papersOk(d)?'':' '+statusChip('bad','Papers')}<div class="sub">${esc(t.vehicle||'')}</div>`:'—',
-          esc(t.location||'—'),`<span class="num">${esc(t.km?nfmt(t.km,1):'—')}</span>`,
+          `<div class="addr-cell"><span>${esc(t.location||'—')}</span>${mapBtn(t.mapUrl)}</div>`,`<span class="num">${esc(t.km?nfmt(t.km,1):'—')}</span>`,
           tripChip(t)+(t.deliveredAt?`<div class="sub">${esc(fmtDate(t.deliveredAt))}</div>`:''),
           t.paperStatus==='Signed & returned'?statusChip('ok','Signed'):t.paperStatus==='Missing'?statusChip('bad','Missing'):statusChip('warn','Pending'),
           actionGroup(small('View',`tripView(${args})`),small('Edit',`tripEdit(${args})`),
@@ -6148,7 +6171,7 @@ function driversPage(){
     panel('Drivers',table(['Driver','Vehicle','Official papers','Where now','Trips','Actions'],drivers.map(d=>{
       const trips=driverTrips(d.id), last=trips.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''))[0], where=driverWhere(d), args=escapeArg(d.id);
       return [`<div class="record-media co-media"><span class="co-avatar co-initials co-avatar-sm">${esc(initials(d.name))}</span><div>${cell(d.name,[d.phone,d.kind].filter(Boolean).join(' · '))}</div></div>`,
-        cell(d.vehiclePlate||'—',d.vehicleType),papersChip(d),statusChip(where.kind,where.text),
+        cell(d.vehiclePlate||'—',d.vehicleType),papersChip(d),`<div class="addr-cell">${statusChip(where.kind,where.text)}${mapBtn(where.trip?.mapUrl)}</div>`,
         `<span class="co-count">${trips.length}</span> <span class="num">${esc(nfmt(tripKm(trips),1))} km</span><div class="sub">${esc(last?'Last: '+fmtDate(last.date)+' · '+last.no:'No trips yet')}</div>`,
         actionGroup(button('View',`driverView(${args})`,'btn-sm btn-view','search'),small('Edit',`driverEdit(${args})`),
           papersOk(d)?small('New trip',`tripEdit('',{driverId:${args}})`):'',dangerSmall('Delete',`deleteDriver(${args})`))];
@@ -6286,7 +6309,7 @@ function trackingPage(){
       ['pulse','All-time movements',state.events.length,'Full history kept','k-ink']])+
     (moving.length?panel('On the road now',table(['Trip','Driver','Customer','To','Left at'],moving.map(t=>[
       `<button type="button" class="link-btn" onclick="tripView(${escapeArg(t.id)})">${esc(t.no)}</button>`,esc(get(state,'drivers',t.driverId)?.name||'—'),
-      esc(t.customerName||'—'),esc(t.location||'—'),esc(t.departedAt?stamp(t.departedAt):fmtDate(t.date))]))):'')+
+      esc(t.customerName||'—'),`<div class="addr-cell"><span>${esc(t.location||'—')}</span>${mapBtn(t.mapUrl)}</div>`,esc(t.departedAt?stamp(t.departedAt):fmtDate(t.date))]))):'')+
     `<div class="card trk-filters"><div class="toolbar">
       <div class="search">${ic('search')}<input class="inp" aria-label="Search items" placeholder="Search item, code, reference, company…" value="${esc(f.q)}" oninput="Trk.set('q',this.value)"></div>
       <select class="sel" aria-label="Item type" onchange="Trk.set('kind',this.value)">${opt(same(['Raw material','Part','Part variant','Product']),f.kind,'All item types')}</select>
@@ -6385,7 +6408,7 @@ function dashboard(){
         e.lines.map(l=>`<span class="num ${l.delta<0?'trk-out':'trk-in'}">${l.delta<0?'':'+'}${esc(qfmt(l.delta,item(state,l.sku)?.unit))}</span>`).join(' ')]),'No movements yet.'))}
       ${panel('Deliveries to watch',table(['Trip','Driver','Customer','Status'],[...moving,...waiting.sort((a,b)=>(b.priority==='Urgent')-(a.priority==='Urgent'))].slice(0,8).map(t=>[
         `<button type="button" class="link-btn" onclick="tripView(${escapeArg(t.id)})">${esc(t.no)}</button>`,esc(get(state,'drivers',t.driverId)?.name||'—'),
-        cell(t.customerName||'—',t.location),tripChip(t)]),'No open deliveries.'))}
+        cell(t.customerName||'—',t.location)+mapBtn(t.mapUrl),tripChip(t)]),'No open deliveries.'))}
     </div>`+
     (out.length||warnings.length?panel('Stock alerts',textTable(['Item','Alert','Location','Shortfall'],[
       ...out.map(m=>[label(m),'Out of stock (used in a BOM)','All locations',qfmt(0,m.unit)]),...warnings])):'')+
