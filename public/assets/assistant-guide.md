@@ -24,6 +24,7 @@ Keywords: menu, top bar, open record, click row, breadcrumb, new button, search
 - In every list, **click a row** to open the record as a full page. The breadcrumb at the top (e.g. *Customers / Emaar*) goes back to the list.
 - **Edit** and **Delete** (and BOM, Variants, Archive where they apply) are at the top of the record page — no buttons on every row.
 - **New** (top right of a list) adds a record.
+- **Search bar in the top bar** (press `/` or Ctrl+K): type a page name, e.g. *customers*, and pick **AMBS / Contacts & Products / Customers**; matching records (customers, vendors, materials, parts, products, drivers, trips) are listed under it. ↑/↓ to move, Enter to open, Esc to close.
 
 ## Navigating the app (sidebar and pages)
 Keywords: menu, sidebar, navigation, pages, where is, find page, القائمة, صفحة
