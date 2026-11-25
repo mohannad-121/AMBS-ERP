@@ -12,7 +12,7 @@ Keywords: vendor, supplier renamed, driver, delivery, trip, papers, tracking, li
 - **Suppliers are now called Vendors**. Short form (name, code, phone, email, address, **Address 2** for a second branch or store — no position) plus **Materials this vendor supplies**: pick a raw material and the number of **bundles**. Open a vendor (click its card) to see its materials, bundles, units per bundle and stock on hand.
 - **Raw materials**: the form starts with **Material name**, followed by code, category and a **Material photo** box. You can also click the material's picture (small **+**) in the list or on its page to upload or replace the photo straight away. **Parts** and **Products** work the same way: a **Part photo** / **Product photo** box in the form, and a clickable picture in the list and on the record page. Safety / minimum stock and the Archive button were removed.
 - **Bills of Materials**: **Create BOM** opens a large window with a search box and the full list, each item shown with its photo — type part of a name or code to narrow it down. Item search boxes elsewhere (BOM lines, sales, stock) also show photos. Click a BOM row to see what is inside. In the BOM form there is no "Add line" button: it opens with one line, and the next line appears by itself only after the current one is complete (raw material + formula, or part + quantity); empty lines are ignored.
-- **Drivers & Deliveries** (`#/drivers`): add drivers with phone, vehicle, licence, Emirates ID, vehicle registration and the **Official papers checked and on file** box. **A trip cannot be created, started or delivered with a driver whose papers are missing or expired.** Each trip has a packing number (PL2026-11-001), customer, project, system, short description, from / delivery location, distance in km, priority, status (Next → On the way → Delivered), delivery date and delivery paper status. Export everything with **PDF** or **Excel** (Excel has a Deliveries sheet and a Drivers sheet); each driver's page has its own PDF / Excel under **⚙ Actions**.
+- **Drivers & Deliveries** (`#/drivers`): add drivers with phone, vehicle type, licence, vehicle registration (Mulkiya) and the **Official papers checked and on file** box. **A trip cannot be created, started or delivered with a driver whose papers are missing or expired.** Each trip has a packing number (PL2026-11-001), customer, project, system, short description, from / delivery location, distance in km, priority, status (Next → On the way → Delivered), delivery date and delivery paper status. Export everything with **PDF** or **Excel** (Excel has a Deliveries sheet and a Drivers sheet); each driver's page has its own PDF / Excel under **⚙ Actions**.
 - **Live Tracking** (`#/tracking`): every movement reads **From → To** (vendor → store, store → store, store → production, store → customer site with a 📍 map pin) with the **trip and driver** that carried it; a **Waiting to be delivered** panel lists open dispatch jobs and sales orders per item with from → to and the assigned trip (or an **Assign driver** button). Also: where every item is now, every movement with the balance left at that location, filters for item type, location, movement type and dates, a **Track** timeline per item, and an Excel export. Dashboard, Live Tracking and Drivers refresh themselves every 30 seconds.
 - **Dashboard**: live KPI cards, stock movements over 14 days, deliveries by status and per driver, where stock is held, most moved items, the live movement feed and deliveries to watch.
 
@@ -107,7 +107,7 @@ Keywords: job 3, third job, sell and deliver, dispatch walkthrough, delivery wal
 
 Goal: a product is packed, delivered to a customer by a driver with valid papers, and the reports are exported.
 1. **Customer**: **Overview → Customers → New** (`#/customers`) — name, phone (+971 is already there), position, delivery address, Google Maps link → **Save**.
-2. **Drivers**: **Overview → Drivers → New** (`#/drivers`) — one driver with licence / Emirates ID / vehicle expiry dates in the future and **Official papers checked and on file** ticked; one without (to test the block).
+2. **Drivers**: **Overview → Drivers → New** (`#/drivers`) — one driver with licence and Mulkiya expiry dates in the future and **Official papers checked and on file** ticked; one without (to test the block).
 3. **Dispatch job**: **Operations → Packing & Dispatch → New** (`#/dispatch`) — reference, source store, customer, delivery site, product, quantity 5, fulfilment **Pack from parts** → **Save Job**.
 4. **Assign a driver**: **Operations → Deliveries** (`#/deliveries`) → the job is under **To deliver** → **Assign driver**. The driver without papers is **blocked** (correct). Choose the good driver, km → **Assign driver**. The trip gets a number like **PL2026-11-001**.
 5. **Packing list**: open the trip (click its row) → **Print packing list**. Tick each line while loading; get the signatures.
@@ -117,11 +117,11 @@ Goal: a product is packed, delivered to a customer by a driver with valid papers
 Check: the parts went down by (5 × parts per kit); Live Tracking shows *Main Store → customer* with the trip and driver; the customer's **Deliveries** tab shows the trip; the Dashboard counts it.
 
 ## Add a driver 🚗
-Keywords: add driver, new driver, driver form, truck driver, vehicle, plate, licence, license, emirates id, mulkiya, papers, driver photo, سائق, اضافة سائق, رخصة
+Keywords: add driver, new driver, driver form, truck driver, vehicle, licence, license, mulkiya, papers, driver photo, سائق, اضافة سائق, رخصة
 
 1. **Overview → Drivers** (`#/drivers`) → **New**.
-2. Fill **Driver name**, **Phone number** (+971 is already there), **Driver type** (AMBS driver, Outside driver, Client pickup), **Vehicle plate**, **Vehicle type** (Pickup, 3-ton truck …).
-3. Papers: **Licence no.** and expiry, **Emirates ID** and expiry, **Vehicle registration (Mulkiya) expiry**.
+2. Fill **Driver name**, **Phone number** (+971 is already there), **Driver type** (AMBS driver, Outside driver, Client pickup), **Vehicle type** (Pickup, 3-ton truck …).
+3. Papers: **Driving licence number** and expiry, **Vehicle registration (Mulkiya) expiry**.
 4. Tick **Official papers checked and on file** only after you have seen the papers.
 5. Optional **Driver photo** → **Save driver**.
 
@@ -132,7 +132,7 @@ Keywords: blocked driver, papers missing, expired licence, cannot assign driver,
 
 A driver can only be given a trip when **all** of these are true:
 - **Official papers checked and on file** is ticked,
-- the licence, Emirates ID and vehicle registration expiry dates are not in the past.
+- the driving licence and vehicle registration (Mulkiya) expiry dates are not in the past.
 
 Otherwise **Assign driver**, **Start trip** and **Delivered** are refused with a message naming the problem (e.g. "papers not on file", "licence expired"). Fix it: open the driver → **Edit** → update the dates / tick the box → **Save**. The Dashboard card **Driver papers** counts drivers with problems.
 
