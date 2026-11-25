@@ -926,3 +926,16 @@ body[data-page="tracking"]{--pc:#06b6d4} body[data-page="drivers"]{--pc:#f97316}
 .photo-up:focus-within{outline:3px solid color-mix(in srgb,var(--pc,var(--red)) 40%,transparent);outline-offset:2px;border-radius:12px}
 .record-detail-image .photo-up .co-avatar-cam{width:28px;height:28px;right:-6px;bottom:-6px}
 .record-detail-image .photo-up .co-avatar-cam svg{width:15px;height:15px}
+/* Search pickers: photo next to each stock item */
+.erp-options button.pick-row{display:flex;align-items:center;gap:12px;padding:6px 10px}
+.erp-options .thumb-pick{width:44px;height:44px;flex:0 0 44px;border-radius:8px;object-fit:contain;background:#fff;border:1px solid var(--line)}
+.erp-options .thumb-ph.thumb-pick{display:grid;place-items:center;color:var(--muted-2)}
+.erp-options .thumb-ph.thumb-pick svg{width:20px;height:20px}
+.erp-options button.pick-row span{min-width:0}
+/* Create BOM: a big window with a big result list */
+.modal.bom-create{width:min(960px,calc(100vw - 32px));max-width:none}
+.modal.bom-create .modal-body{min-height:min(70vh,720px)}
+.modal.bom-create .erp-options{position:static;max-height:min(58vh,600px);margin-top:10px;box-shadow:none}
+.modal.bom-create .erp-options button.pick-row{min-height:60px;font-size:14.5px}
+.modal.bom-create .thumb-pick{width:52px;height:52px;flex-basis:52px}
+.modal.bom-create .erp-pick input.inp{min-height:52px;font-size:16px}
