@@ -66,14 +66,18 @@ AMBS shows only the buttons you need right now (like Odoo):
 If a button is not in the menu either, the record's status does not allow it (for example **Delete** disappears after the first delivery or receipt).
 
 ## Owner area (super admin): see every employee's work 👑
-Keywords: owner, super admin, manager view, boss, team activity, who did what, employee work, audit, items and stock, owner overview, المالك, المدير, شغل الموظفين
+Keywords: owner, super admin, manager view, boss, team activity, who did what, employee work, view only, read only, items and stock, owner overview, المالك, المدير, شغل الموظفين
 
-The owner (role **owner**, super admin) always lands on **Owner overview** — after signing in and after every refresh. His menu has a **Super admin** section on top and the full admin menu below it (Overview, Master Data, Operations, System), so he can open every page:
-- **Owner overview**, in plain words: 4 big numbers (things done today, deliveries this month, orders waiting for a driver, items in stock), **Needs your attention** (orders waiting for a driver, deliveries on the road, purchases not received, drivers with bad papers, stock warnings), **Who worked today** and **What happened last** written as sentences. Click anything to open it.
-- **Team activity**: every action by every employee — records created or updated and every stock movement — filtered by **person** and **period** (today, 7 days, 30 days, all time) with a search box.
-- **Items & stock**: every raw material, part and product with the quantity on hand, where it is (per store / site) and the last movement with who made it. Click an item to see its full tracking timeline.
+The owner (role **owner**, super admin) is a **view-only** account. He always lands on **Owner overview** (after signing in and after every refresh). His menu:
+- **Super admin**
+  - **Owner overview** in plain words: things done today, deliveries this month, orders waiting for a driver, items in stock; **Needs your attention**; **Who worked today**; **What happened last**.
+  - **Team activity**: every action by every employee, by person and period, with search.
+  - **Items & stock**: every raw material, part and product — how much, where, and the last movement with who made it. Click an item for its tracking timeline.
+- **View only**: **Live Tracking**, **Deliveries**, **Customers**, **Vendors**, **Processing Companies** — open and search them, open any record.
 
-Every save and stock movement records the signed-in person (their name, or their email). Records saved before this was added show without a name. Administrators see the same three pages under **Owner view** in their menu.
+The owner cannot add, edit, delete, change status or upload photos: those buttons are hidden and any save is refused ("The owner account is view-only"). PDF, Excel, packing list and movement exports still work. Employees (admin and staff) keep the full system; administrators also see the owner pages under **Owner view**.
+
+Every save and stock movement records the signed-in person (their name, or their email). Records saved before this was added show as "Someone".
 
 ## Get started: first-day setup checklist ✅
 Keywords: start, getting started, first time, setup, new system, empty system, where do I begin, first steps, begin, onboarding, من وين ابدا, بداية
