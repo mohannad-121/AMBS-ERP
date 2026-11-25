@@ -3181,7 +3181,63 @@ const cell=(main,sub='')=>`<strong>${esc(main)}</strong>${sub?`<div class="sub">
 const thumb=(src,alt='',size='')=>validImage(src)?`<img class="thumb ${size}" src="${esc(src)}" alt="${esc(alt)}" loading="lazy">`:'';
 const recordPicture=(row,size='thumb-record')=>thumb(row.image,row.name,size)||
   `<span class="thumb-ph ${size}" aria-label="No image">${ic('box')}</span>`;
-const kv=rows=>textTable(['Field','Value'],rows.filter(r=>r[1]!==''&&r[1]!=null));
+/* Two-column label / value fields (Odoo form layout). */
+const kv=rows=>{const r=rows.filter(x=>x[1]!==''&&x[1]!=null);
+  return r.length?`<div class="o-fields">${r.map(([k,v])=>`<div class="o-field"><span class="o-label">${esc(k)}</span><span class="o-value">${esc(v)}</span></div>`).join('')}</div>`:'';};
+/* Odoo status bar: the record's steps, current one highlighted; actions on the left. */
+function formHeader(actions,steps,current){
+  const list=steps.includes(current)?steps:[...steps,current];
+  const at=list.indexOf(current);
+  return `<div class="o-form-header"><div class="o-fh-actions">${actions.filter(Boolean).join('')}</div>
+    <div class="o-statusbar">${list.map((s,i)=>`<span class="${i===at?'on':i<at&&current!=='Cancelled'?'done':''}">${esc(s)}</span>`).join('')}</div></div>`;
+}
+/* Sections of a record page become tabs (Odoo notebook). */
+function makeNotebook(sheet){
+  const blocks=[...sheet.children].filter(el=>el.matches('section.card,.co-section')&&el.querySelector('.card-title'));
+  if(blocks.length<2)return;
+  const nav=document.createElement('div');nav.className='o-notebook-nav';nav.setAttribute('role','tablist');
+  blocks.forEach((b,i)=>{
+    const t=document.createElement('button');t.type='button';t.className='o-tab'+(i?'':' on');t.setAttribute('role','tab');
+    t.textContent=b.querySelector('.card-title').textContent.replace(/\s*·.*$/,'');
+    t.onclick=()=>{blocks.forEach((x,j)=>{x.hidden=j!==i;nav.children[j].classList.toggle('on',j===i);});};
+    nav.append(t);b.classList.add('o-pane');b.hidden=i>0;
+  });
+  blocks[0].before(nav);
+}
+function showSection(id){
+  const el=document.getElementById(id);if(!el)return;
+  const pane=el.closest('.o-pane')||el;
+  if(pane.hidden){const nav=pane.parentElement.querySelector('.o-notebook-nav'),panes=[...pane.parentElement.querySelectorAll(':scope > .o-pane')];
+    nav?.children[panes.indexOf(pane)]?.click();}
+  el.scrollIntoView({behavior:'smooth',block:'start'});
+}
+/* History log beside a record (Odoo chatter), built from what the system already records. */
+function recordRef(rec){
+  if(!rec)return null;
+  const [x,y]=rec.args;
+  return {masterView:{table:x,id:y},companyView:{table:x,id:y},recipeView:{table:'recipes',id:y,owner:x},driverView:{table:'drivers',id:x},
+    tripView:{table:'trips',id:x},salesView:{table:'sales',id:x},purchaseView:{table:'purchases',id:x},dispatchView:{table:'jobs',id:x},
+    orderView:{table:'orders',id:x},planView:{table:'plans',id:x},trackItem:{table:'items',id:x}}[rec.fn]||null;
+}
+function recordHistory(rec){
+  const ref=recordRef(rec);if(!ref)return '';
+  const id=ref.id, r=ref.table==='items'?item(state,id):get(state,ref.table,id), out=[];
+  const push=(at,text,by)=>{if(at)out.push({at,text,by});};
+  if(r){push(r.at,['sales','purchases','jobs','orders','plans','trips'].includes(ref.table)?'Created':'Last saved',r.by);
+    push(r.updated,'Updated',r.by);push(r.departedAt,'Trip started — driver on the way',r.by);push(r.completedAt,'Production completed',r.by);
+    if(r.deliveredAt&&ref.table==='trips')push(r.deliveredAt,'Delivered',r.by);}
+  for(const e of state.events)if(e.partyId===id||e.salesId===id||e.purchaseId===id||e.jobId===id||e.orderId===id||e.id==='production:'+id||
+    e.lines.some(l=>l.sku===id))push(e.at,evType(e.type)+(e.note?' · '+e.note:''),e.by);
+  for(const t of state.trips)if(t.driverId===id||t.salesId===id||t.jobId===id||t.customerId===id){
+    push(t.at,'Trip '+t.no+' created'+(ref.table==='drivers'?' · '+(t.customerName||''):' · driver '+(get(state,'drivers',t.driverId)?.name||'')),t.by);
+    push(t.departedAt,'Trip '+t.no+' left',t.by);}
+  if(ref.table==='customers')for(const o of state.sales.filter(o=>o.customerId===id))push(o.at,'Sales order '+o.no+' created');
+  if(ref.table==='suppliers')for(const o of state.purchases.filter(o=>o.supplierId===id))push(o.at,'Purchase '+o.no+' created');
+  out.sort((x,y)=>String(y.at).localeCompare(String(x.at)));
+  return `<aside class="o-chatter"><div class="o-chatter-head">History</div>${out.length?out.slice(0,40).map(m=>`<div class="o-msg">
+    <span class="o-msg-avatar">${esc(initials(m.by||'System'))}</span><div><div class="o-msg-meta"><b>${esc(m.by||'System')}</b> · ${esc(stamp(m.at.length<=10?m.at+'T12:00:00':m.at))}</div>
+    <div class="o-msg-text">${esc(m.text)}</div></div></div>`).join(''):'<div class="o-msg-empty">Nothing recorded yet.</div>'}</aside>`;
+}
 const dateSort=(a,b)=>(b.at||'').localeCompare(a.at||'');
 const valOf=(form,name)=>form.elements.namedItem(name)?.value?.trim()||'';
 const checked=(form,name)=>form.elements.namedItem(name)?.checked===true;
@@ -3302,14 +3358,33 @@ function wirePicks(root){
     box.addEventListener('focusout',e=>{if(!box.contains(e.relatedTarget))menu.replaceChildren();});
   });
 }
-function formModal(title,body,save,{text='Save',intro='',danger=false}={}){
-  const back=openModal(`<form><div class="modal-head"><div><h3>${esc(title)}</h3>${intro?`<div class="msub">${esc(intro)}</div>`:''}</div>
-    <button type="button" class="x" aria-label="Close" onclick="closeModal()">${ic('x')}</button></div>
-    <div class="modal-body erp-modal-body"><div class="erp-error" role="alert"></div>${body}</div>
-    <div class="modal-foot"><button type="button" class="btn btn-ghost" onclick="closeModal()">Cancel</button>
-    <button class="btn ${danger?'btn-danger':'btn-primary'}" type="submit">${ic(danger?'trash':'save')}${esc(text)}</button></div></form>`,'lg');
-  back.classList.add('erp-form');
-  const form=$('form',back), submit=$('[type=submit]',form), error=$('.erp-error',form);
+/* Odoo-style forms. "New …", "Add …", "Edit …" and "Create …" forms open as the page itself with Save / Discard at the top.
+   Short actions (confirmations, receipts, transfers, assigning a driver) stay small dialogs. */
+const PAGE_FORM=/^(Edit|Add|New|Create)\b/;
+function formModal(title,body,save,{text='Save',intro='',danger=false,page}={}){
+  const inline=(page??(PAGE_FORM.test(title)&&!danger))&&!_modalStack&&typeof App!=='undefined'&&!!$('#view');
+  let back=null, form;
+  if(inline){
+    const view=$('#view');
+    const crumbs=[`<button type="button" class="o-bc-link" onclick="App.discard()">${esc(TITLES[App.route]||'Back')}</button>`];
+    if(App.record&&App.recordTitle)crumbs.push(`<button type="button" class="o-bc-link" onclick="App.discard()">${esc(App.recordTitle)}</button>`);
+    view.innerHTML=`<form class="o-form-page erp-form"><div class="o-cp o-cp-record"><div class="o-bc">${crumbs.join('<span class="o-bc-sep">/</span>')}
+      <span class="o-bc-sep">/</span><span class="o-bc-cur">${esc(title)}</span></div>
+      <div class="o-cp-actions"><button class="btn ${danger?'btn-danger':'btn-primary'}" type="submit">${esc(text)}</button>
+      <button type="button" class="btn btn-ghost" onclick="App.discard()">Discard</button></div></div>
+      <div class="o-sheet o-sheet-edit erp-modal-body">${intro?note(intro):''}<div class="erp-error" role="alert"></div>${body}</div></form>`;
+    App.editing=true;document.body.classList.add('o-record');window.scrollTo(0,0);
+    form=$('form.o-form-page',view);
+  }else{
+    back=openModal(`<form><div class="modal-head"><div><h3>${esc(title)}</h3>${intro?`<div class="msub">${esc(intro)}</div>`:''}</div>
+      <button type="button" class="x" aria-label="Close" onclick="closeModal()">${ic('x')}</button></div>
+      <div class="modal-body erp-modal-body"><div class="erp-error" role="alert"></div>${body}</div>
+      <div class="modal-foot"><button type="button" class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn ${danger?'btn-danger':'btn-primary'}" type="submit">${ic(danger?'trash':'save')}${esc(text)}</button></div></form>`,'lg');
+    back.classList.add('erp-form');
+    form=$('form',back);
+  }
+  const submit=$('[type=submit]',form), error=$('.erp-error',form);
   // Owner request: no field is marked or enforced as "required" by the browser; saves explain what is missing.
   form.noValidate=true;form.querySelectorAll('[required]').forEach(el=>el.removeAttribute('required'));
   form.onsubmit=async e=>{
@@ -3317,7 +3392,8 @@ function formModal(title,body,save,{text='Save',intro='',danger=false}={}){
     error.textContent=''; submit.disabled=true;
     try{
       const message=await save(form);
-      closeModal(back); App.render();
+      if(back)closeModal(back);else App.editing=false;
+      App.render();
       toast(message||'Saved.','ok');
     }catch(err){error.textContent=err.message; error.scrollIntoView({block:'nearest'});}
     finally{submit.disabled=false;}
@@ -3328,10 +3404,14 @@ function formModal(title,body,save,{text='Save',intro='',danger=false}={}){
 }
 function infoModal(title,body,footer=''){
   if(typeof App!=='undefined'&&App.recordRendering){
-    const view=$('#view');
+    const view=$('#view'), history=recordHistory(App.record);
+    App.recordTitle=title;
     view.innerHTML=`<div class="o-cp o-cp-record"><div class="o-bc"><button type="button" class="o-bc-link" onclick="App.back()">${esc(TITLES[App.route]||'Back')}</button>
       <span class="o-bc-sep">/</span><span class="o-bc-cur">${esc(title)}</span></div><div class="o-cp-actions">${footer}</div></div>
-      <div class="o-sheet erp-modal-body">${body}</div>`;
+      <div class="o-form-wrap"><div class="o-sheet erp-modal-body">${body}</div>${history}</div>`;
+    const sheet=$('.o-sheet',view), header=$(':scope > .o-form-header',sheet);
+    if(header)view.querySelector('.o-form-wrap').before(header);
+    makeNotebook(sheet);
     return view;
   }
   return openModal(`<div class="modal-head"><h3>${esc(title)}</h3><button class="x" aria-label="Close" onclick="closeModal()">${ic('x')}</button></div>
@@ -3833,11 +3913,12 @@ function materialFields(row,old){
       number('Opening / initial stock','opening',0,0,'any'))+
     (!old?`<div class="full" data-opening-location hidden>${select('Opening stock custody location','openingLocation',locOptions(),'',false,
       'Choose a custody location')}</div>`:'')+
+    `<details class="o-more full"><summary>More details — section profile, stock length, rates, specifications</summary><div class="form-grid">`+
     field('Section profile (links to calculators)',`<select class="sel" name="profileKey"><option value="">— not linked —</option>${twcTypeOptions(row.profileKey||'')}</select>`)+
     number('Stock length (m)','stockLen',row.stockLen??6)+
     number('Rate (AED per kg)','rateKg',row.rateKg??0)+
     number('Rate (AED per piece)','ratePc',row.ratePc??0)+
-    input('Dimensions / specifications','dimensions',row.dimensions,{full:true})+
+    input('Dimensions / specifications','dimensions',row.dimensions,{full:true})+`</div></details>`+
     `<div class="field full material-help">Opening stock is posted once to the selected location. Later changes go through Inventory &amp; Stock Movements. Bundle quantities round purchase suggestions.</div>`+
     tick('Active (available for planning and movements)','active',row.active!==false);
 }
@@ -4048,7 +4129,7 @@ function companyView(type,id){
   const orderedValue=sales.filter(o=>o.status!=='Cancelled').reduce((n,o)=>n+salesTotal(o),0);
   const openPurchases=purchases.filter(p=>['Draft','Ordered'].includes(p.status));
   const openOrders=orders.filter(o=>['Draft','Released'].includes(o.status));
-  const go=target=>`document.getElementById('${target}')?.scrollIntoView({behavior:'smooth',block:'start'})`;
+  const go=target=>`showSection('${target}')`;
   const smart=({customers:[
       ['invoice','Sales orders',sales.length,openSales.length+' open','co-sales'],
       ['chart','Ordered value',orderedValue?nfmt(orderedValue,0):'—',orderedValue?'AED, excl. cancelled':'Add prices to orders','co-sales'],
@@ -4380,7 +4461,9 @@ function searchDistance(a,b){
   return previous[b.length];
 }
 function filterTable(el){
-  const query=searchKey(el.value).split(' ').filter(Boolean), card=el.closest('.card');
+  const card=el.closest('.card');
+  if(card.querySelector('.tbl tbody')&&!card.querySelector('.o-card')){listState(card).q=el.value;listState(card).page=0;applyList(card);return;}
+  const query=searchKey(el.value).split(' ').filter(Boolean);
   let matches=0;
   card.querySelectorAll('tbody tr, .o-card').forEach(tr=>{
     const text=searchKey(tr.dataset.search||tr.textContent), words=text.split(' ');
@@ -4559,7 +4642,7 @@ function recipeView(type,id){
 }
 function recipePage(){
   const rows=[...state.parts.map(x=>['parts',x]),...state.products.map(x=>['products',x])];
-  return head('Master Data','Bill of Materials',button('Create BOM','createBOM()','btn-primary','plus'))+
+  return head('Master Data',TITLES.bom,button('New','createBOM()','btn-primary'))+
     searchableTable(['Owner','Recipe type','Sizes','Colors','Lines','Status','Actions'],rows.map(([type,r])=>{
       const recipe=get(state,'recipes',r.id), isPart=type==='parts';
       const variants=isPart?current(state,'variants').filter(v=>v.partId===r.id):
@@ -4755,8 +4838,11 @@ function planEdit(id){
     after:form=>wireCompanySite(form,'customers','customer','customerSite',draft?.customerSiteId)});
 }
 function planView(id){
-  const p=get(state,'plans',id);
-  infoModal(p.no+' · '+p.name,kv([['Location',locName(state,p.location)],['Customer',get(state,'customers',p.customerId)?.name],
+  const p=get(state,'plans',id), args=escapeArg(id);
+  infoModal(p.no+' · '+p.name,formHeader([
+      p.status==='Draft'?button('Reserve',`planTransition(${args},'Reserved')`,'btn-sm btn-primary'):'',
+      p.status==='Reserved'?button('Close reservation',`planTransition(${args},'Closed')`,'btn-sm btn-primary'):'',
+      small('Edit',`planEdit(${args})`)],['Draft','Reserved','Closed'],p.status)+kv([['Location',locName(state,p.location)],['Customer',get(state,'customers',p.customerId)?.name],
     ['Customer site',get(state,'locations',p.customerSiteId)?.name],['Status',p.status]])+
     panel('Products',textTable(['Product','Quantity'],p.products.map(x=>[labelOf(state,x.productId),x.qty])))+
     panel('Parts',partsTable(p.parts))+panel('Consolidated raw materials',requireTable(state,p.materials,p.location,p.id))+
@@ -4820,13 +4906,19 @@ function orderEdit(initialPart='',initialLocation='',id){
   form.addEventListener('change',update);form.addEventListener('input',update);update();
 }
 function orderView(id){
-  const o=get(state,'orders',id);
-  infoModal(o.no+' · '+labelOf(state,o.sku),kv([['Status',o.status],['Quantity',o.qty],['Location',locName(state,o.location)],
+  const o=get(state,'orders',id), args=escapeArg(id);
+  infoModal(o.no+' · '+labelOf(state,o.sku),formHeader([
+      o.status==='Draft'?button('Release',`orderTransition(${args},'Released')`,'btn-sm btn-primary'):'',
+      o.status==='Released'?button('Mark completed',`orderTransition(${args},'Completed')`,'btn-sm btn-primary'):'',
+      ['Draft','Released'].includes(o.status)?small('Edit',`orderEdit('','',${args})`):'',
+      ['Draft','Released'].includes(o.status)?small('Cancel',`orderTransition(${args},'Cancelled')`):''],['Draft','Released','Completed'],o.status)+
+    kv([['Status',o.status],['Quantity',o.qty],['Location',locName(state,o.location)],
     ['Customer',get(state,'customers',o.customerId)?.name],['Customer site',get(state,'locations',o.customerSiteId)?.name],
     ['Processing company',get(state,'processors',o.processorId)?.name],['Processing site',get(state,'locations',o.processorSiteId)?.name],
     ['Notes',o.notes]])+
     panel('Raw material requirements',requireTable(state,o.materials,o.location,o.id))+panel('BOM trace',traceTable(o.source)),
-    button('Download PDF',`recordPDF('orders',${escapeArg(id)})`,'btn-sm','pdf'));
+    actionGroup(button('PDF',`recordPDF('orders',${escapeArg(id)})`,'btn-sm','pdf'),
+      o.status!=='Completed'?dangerSmall('Delete',`deleteOperation('orders',${escapeArg(id)})`):''));
 }
 function orderTransition(id,status){
   const word={Released:'Release',Completed:'Confirm completion',Cancelled:'Cancel order'}[status];
@@ -4850,7 +4942,7 @@ function orderTransition(id,status){
 }
 function productionPage(){
   return head('Operations','Production',button('New Production Plan','planEdit()','','plan'),
-    button('Create Production Order','orderEdit()','btn-primary','plus'))+
+    button('New','orderEdit()','btn-primary'))+
     panel('Production orders',table(['Order','Part / SKU','Qty','Fabrication location','Customer / site','Processor / site','Status','Actions'],state.orders.slice().sort(dateSort).map(o=>[
       esc(o.no),esc(labelOf(state,o.sku)),esc(qfmt(o.qty,item(state,o.sku)?.unit)),esc(locName(state,o.location)),
       esc([get(state,'customers',o.customerId)?.name,get(state,'locations',o.customerSiteId)?.name].filter(Boolean).join(' / ')),
@@ -5072,28 +5164,33 @@ function receiptEdit(id){
   },{text:'Confirm Receipt'});
 }
 function purchaseView(id){
-  const p=get(state,'purchases',id);
-  infoModal(p.no,kv([['Status',p.status],['Vendor',label(get(state,'suppliers',p.supplierId))],
+  const p=get(state,'purchases',id), args=escapeArg(id), untouched=p.lines.every(l=>l.received===0);
+  infoModal(p.no,formHeader([
+      p.status==='Draft'?button('Mark ordered',`purchaseStatus(${args},'Ordered')`,'btn-sm btn-primary'):'',
+      p.status==='Ordered'?button('Receive',`receiptEdit(${args})`,'btn-sm btn-primary'):'',
+      untouched&&['Draft','Ordered'].includes(p.status)?small('Edit',`purchaseEdit(${args})`):'',
+      ['Draft','Ordered'].includes(p.status)?small('Cancel',`purchaseStatus(${args},'Cancelled')`):''],['Draft','Ordered','Received'],p.status)+
+    kv([['Status',p.status],['Vendor',label(get(state,'suppliers',p.supplierId))],
     ['Vendor site',get(state,'locations',p.supplierSiteId)?.name],
     ['Receiving location',locName(state,p.location)],['Notes',p.notes]])+
     textTable(['Material / SKU','Ordered','Received','Outstanding'],p.lines.map(l=>{
       const unit=item(state,l.sku)?.unit;
       return [labelOf(state,l.sku),qfmt(l.qty,unit),qfmt(l.received,unit),qfmt(l.qty-l.received,unit)];
     }))+panel('Receipts',eventsTable(state.events.filter(e=>e.purchaseId===id))),
-    button('Download PDF',`recordPDF('purchases',${escapeArg(id)})`,'btn-sm','pdf'));
+    actionGroup(button('PDF',`recordPDF('purchases',${escapeArg(id)})`,'btn-sm','pdf'),
+      p.lines.every(l=>l.received===0)?dangerSmall('Delete',`deleteOperation('purchases',${escapeArg(id)})`):''));
 }
 function purchasingPage(){
-  return head('Operations','Purchasing',button('New Purchase Request','purchaseEdit()','btn-primary','plus'))+
-    panel('Purchase requests',table(['Request','Vendor','Vendor site','Receiving location','Status','Actions'],state.purchases.slice().sort(dateSort).map(p=>[
-      esc(p.no),esc(label(get(state,'suppliers',p.supplierId))),esc(get(state,'locations',p.supplierSiteId)?.name),esc(locName(state,p.location)),
+  return head('Operations','Purchasing',button('New','purchaseEdit()','btn-primary'))+
+    searchableTable(['Request','Vendor','Receiving location','Lines','Status',''],state.purchases.slice().sort(dateSort).map(p=>[
+      esc(p.no),esc(get(state,'suppliers',p.supplierId)?.name||'—'),esc(locName(state,p.location)),esc(p.lines.length),
       chip(p.status==='Ordered'&&p.lines.some(l=>l.received>0)?'Partially received':p.status),
-      actionGroup(small('View',`purchaseView(${escapeArg(p.id)})`),
-        p.lines.every(line=>line.received===0)?small('Edit',`purchaseEdit(${escapeArg(p.id)})`):'',
-        p.status==='Draft'?small('Mark Ordered',`purchaseStatus(${escapeArg(p.id)},'Ordered')`):'',
-        p.status==='Ordered'?small('Record Receipt',`receiptEdit(${escapeArg(p.id)})`):'',
-        ['Draft','Ordered'].includes(p.status)?small('Cancel',`purchaseStatus(${escapeArg(p.id)},'Cancelled')`):'',
-        p.lines.every(line=>line.received===0)?dangerSmall('Delete',`deleteOperation('purchases',${escapeArg(p.id)})`):'')
-    ])))+panel('Vendor receipts',eventsTable(state.events.filter(e=>e.type==='Supplier receipt')))+
+      actionGroup(openBtn(`purchaseView(${escapeArg(p.id)})`),
+        p.status==='Draft'?small('Mark ordered',`purchaseStatus(${escapeArg(p.id)},'Ordered')`):'',
+        p.status==='Ordered'?small('Receive',`receiptEdit(${escapeArg(p.id)})`):'')
+    ]),'No purchases yet. Click New to request materials from a vendor.',
+    state.purchases.map(p=>[p.no,get(state,'suppliers',p.supplierId)?.name,p.status,...p.lines.map(l=>labelOf(state,l.sku))].join(' ')),
+    {placeholder:'Search purchases…',noun:'purchases'})+panel('Vendor receipts',eventsTable(state.events.filter(e=>e.type==='Supplier receipt')))+
     legacySection('purchaseRequests','Legacy purchase requests')+legacySection('receipts','Legacy vendor receipts');
 }
 
@@ -5158,8 +5255,14 @@ function dispatchRows(s,j,count){
 }
 function dispatchView(id){
   const j=get(state,'jobs',id), destination=j.destinationSnapshot||get(state,'locations',j.destination);
-  const history=state.events.filter(e=>e.jobId===id);
-  infoModal(j.no+' · '+j.name,kv([['Product',labelOf(state,j.productId)],['Customer',label(get(state,'customers',j.customerId))],
+  const history=state.events.filter(e=>e.jobId===id), trip=activeTrip('jobId',id), open=['Open','Partially delivered'].includes(j.status), args=escapeArg(id);
+  infoModal(j.no+' · '+j.name,formHeader([
+      open&&!trip?button('Assign driver',`assignDelivery('job',${args})`,'btn-sm btn-primary'):'',
+      trip?button('Trip '+trip.no+' · '+trip.status,`tripView(${escapeArg(trip.id)})`,'btn-sm'):'',
+      open?small('Partial delivery',`deliveryEdit(${args})`):'',
+      j.delivered===0&&open?small('Edit',`dispatchEdit(${args})`):'',
+      open?small('Cancel job',`cancelJob(${args})`):''],
+      ['Open','Partially delivered','Delivered'].filter(s=>s!=='Partially delivered'||j.status==='Partially delivered'),j.status)+kv([['Product',labelOf(state,j.productId)],['Customer',label(get(state,'customers',j.customerId))],
     ['Delivery site',[destination.name,destination.address,destination.city].filter(Boolean).join(' · ')],
     ['Custody location',locName(state,j.location)],['Fulfilment',j.finished?'Finished stock':'Pack from parts'],
     ['Track at customer site',j.trackAtDestination?'Yes':'No'],
@@ -5167,7 +5270,8 @@ function dispatchView(id){
     mapAction(destination)+panel('Saved packing configuration',partsTable(j.parts))+
     panel('Delivery history',table(['Delivery date','Product quantity','Reference','Actions'],history.map(e=>[
       esc(stamp(e.at)),esc(e.deliveredQty),esc(e.reference),small('View stock posting',`eventView(${escapeArg(e.id)})`)
-    ]))),button('Download PDF',`recordPDF('jobs',${escapeArg(id)})`,'btn-sm','pdf'));
+    ]))),actionGroup(button('PDF',`recordPDF('jobs',${escapeArg(id)})`,'btn-sm','pdf'),
+      j.delivered===0?dangerSmall('Delete',`deleteOperation('jobs',${escapeArg(id)})`):''));
 }
 function deliveryEdit(id){
   const j=get(state,'jobs',id), eventId=key(), remaining=j.qty-j.delivered;
@@ -5214,15 +5318,12 @@ function cancelJob(id){
   });
 }
 function dispatchPage(){
-  return head('Operations',TITLES.dispatch,button('New Dispatch Job','dispatchEdit()','btn-primary','plus'))+
+  return head('Operations',TITLES.dispatch,button('New','dispatchEdit()','btn-primary'))+
     searchableTable(['Job','Customer / site','Product','Requested','Delivered','Outstanding','Status','Actions'],state.jobs.slice().sort(dateSort).map(j=>[
       cell(j.no,j.name),cell(get(state,'customers',j.customerId)?.name,j.destinationSnapshot.name),
       esc(labelOf(state,j.productId)),esc(j.qty),esc(j.delivered),esc(j.qty-j.delivered),chip(j.status),
-      actionGroup(small('View',`dispatchView(${escapeArg(j.id)})`),
-        j.delivered===0?small('Edit',`dispatchEdit(${escapeArg(j.id)})`):'',
-        ['Open','Partially delivered'].includes(j.status)?
-        small('Record Delivery',`deliveryEdit(${escapeArg(j.id)})`)+small('Cancel',`cancelJob(${escapeArg(j.id)})`):'',
-        j.delivered===0?dangerSmall('Delete',`deleteOperation('jobs',${escapeArg(j.id)})`):'')
+      actionGroup(openBtn(`dispatchView(${escapeArg(j.id)})`),
+        ['Open','Partially delivered'].includes(j.status)&&!activeTrip('jobId',j.id)?small('Assign driver',`assignDelivery('job',${escapeArg(j.id)})`):'')
     ]));
 }
 
@@ -5334,7 +5435,16 @@ function salesDeliver(id){
 }
 function salesView(id){
   const o=get(state,'sales',id), total=salesTotal(o);
-  infoModal(o.no+' · '+(get(state,'customers',o.customerId)?.name||''),kv([['Status',o.status],['Customer',label(get(state,'customers',o.customerId))],
+  const trip=activeTrip('salesId',id), open=['Confirmed','Partially delivered'].includes(o.status), args=escapeArg(id);
+  infoModal(o.no+' · '+(get(state,'customers',o.customerId)?.name||''),formHeader([
+      o.status==='Draft'?button('Confirm',`salesStatus(${args},'Confirmed')`,'btn-sm btn-primary'):'',
+      open&&!trip?button('Assign driver',`assignDelivery('sale',${args})`,'btn-sm btn-primary'):'',
+      trip?button('Trip '+trip.no+' · '+trip.status,`tripView(${escapeArg(trip.id)})`,'btn-sm'):'',
+      open?small('Partial delivery',`salesDeliver(${args})`):'',
+      ['Draft','Confirmed'].includes(o.status)&&o.lines.every(l=>l.delivered===0)?small('Edit',`salesEdit(${args})`):'',
+      SALES_OPEN.includes(o.status)?small('Cancel order',`salesStatus(${args},'Cancelled')`):''],
+      ['Draft','Confirmed','Partially delivered','Delivered'].filter(s=>s!=='Partially delivered'||o.status==='Partially delivered'),o.status)+
+    kv([['Status',o.status],['Customer',label(get(state,'customers',o.customerId))],
     ['Delivery site',get(state,'locations',o.siteId)?.name],['Customer PO / reference',o.reference],['Order date',fmtDate(o.date)],
     ['Requested delivery',o.due?fmtDate(o.due):''],['Delivered',salesProgress(o)+'%'],['Order total',total?nfmt(total,2)+' AED':''],['Notes',o.notes]])+
     textTable(['Item / SKU','Ordered','Delivered','Outstanding','In stock (all locations)','Unit price','Line total'],o.lines.map(l=>{
@@ -5342,21 +5452,16 @@ function salesView(id){
       return [labelOf(state,l.sku),qfmt(l.qty,u),qfmt(l.delivered,u),qfmt(Math.max(0,l.qty-l.delivered),u),qfmt(physical(state,l.sku),u),
         l.price?nfmt(l.price,2):'—',l.price?nfmt(l.price*l.qty,2):'—'];
     }))+panel('Deliveries',eventsTable(state.events.filter(e=>e.salesId===id))),
-    actionGroup(['Confirmed','Partially delivered'].includes(o.status)?button('Deliver',`closeModal();salesDeliver(${escapeArg(id)})`,'btn-sm btn-primary','truck'):'',
-      button('Download PDF',`recordPDF('sales',${escapeArg(id)})`,'btn-sm','pdf')));
+    actionGroup(button('PDF',`recordPDF('sales',${escapeArg(id)})`,'btn-sm','pdf'),
+      o.lines.every(l=>l.delivered===0)?dangerSmall('Delete',`deleteOperation('sales',${escapeArg(id)})`):''));
 }
 function salesPage(){
   const orders=state.sales.slice().sort(dateSort);
   const open=orders.filter(o=>SALES_OPEN.includes(o.status));
   const due=open.filter(o=>o.due&&o.due<todayISO()).length;
   const value=open.reduce((n,o)=>n+salesTotal(o),0);
-  return head('Operations',TITLES.sales,button('New Sales Order','salesEdit()','btn-primary','plus'))+
-    `<div class="kpis">${[
-      ['k-ink','Open orders',open.length,'Draft, confirmed or partly delivered'],
-      ['k-yellow','Awaiting delivery',open.filter(o=>o.status!=='Draft').length,'Confirmed and not fully delivered'],
-      [due?'k-red':'k-ok','Past requested date',due,'Open orders after their requested delivery date'],
-      ['k-ok','Open order value',value?nfmt(value,2):'—',value?'AED, from unit prices':'Add unit prices to see order value']
-    ].map(([c,l,v,f])=>`<div class="kpi ${c}"><div class="kl">${esc(l)}</div><div class="kv">${esc(v)}</div><div class="kf">${esc(f)}</div></div>`).join('')}</div>`+
+  return head('Operations',TITLES.sales,button('New','salesEdit()','btn-primary'))+
+    (due?note(due+' open order'+(due>1?'s are':' is')+' past the requested delivery date.','warn'):'')+
     searchableTable(['Order','Customer / site','Order date','Requested','Lines','Delivered','Value (AED)','Status','Actions'],orders.map(o=>{
       const late=SALES_OPEN.includes(o.status)&&o.due&&o.due<todayISO(), total=salesTotal(o), progress=salesProgress(o);
       return [cell(o.no,o.reference),cell(get(state,'customers',o.customerId)?.name||'—',get(state,'locations',o.siteId)?.name||''),
@@ -5364,12 +5469,9 @@ function salesPage(){
         esc(o.lines.length+(o.lines.length===1?' item':' items')),
         `<div class="sales-progress" title="${progress}% delivered"><span style="width:${progress}%"></span></div><div class="sub">${progress}%</div>`,
         esc(total?nfmt(total,2):'—'),chip(o.status),
-        actionGroup(small('View',`salesView(${escapeArg(o.id)})`),
-          ['Draft','Confirmed'].includes(o.status)&&o.lines.every(l=>l.delivered===0)?small('Edit',`salesEdit(${escapeArg(o.id)})`):'',
+        actionGroup(openBtn(`salesView(${escapeArg(o.id)})`),
           o.status==='Draft'?small('Confirm',`salesStatus(${escapeArg(o.id)},'Confirmed')`):'',
-          ['Confirmed','Partially delivered'].includes(o.status)?small('Deliver',`salesDeliver(${escapeArg(o.id)})`):'',
-          SALES_OPEN.includes(o.status)?small('Cancel',`salesStatus(${escapeArg(o.id)},'Cancelled')`):'',
-          o.lines.every(l=>l.delivered===0)?dangerSmall('Delete',`deleteOperation('sales',${escapeArg(o.id)})`):'')];
+          ['Confirmed','Partially delivered'].includes(o.status)&&!activeTrip('salesId',o.id)?small('Assign driver',`assignDelivery('sale',${escapeArg(o.id)})`):'')];
     }),'No sales orders yet. Click New Sales Order to record a customer order.',
     orders.map(o=>[o.no,o.reference,get(state,'customers',o.customerId)?.name,o.status,...o.lines.map(l=>labelOf(state,l.sku))].join(' ')),
     {placeholder:'Search by order, customer, item or status…',noun:'orders'})+
@@ -6125,6 +6227,12 @@ function checkTripDriver(driver,status,previous){
 function tripStatus(id,status){
   const t=get(state,'trips',id);
   if(!t)return;
+  if(status==='On the way')return commit(s=>{
+    const trip=get(s,'trips',id);
+    need(trip&&trip.status==='Next','This trip already changed.');
+    checkTripDriver(get(s,'drivers',trip.driverId),status,trip.status);
+    trip.status=status;trip.updated=now();trip.departedAt=now();
+  }).then(()=>{App.render();toast('Trip '+t.no+' started — the driver is on the way.','ok');}).catch(e=>toast(e.message,'bad'));
   const posts=status==='Delivered'&&(t.jobId||t.salesId);
   approval((status==='On the way'?'Start trip ':'Mark delivered · ')+t.no,
     status==='On the way'?'The driver is leaving now with this delivery.':
@@ -6145,7 +6253,13 @@ function deleteTrip(id){
 }
 function tripView(id){
   const t=get(state,'trips',id), d=get(state,'drivers',t.driverId);
-  infoModal('Trip '+t.no,`<div class="co-details">${[
+  const args=escapeArg(id);
+  infoModal('Trip '+t.no,formHeader([
+      t.status==='Next'?button('Start trip',`tripStatus(${args},'On the way')`,'btn-sm btn-primary'):'',
+      t.status==='On the way'?button('Delivered',`tripStatus(${args},'Delivered')`,'btn-sm btn-primary'):'',
+      ['Next','On the way'].includes(t.status)?small('Edit',`tripEdit(${args})`):'',
+      t.salesId?small('Sales order',`salesView(${escapeArg(t.salesId)})`):'',t.jobId?small('Dispatch job',`dispatchView(${escapeArg(t.jobId)})`):''],
+      ['Next','On the way','Delivered'],t.status)+`<div class="co-details">${[
     ['Status',chip(t.status==='Next'?'Open':t.status==='On the way'?'In progress':t.status)+' '+(t.priority==='Urgent'?statusChip('bad','Urgent'):'')],
     ['Driver',d?`${esc(d.name)} ${papersChip(d)}`:'—'],['Driver phone',esc(d?.phone||'—')],['Vehicle',esc(t.vehicle||'—')],
     ['Customer',esc(t.customerName||get(state,'customers',t.customerId)?.name||'—')],['Project',esc(t.project||'—')],
@@ -6154,7 +6268,7 @@ function tripView(id){
     ['System',esc(t.system||'—')],['Short description',esc(t.description||'—')],['Delivery papers',esc(t.paperStatus||'—')],
     ['Dispatch job',esc(get(state,'jobs',t.jobId)?.no||'—')],['Recorded by',esc(t.by||'—')]
   ].map(([k,v])=>`<div><span>${esc(k)}</span><div>${v}</div></div>`).join('')}</div>`+(t.notes?note(t.notes):''),
-  actionGroup(small('Edit',`closeModal();tripEdit(${escapeArg(id)})`),d?small('Driver',`closeModal();driverView(${escapeArg(d.id)})`):'',
+  actionGroup(d?small('Driver',`closeModal();driverView(${escapeArg(d.id)})`):'',
     dangerSmall('Delete trip',`closeModal();deleteTrip(${escapeArg(id)})`)));
 }
 const TRIP_EXPORT_COLUMNS=['Customer','Project','Packing No.','Date','Status','Priority','System','Short description','Driver name','Driver phone',
@@ -6289,7 +6403,7 @@ function assignDelivery(kind,docId,tripId=''){
     ${input('Vehicle','vehicle',old?.vehicle||'',{extra:'placeholder="Filled from the driver"'})}
     ${input('Distance (km)','km',old?.km||'',{type:'number',extra:'min="0" step="0.1" placeholder="e.g. 38"'})}
     ${input('Trip date','date',old?.date||todayISO(),{type:'date'})}
-    ${kind==='sale'?select('Ship from','fromLocation',locOptions(),old?.fromLocation||(sources.length===1?sources[0].id:''),false,'Choose the store'):''}
+    ${kind==='sale'?select('Ship from','fromLocation',locOptions(),old?.fromLocation||bestSource(info.items),false,'Choose the store'):''}
     ${select('Priority','priority',same(['Normal','Urgent']),old?.priority||'Normal',false)}
     ${old?select('Delivery papers','paperStatus',same(PAPER_STATUS),old.paperStatus||'Pending',false):''}
     </div>`,async f=>{
@@ -6320,6 +6434,13 @@ function assignDelivery(kind,docId,tripId=''){
   };
   form.elements.driverId.addEventListener('change',showPapers);showPapers();
   form.elements.vehicle.addEventListener('input',e=>delete e.target.dataset.auto);
+}
+/* The store holding the most of the ordered items is the default "ship from". */
+function bestSource(items){
+  const stores=custody();
+  if(!stores.length)return '';
+  const score=l=>items.reduce((n,x)=>n+Math.min(x.qty,Math.max(0,availability(state,x.sku,l.id)))/(x.qty||1),0);
+  return stores.slice().sort((a,b)=>score(b)-score(a))[0].id;
 }
 function postJobDelivery(s,job,ref){
   const count=job.qty-job.delivered;
@@ -6585,7 +6706,7 @@ const Live={
     this.at=new Date();
     if(this.timer)return;
     this.timer=setInterval(async()=>{
-      if(!state||_modalStack||document.visibilityState!=='visible'||!['dashboard','tracking','deliveries'].includes(App.route))return;
+      if(!state||_modalStack||App.editing||document.visibilityState!=='visible'||!['dashboard','tracking','deliveries'].includes(App.route))return;
       if(document.activeElement?.matches?.('input,select,textarea'))return;
       try{await refreshCloudWorkspace(false);this.at=new Date();const y=scrollY;App.render();scrollTo(0,y);}catch{}
     },30000);
@@ -6727,7 +6848,7 @@ window.addEventListener('keydown',e=>{
 const App={
   route:'dashboard',record:null,
   go(r){
-    const previous=this.route;this.record=null;
+    const previous=this.route;this.record=null;this.editing=false;
     this.route=r==='purchase-new'?'purchase':r==='plan-new'?'production':r;
     location.hash='#/'+this.route;
     this.toggleNavigation(false);
@@ -6759,7 +6880,8 @@ const App={
         <div class="avatar" title="${esc(CLOUD.email||'')}">${esc((CLOUD.email||'U').slice(0,1).toUpperCase())}</div>
       </div></nav>`;
   },
-  back(){this.record=null;this.render();window.scrollTo(0,0);},
+  back(){this.record=null;this.editing=false;this.render();window.scrollTo(0,0);},
+  discard(){this.editing=false;this.render();window.scrollTo(0,0);},
   render(){
     $('#sidebar').innerHTML=this.nav();
     $('#topbar').innerHTML=this.top();wireGlobalSearch();
@@ -6803,7 +6925,90 @@ function enhanceRows(root){
     tr.addEventListener('click',e=>{if(!e.target.closest('a,button,label,input,select,textarea'))b.click();});
   });
 }
-new MutationObserver(list=>{for(const m of list)for(const n of m.addedNodes)if(n.nodeType===1)enhanceRows(n);})
+/* ---------- Odoo-style list tools: click a header to sort, status filters, group by, pager ---------- */
+const cellText=td=>td?(td.querySelector('.chip:last-of-type')?.textContent||td.textContent).trim():'';
+const cellNum=t=>{const m=String(t).replace(/,/g,'').match(/^[−-]?\d+(\.\d+)?/);return m?Number(m[0].replace('−','-')):NaN;};
+function listState(card){return card._ls||(card._ls={q:'',status:'',group:'',page:0,size:80,sort:null});}
+function dataRows(card){return [...card.querySelectorAll('.tbl tbody tr')].filter(tr=>!tr.classList.contains('o-group')&&!(tr.children.length===1&&tr.firstElementChild.colSpan>1));}
+function applyList(card){
+  const ls=listState(card), tbody=card.querySelector('.tbl tbody');if(!tbody)return;
+  tbody.querySelectorAll('tr.o-group').forEach(g=>g.remove());
+  const rows=dataRows(card), query=searchKey(ls.q).split(' ').filter(Boolean);
+  let shown=rows.filter(tr=>{
+    const text=searchKey(tr.dataset.search||tr.textContent), words=text.split(' ');
+    const okQ=query.every(token=>text.includes(token)||words.some(word=>word.startsWith(token)||(token.length>=4&&searchDistance(token,word)<=(token.length>=8?2:1))));
+    const okS=!ls.status||card._statusCol==null||cellText(tr.children[card._statusCol])===ls.status;
+    return okQ&&okS;
+  });
+  if(ls.sort){const {col,dir}=ls.sort;
+    shown.sort((x,y)=>{const a=cellText(x.children[col]),b=cellText(y.children[col]),na=cellNum(a),nb=cellNum(b);
+      return (Number.isFinite(na)&&Number.isFinite(nb)?na-nb:a.localeCompare(b,undefined,{numeric:true,sensitivity:'base'}))*dir;});}
+  rows.forEach(tr=>tr.hidden=true);
+  if(ls.group!==''){
+    const col=+ls.group, groups=new Map();
+    for(const tr of shown){const k=cellText(tr.children[col])||'—';if(!groups.has(k))groups.set(k,[]);groups.get(k).push(tr);}
+    const cols=card.querySelectorAll('.tbl thead th').length;
+    for(const [k,list] of groups){
+      const g=document.createElement('tr');g.className='o-group';g.innerHTML=`<td colspan="${cols}"><span class="o-caret">▾</span> ${esc(k)} <span class="o-group-n">(${list.length})</span></td>`;
+      g.onclick=()=>{const open=!g.classList.toggle('closed');list.forEach(tr=>tr.hidden=!open);g.querySelector('.o-caret').textContent=open?'▾':'▸';};
+      tbody.append(g);list.forEach(tr=>{tbody.append(tr);tr.hidden=false;});
+    }
+  }else{
+    shown.forEach(tr=>tbody.append(tr));
+    const pages=Math.max(1,Math.ceil(shown.length/ls.size));ls.page=Math.min(ls.page,pages-1);
+    shown.forEach((tr,i)=>{tr.hidden=i<ls.page*ls.size||i>=(ls.page+1)*ls.size;});
+  }
+  const legend=card.querySelector('.pill-legend');
+  if(legend){
+    const from=shown.length?ls.page*ls.size+1:0, to=Math.min(shown.length,(ls.page+1)*ls.size);
+    legend.innerHTML=ls.group===''&&shown.length>ls.size?`${from}-${to} / ${shown.length} <button type="button" class="o-pg" data-d="-1" aria-label="Previous page">‹</button><button type="button" class="o-pg" data-d="1" aria-label="Next page">›</button>`:
+      `${shown.length} ${esc(query.length||ls.status?'matches':card.dataset.noun||'records')}`;
+    legend.querySelectorAll('.o-pg').forEach(b=>b.onclick=()=>{ls.page=Math.max(0,ls.page+ +b.dataset.d);applyList(card);});
+  }
+  card.querySelectorAll('.tbl thead th').forEach((th,i)=>{th.classList.toggle('sorted',ls.sort?.col===i);th.classList.toggle('desc',ls.sort?.col===i&&ls.sort?.dir<0);});
+}
+function enhanceTables(root){
+  const tables=root.matches?.('.tbl')?[root]:[...(root.querySelectorAll?.('.tbl')||[])];
+  for(const tbl of tables){
+    if(tbl.dataset.enhanced)continue;tbl.dataset.enhanced='1';
+    const heads=[...tbl.querySelectorAll('thead th')].map(th=>th.textContent.trim());
+    tbl.querySelectorAll('tbody tr').forEach(tr=>[...tr.children].forEach((td,i)=>{if(heads[i])td.dataset.label=heads[i];}));
+    const card=tbl.closest('.card')||tbl.parentElement;
+    const rows=dataRows(card);
+    if(rows.length<2)continue;
+    tbl.querySelectorAll('thead th').forEach((th,i)=>{
+      if(!heads[i]||/^actions?$/i.test(heads[i]))return;
+      th.classList.add('o-sortable');th.title='Sort by '+heads[i];
+      th.onclick=()=>{const ls=listState(card);ls.sort=ls.sort?.col===i?{col:i,dir:-ls.sort.dir}:{col:i,dir:1};applyList(card);};
+    });
+    const toolbar=card.querySelector(':scope > .toolbar');
+    if(!toolbar||!card.dataset.noun)continue;
+    const statusCol=heads.findIndex(h=>/^(status|state)$/i.test(h));
+    card._statusCol=statusCol<0?null:statusCol;
+    const extra=document.createElement('div');extra.className='o-list-tools';
+    if(statusCol>=0){
+      const values=[...new Set(rows.map(tr=>cellText(tr.children[statusCol])).filter(Boolean))];
+      if(values.length>1){
+        const f=document.createElement('div');f.className='o-facets';
+        f.innerHTML=['All',...values].map((v,i)=>`<button type="button" class="o-facet${i?'':' on'}" data-v="${esc(i?v:'')}">${esc(v)}</button>`).join('');
+        f.onclick=e=>{const b=e.target.closest('.o-facet');if(!b)return;f.querySelectorAll('.o-facet').forEach(x=>x.classList.toggle('on',x===b));
+          const ls=listState(card);ls.status=b.dataset.v;ls.page=0;applyList(card);};
+        extra.append(f);
+      }
+    }
+    const groupable=heads.map((h,i)=>[h,i]).filter(([h,i])=>{if(!h||/^actions?$/i.test(h))return false;
+      const vals=new Set(rows.map(tr=>cellText(tr.children[i])));return vals.size>1&&vals.size<=20&&(rows.length<=3||vals.size<rows.length)&&![...vals].every(v=>v==='—'||Number.isFinite(cellNum(v)));});
+    if(groupable.length){
+      const s=document.createElement('select');s.className='sel o-groupby';s.setAttribute('aria-label','Group by');
+      s.innerHTML='<option value="">Group by…</option>'+groupable.map(([h,i])=>`<option value="${i}">${esc(h)}</option>`).join('');
+      s.onchange=()=>{const ls=listState(card);ls.group=s.value;ls.page=0;applyList(card);};
+      extra.append(s);
+    }
+    if(extra.children.length)toolbar.querySelector('.search')?.after(extra);
+    if(rows.length>listState(card).size)applyList(card);
+  }
+}
+new MutationObserver(list=>{for(const m of list)for(const n of m.addedNodes)if(n.nodeType===1){enhanceRows(n);enhanceTables(n);}})
   .observe(document.documentElement,{childList:true,subtree:true});
 window.addEventListener('DOMContentLoaded',()=>CLOUD.start());
 window.addEventListener('hashchange',()=>{

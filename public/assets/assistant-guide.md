@@ -26,6 +26,17 @@ Keywords: master data, data entry, operations, deliveries, assign driver, to del
 - On the trip click **Start**, then **Delivered** — Delivered also takes the goods out of stock and closes the order. No separate "record delivery" step is needed.
 - **Other trip** is only for trips that are not linked to an order.
 
+## Working with records (Nov 2026)
+Keywords: edit, save, discard, status bar, tabs, history, sort, filter, group by, pages, more details
+
+- **New** and **Edit** open on the page itself (not a pop-up). The top shows the path, e.g. *Customers / Emaar / Edit Customer*, with **Save** and **Discard**.
+- Sales orders, purchases, production orders, plans, dispatch jobs and trips have a **status bar** (e.g. Draft → Confirmed → Delivered) with the next step as a button on the left: Confirm, Assign driver, Mark ordered, Receive, Release, Mark completed, Start trip, Delivered.
+- **Start trip** is one click. **Delivered** asks once, because it takes the goods out of stock.
+- Record pages show fields in two columns, sections as **tabs**, and a **History** log on the right (created, updated, stock movements, trips).
+- In lists: click a column header to **sort** (click again to reverse), use the status buttons (**All / Draft / Confirmed …**) to filter, **Group by…** to group rows, and the ‹ › pager when there are more than 80 rows.
+- Rarely used raw-material fields (section profile, stock length, rates, specifications) are under **More details** in the form.
+- On a phone, list rows show as stacked cards.
+
 ## Odoo-style layout (Nov 2026)
 Keywords: menu, top bar, open record, click row, breadcrumb, new button, search
 
