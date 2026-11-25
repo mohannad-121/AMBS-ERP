@@ -6088,6 +6088,7 @@ function tripEdit(id,preset={}){
     if(c&&!form.elements.mapUrl.value)form.elements.mapUrl.value=companyMap('customers',c);
   });
   form.elements.date.addEventListener('change',()=>{if(!old)form.elements.no.value=nextTripNo(state,form.elements.date.value);});
+  if(!old&&preset.jobId)setTimeout(()=>form.elements.jobId?.dispatchEvent(new Event('change')));
   form.elements.jobId?.addEventListener('change',e=>{
     const j=get(state,'jobs',e.target.value);if(!j)return;
     const c=get(state,'customers',j.customerId);
@@ -6297,7 +6298,7 @@ function sparkline(points,{height=60}={}){
 })();
 
 /* ---------------- Live tracking: every item, every movement ---------------- */
-const EVENT_LABEL={'Supplier receipt':'Vendor receipt'};
+const EVENT_LABEL={'Supplier receipt':'Vendor receipt','Record Stock Adjustment':'Stock adjustment','Physical Stock Check':'Stock count'};
 const evType=t=>EVENT_LABEL[t]||t;
 const skuKind=id=>get(state,'materials',id)?'Raw material':get(state,'parts',id)?'Part':get(state,'products',id)?'Product':get(state,'variants',id)?'Part variant':'Item';
 function ledger(){
@@ -6307,10 +6308,51 @@ function ledger(){
     const transfer=e.lines.length===2&&e.lines[0].sku===e.lines[1].sku&&e.lines[0].delta===-e.lines[1].delta;
     e.lines.forEach((l,i)=>{
       const k=l.sku+'|'+l.location, bal=(run.get(k)||0)+l.delta;run.set(k,bal);
-      rows.push({e,l,bal,other:transfer?e.lines[1-i].location:''});
+      const other=transfer?e.lines[1-i].location:'';
+      rows.push({e,l,bal,other,...moveRoute(e,l,other)});
     });
   }
   return rows;
+}
+/* Where a stock line came from and where it went: store → store, vendor → store, store → customer site, production. */
+function moveRoute(e,l,other){
+  const here=locName(state,l.location), L=eventLinks(state,e), party=[L.company,L.site].filter(Boolean).join(' · ');
+  const prod=e.orderId||e.id.startsWith('production:'), trip=e.jobId?state.trips.find(t=>t.jobId===e.jobId&&t.status!=='Cancelled'):null;
+  const site=get(state,'locations',e.siteId||e.destination||'');
+  const map=trip?.mapUrl||(site?mapsLink(site):'');
+  let from=here,to=here;
+  if(other){if(l.delta<0)to=locName(state,other);else from=locName(state,other);}
+  else if(l.delta<0){to=e.jobId||e.salesId?(party||'Customer'):prod?'Used in production '+(L.document||''):evType(e.type)+' (removed)';}
+  else{from=e.purchaseId?(party||'Vendor'):prod?'Made in production '+(L.document||''):e.jobId?locName(state,get(state,'jobs',e.jobId)?.location):evType(e.type)+(e.type==='Opening stock'?'':' (added)');}
+  return {from,to,trip,map:l.delta<0&&(e.jobId||e.salesId)?map:''};
+}
+const routeCell=r=>`<div class="route-cell"><span>${esc(r.from)}</span><b>→</b><span>${esc(r.to)}</span>${mapBtn(r.map)}</div>`;
+const tripCell=t=>t?`<button type="button" class="link-btn" onclick="tripView(${escapeArg(t.id)})">${esc(t.no)}</button><div class="sub">${esc(get(state,'drivers',t.driverId)?.name||'')} · ${esc(t.status)}</div>`:'<span class="sub">—</span>';
+/* Everything still waiting to go out to a customer: open dispatch jobs and open sales orders, per item. */
+function pendingDeliveries(sku=''){
+  const rows=[];
+  for(const j of state.jobs.filter(j=>['Open','Partially delivered'].includes(j.status))){
+    const left=j.qty-j.delivered, site=get(state,'locations',j.destination);
+    const trip=state.trips.find(t=>t.jobId===j.id&&t.status!=='Cancelled');
+    const items=j.finished?[{sku:j.productId,qty:left}]:j.parts.map(p=>({sku:p.sku,qty:p.qty*left/j.qty}));
+    for(const x of items)if(!sku||x.sku===sku)rows.push({doc:j.no,kind:'Dispatch job',open:`dispatchView(${escapeArg(j.id)})`,sku:x.sku,qty:x.qty,
+      from:locName(state,j.location),to:[get(state,'customers',j.customerId)?.name,j.destinationSnapshot?.name].filter(Boolean).join(' · '),
+      map:trip?.mapUrl||mapsLink(site||j.destinationSnapshot||{}),trip,jobId:j.id});
+  }
+  for(const o of state.sales.filter(o=>SALES_OPEN.includes(o.status))){
+    const site=get(state,'locations',o.siteId);
+    for(const l of o.lines.filter(l=>l.qty-l.delivered>EPS))if(!sku||l.sku===sku)rows.push({doc:o.no,kind:'Sales order',open:`salesView(${escapeArg(o.id)})`,
+      sku:l.sku,qty:l.qty-l.delivered,from:'Chosen when delivering',to:[get(state,'customers',o.customerId)?.name,site?.name].filter(Boolean).join(' · '),
+      map:site?mapsLink(site):companyMap('customers',get(state,'customers',o.customerId)),trip:null});
+  }
+  return rows;
+}
+function pendingTable(rows,withItem=true){
+  return table(['Document',...(withItem?['Item']:[]),'Still to deliver','From → To','Trip / driver'],rows.map(p=>{const it=item(state,p.sku);return [
+    `<button type="button" class="link-btn" onclick="${p.open}">${esc(p.doc)}</button><div class="sub">${esc(p.kind)}</div>`,
+    ...(withItem?[cell(it?.name||'—',it?.code||'')]:[]),`<strong class="num">${esc(qfmt(p.qty,it?.unit))}</strong>`,
+    routeCell(p),p.trip?tripCell(p.trip):p.jobId?small('Assign driver',`tripEdit('',{jobId:${escapeArg(p.jobId)}})`):'<span class="sub">No trip yet</span>'];}),
+    'Nothing is waiting to be delivered.');
 }
 const Trk={
   f:{q:'',kind:'',location:'',type:'',from:'',to:''},
@@ -6320,7 +6362,7 @@ const Trk={
     const f=this.f, q=searchKey(f.q), all=ledger();
     const match=r=>(!f.kind||skuKind(r.l.sku)===f.kind)&&(!f.location||r.l.location===f.location||r.other===f.location)&&
       (!f.type||evType(r.e.type)===f.type)&&(!f.from||r.e.at.slice(0,10)>=f.from)&&(!f.to||r.e.at.slice(0,10)<=f.to)&&
-      (!q||searchKey([labelOf(state,r.l.sku),r.e.note,evType(r.e.type),locName(state,r.l.location),eventLinks(state,r.e).company].join(' ')).includes(q));
+      (!q||searchKey([labelOf(state,r.l.sku),r.e.note,evType(r.e.type),r.from,r.to,r.trip?.no,get(state,'drivers',r.trip?.driverId)?.name].join(' ')).includes(q));
     const feed=all.filter(match).reverse();
     const ids=[...new Set(feed.map(r=>r.l.sku))];
     // Items with no stock and no movement stay hidden unless someone searches for them by name.
@@ -6339,15 +6381,15 @@ const Trk={
     const feedRows=feed.slice(0,250).map(r=>{
       const it=item(state,r.l.sku), linked=eventLinks(state,r.e), out=r.l.delta<0;
       return [`<span class="num">${esc(stamp(r.e.at))}</span>`,cell(it?.name||'—',it?.code||''),esc(evType(r.e.type)),
-        esc(r.other?(out?locName(state,r.l.location)+' → '+locName(state,r.other):locName(state,r.other)+' → '+locName(state,r.l.location)):locName(state,r.l.location)),
+        routeCell(r),
         `<strong class="num ${out?'trk-out':'trk-in'}">${out?'':'+'}${esc(qfmt(r.l.delta,it?.unit))}</strong>`,`<span class="num">${esc(qfmt(r.bal))}</span>`,
-        esc([linked.company,linked.site].filter(Boolean).join(' / ')||'—'),esc(r.e.note||linked.document||'—'),esc(r.e.by||'—')];
+        tripCell(r.trip),esc(r.e.note||linked.document||'—'),esc(r.e.by||'—')];
     });
     return `<div class="trk-summary">${[['Items shown',items.length],['Movements',feed.length],['In',feed.filter(r=>r.l.delta>0).length],['Out',feed.filter(r=>r.l.delta<0).length]]
       .map(([k,v])=>`<span>${esc(k)} <b>${v}</b></span>`).join('')}</div>`+
       panel('Where every item is now',table(['Item','Type','On hand','Locations','Last movement','Moves','Track'],itemRows,
         q?'No items match these filters.':'No stock movements yet. Search an item name to look up items that never moved.'))+
-      panel('Movement feed'+(feed.length>250?' · newest 250 of '+feed.length:''),table(['When','Item','Movement','Location / route','Change','Balance there','Company / site','Reference','By'],feedRows,
+      panel('Movement feed'+(feed.length>250?' · newest 250 of '+feed.length:''),table(['When','Item','Movement','From → To','Change','Balance there','Trip / driver','Reference','By'],feedRows,
         'No movements match these filters.'));
   }
 };
@@ -6366,6 +6408,7 @@ function trackingPage(){
     (moving.length?panel('On the road now',table(['Trip','Driver','Customer','To','Left at'],moving.map(t=>[
       `<button type="button" class="link-btn" onclick="tripView(${escapeArg(t.id)})">${esc(t.no)}</button>`,esc(get(state,'drivers',t.driverId)?.name||'—'),
       esc(t.customerName||'—'),`<div class="addr-cell"><span>${esc(t.location||'—')}</span>${mapBtn(t.mapUrl)}</div>`,esc(t.departedAt?stamp(t.departedAt):fmtDate(t.date))]))):'')+
+    (pendingDeliveries().length?panel('Waiting to be delivered · from → to',pendingTable(pendingDeliveries())):'')+
     `<div class="card trk-filters"><div class="toolbar">
       <div class="search">${ic('search')}<input class="inp" aria-label="Search items" placeholder="Search item, code, reference, company…" value="${esc(f.q)}" oninput="Trk.set('q',this.value)"></div>
       <select class="sel" aria-label="Item type" onchange="Trk.set('kind',this.value)">${opt(same(['Raw material','Part','Part variant','Product']),f.kind,'All item types')}</select>
@@ -6377,26 +6420,28 @@ function trackingPage(){
 }
 function trackExport(){
   const f=Trk.f, rows=ledger().filter(r=>(!f.from||r.e.at.slice(0,10)>=f.from)&&(!f.to||r.e.at.slice(0,10)<=f.to)).reverse();
-  XLSX.save('AMBS_Movements_'+todayISO(),[{name:'Movements',columns:['Date','Time','Item code','Item','Type','Movement','Location','Other location','Change','Unit','Balance there','Company / site','Reference','By'],
+  XLSX.save('AMBS_Movements_'+todayISO(),[{name:'Movements',columns:['Date','Time','Item code','Item','Type','Movement','From','To','Change','Unit','Balance there','Trip','Driver','Reference','By'],
     rows:rows.map(r=>{const it=item(state,r.l.sku), linked=eventLinks(state,r.e);return [r.e.at.slice(0,10),new Date(r.e.at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}),
-      it?.code||'',it?.name||'',skuKind(r.l.sku),evType(r.e.type),locName(state,r.l.location),r.other?locName(state,r.other):'',r.l.delta,it?.unit||'',
-      Number(r.bal.toFixed(6)),[linked.company,linked.site].filter(Boolean).join(' / '),r.e.note||linked.document||'',r.e.by||''];})},
+      it?.code||'',it?.name||'',skuKind(r.l.sku),evType(r.e.type),r.from,r.to,r.l.delta,it?.unit||'',
+      Number(r.bal.toFixed(6)),r.trip?.no||'',get(state,'drivers',r.trip?.driverId)?.name||'',r.e.note||linked.document||'',r.e.by||''];})},
     {name:'Stock now',columns:['Item code','Item','Type','Location','Balance','Unit'],rows:stockRows(state).map(b=>{const it=item(state,b.sku);
       return [it?.code||'',it?.name||'',skuKind(b.sku),locName(state,b.location),Number(b.qty.toFixed(6)),it?.unit||''];})}]);
 }
 function trackItem(id){
   const it=item(state,id), rows=ledger().filter(r=>r.l.sku===id), here=stockRows(state).filter(b=>b.sku===id);
-  let total=0;const points=rows.map(r=>({t:Date.parse(r.e.at),v:(total+=r.l.delta)}));
-  if(points.length)points.push({t:Date.now(),v:total});
+  // one step per movement, so a busy single day is as readable as a month
+  let total=0;const points=rows.map((r,i)=>({t:i,v:(total+=r.l.delta)}));
+  if(points.length)points.push({t:points.length,v:total});
   infoModal('Track · '+label(it),`<div class="co-hero">${recordPicture(it,'thumb-record')}<div class="co-hero-main"><div class="co-hero-name">${esc(it.name)}</div>
     <div class="co-hero-sub">${esc(it.code)} · ${esc(skuKind(id))} · on hand <b>${esc(qfmt(total,it.unit))}</b></div></div></div>`+
     (points.length>1?panel('Total balance over time',`<div class="card-body">${sparkline(points)}<div class="viz-x"><span>${esc(fmtDate(rows[0].e.at.slice(0,10)))}</span><span style="margin-left:auto">Today</span></div></div>`):'')+
     panel('Where it is now',hbars(here.sort((a,b)=>b.qty-a.qty).map(b=>({label:locName(state,b.location),value:b.qty,tip:locName(state,b.location)+': '+qfmt(b.qty,it.unit)})),
       {empty:'Not held at any location.',fmt:v=>qfmt(v,it.unit)}))+
-    panel('Every movement · '+rows.length,table(['When','Movement','Location / route','Change','Balance there','Reference','By'],rows.slice().reverse().map(r=>[
-      esc(stamp(r.e.at)),esc(evType(r.e.type)),esc(r.other?locName(state,r.l.delta<0?r.l.location:r.other)+' → '+locName(state,r.l.delta<0?r.other:r.l.location):locName(state,r.l.location)),
+    (pendingDeliveries(id).length?panel('Waiting to be delivered',pendingTable(pendingDeliveries(id),false)):'')+
+    panel('Every movement · '+rows.length,table(['When','Movement','From → To','Change','Balance there','Trip / driver','Reference'],rows.slice().reverse().map(r=>[
+      esc(stamp(r.e.at)),esc(evType(r.e.type)),routeCell(r),
       `<strong class="num ${r.l.delta<0?'trk-out':'trk-in'}">${r.l.delta<0?'':'+'}${esc(qfmt(r.l.delta,it.unit))}</strong>`,esc(qfmt(r.bal)),
-      esc(r.e.note||'—'),esc(r.e.by||'—')]),'No movements yet.')),
+      tripCell(r.trip),esc(r.e.note||'—')]),'No movements yet.')),
     small('Open item',`closeModal();masterView(${escapeArg(get(state,'variants',id)?'variants':get(state,'materials',id)?'materials':get(state,'parts',id)?'parts':'products')},${escapeArg(id)})`));
 }
 

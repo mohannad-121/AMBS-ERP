@@ -940,3 +940,9 @@ body[data-page="tracking"]{--pc:#06b6d4} body[data-page="drivers"]{--pc:#f97316}
 .modal.bom-create .thumb-pick{width:52px;height:52px;flex-basis:52px}
 .modal.bom-create .erp-pick input.inp{min-height:52px;font-size:16px}
 .erp-auto-lines .erp-line:only-child .erp-remove{display:none}
+
+/* From → To route cells in tracking */
+.route-cell{display:flex;align-items:center;flex-wrap:wrap;gap:4px 8px;font-size:12.5px}
+.route-cell b{color:var(--muted-2);font-weight:700}
+.route-cell span:first-child{color:var(--muted)}
+.route-cell span:nth-of-type(2){font-weight:600;color:var(--ink)}
