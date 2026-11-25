@@ -144,7 +144,7 @@ function validateState(s){
     typeof j.destinationSnapshot?.name==='string'&&(j.trackAtDestination==null||typeof j.trackAtDestination==='boolean')&&
     (!j.trackAtDestination||j.location!==j.destination)&&
     ['Open','Partially delivered','Delivered','Cancelled'].includes(j.status),'Invalid dispatch job.');
-  for(const d of s.drivers)need(typeof d.name==='string'&&d.name.trim()&&typeof d.hasPapers==='boolean','Invalid driver.');
+  for(const d of s.drivers)need(typeof d.name==='string'&&d.name.trim()&&typeof d.hasPapers==='boolean'&&(!d.image||validImage(d.image)),'Invalid driver.');
   for(const t of s.trips)need(typeof t.no==='string'&&get(s,'drivers',t.driverId)&&(!t.customerId||get(s,'customers',t.customerId))&&
     (!t.jobId||get(s,'jobs',t.jobId))&&Number.isFinite(t.km)&&t.km>=0&&
     ['Next','On the way','Delivered','Cancelled'].includes(t.status),'Invalid delivery trip.');

@@ -3821,7 +3821,8 @@ const companyContacts=r=>Array.isArray(r?.contacts)&&r.contacts.length?r.contact
 const initials=name=>String(name||'?').trim().split(/\s+/).slice(0,2).map(w=>w[0]).join('').toUpperCase()||'?';
 /* Click a customer / vendor avatar to upload (or replace) its logo or photo straight away. */
 function logoUploader(type,r,size='co-avatar-sm'){
-  return `<label class="co-avatar-up" data-tip="${validImage(r.image)?'Change logo / photo':'Upload a logo or photo'}" onclick="event.stopPropagation()">
+  const what=type==='drivers'?'photo':'logo / photo';
+  return `<label class="co-avatar-up" data-tip="${validImage(r.image)?'Change '+what:'Upload a '+what}" onclick="event.stopPropagation()">
     ${companyAvatar(r,size)}<span class="co-avatar-cam" aria-hidden="true">${ic('plus')}</span>
     <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden aria-label="Upload logo for ${esc(r.name)}"
       onchange="uploadCompanyLogo(${escapeArg(type)},${escapeArg(r.id)},this)"></label>`;
@@ -3834,8 +3835,8 @@ async function uploadCompanyLogo(type,id,inputEl){
   try{
     const image=await imageValue(holder,'');
     await commit(s=>{const row=get(s,type,id);need(row,'This record no longer exists.');row.image=image;row.at=now();});
-    if(viewing){closeModal();masterView(type,id);}
-    App.render();toast('Logo saved.','ok');
+    if(viewing){closeModal();type==='drivers'?driverView(id):masterView(type,id);}
+    App.render();toast(type==='drivers'?'Photo saved.':'Logo saved.','ok');
   }catch(e){toast(e.message,'bad');}
   finally{inputEl.value='';}
 }
@@ -5693,7 +5694,7 @@ function validateState(s){
     typeof j.destinationSnapshot?.name==='string'&&(j.trackAtDestination==null||typeof j.trackAtDestination==='boolean')&&
     (!j.trackAtDestination||j.location!==j.destination)&&
     ['Open','Partially delivered','Delivered','Cancelled'].includes(j.status),'Invalid dispatch job.');
-  for(const d of s.drivers)need(typeof d.name==='string'&&d.name.trim()&&typeof d.hasPapers==='boolean','Invalid driver.');
+  for(const d of s.drivers)need(typeof d.name==='string'&&d.name.trim()&&typeof d.hasPapers==='boolean'&&(!d.image||validImage(d.image)),'Invalid driver.');
   for(const t of s.trips)need(typeof t.no==='string'&&get(s,'drivers',t.driverId)&&(!t.customerId||get(s,'customers',t.customerId))&&
     (!t.jobId||get(s,'jobs',t.jobId))&&Number.isFinite(t.km)&&t.km>=0&&
     ['Next','On the way','Delivered','Cancelled'].includes(t.status),'Invalid delivery trip.');
@@ -5965,12 +5966,14 @@ function driverEdit(id){
     ${input('Emirates ID expiry','idExpiry',d.idExpiry,{type:'date'})}
     <div class="field full papers-confirm"><label><input name="hasPapers" type="checkbox" ${d.hasPapers?'checked':''}>
       <span><b>Official papers checked and on file</b><small>Licence, Emirates ID and vehicle registration were seen and copies are kept.</small></span></label></div>
-    ${area('Notes','notes',d.notes)}</div>`,async f=>{
+    ${area('Notes','notes',d.notes)}
+    ${imageField(d.image).replace('>Image</label>','>Driver photo</label>')}</div>`,async f=>{
     const data={...old,id:id||key(),name:valOf(f,'name'),phone:readPhone(f,'phone'),kind:valOf(f,'kind')||DRIVER_KINDS[0],
       vehiclePlate:valOf(f,'vehiclePlate'),vehicleType:valOf(f,'vehicleType'),vehicleExpiry:valOf(f,'vehicleExpiry'),
       licenseNo:valOf(f,'licenseNo'),licenseExpiry:valOf(f,'licenseExpiry'),emiratesId:valOf(f,'emiratesId'),idExpiry:valOf(f,'idExpiry'),
       hasPapers:checked(f,'hasPapers'),notes:valOf(f,'notes'),active:old?.active!==false};
     need(data.name,'Enter the driver’s name.');
+    data.image=await imageValue(f,old?.image);
     await commit(s=>{
       need(!old||sameCloudRecord(get(s,'drivers',data.id),old),'This driver changed. Reopen it before saving.');
       need(!s.drivers.some(x=>x.id!==data.id&&x.name.trim().toLowerCase()===data.name.toLowerCase()),'A driver with this name already exists.');
@@ -6133,7 +6136,7 @@ function driverView(id){
   const tiles=[['route','Trips',trips.length,month.length+' this month'],['pulse','Distance',nfmt(tripKm(trips),1)+' km',nfmt(tripKm(month),1)+' km this month'],
     ['ok','Delivered',trips.filter(t=>t.status==='Delivered').length,trips.filter(t=>t.status==='Next').length+' waiting'],
     ['pin','Where now',where.trip?'On the way':'At base',where.trip?(where.trip.location||where.trip.customerName||''):'Available']];
-  infoModal(d.name,`<div class="co-hero"><span class="co-avatar co-initials co-avatar-lg">${esc(initials(d.name))}</span><div class="co-hero-main">
+  infoModal(d.name,`<div class="co-hero">${logoUploader('drivers',d,'co-avatar-lg')}<div class="co-hero-main">
       <div class="co-hero-name">${esc(d.name)}</div><div class="co-hero-sub">${esc(d.kind||'Driver')} · ${esc(d.phone||'no phone')} ${papersChip(d)}</div></div></div>`+
     (issues.length?note('⛔ Nothing can be delivered with this driver: '+issues.join(' · ')+'.','bad'):'')+
     `<div class="co-smart-row">${tiles.map(([icon,l,v,sub])=>`<div class="co-smart">${ic(icon)}<span><b>${esc(v)}</b><small>${esc(l)}</small><em>${esc(sub)}</em></span></div>`).join('')}</div>`+
@@ -6192,7 +6195,7 @@ function driversPage(){
     (blocked.length?note('⛔ No delivery can go out with: '+blocked.map(d=>d.name+' ('+papersIssues(d)[0]+')').join(' · '),'bad'):'')+
     panel('Drivers',table(['Driver','Vehicle','Official papers','Where now','Trips','Actions'],drivers.map(d=>{
       const trips=driverTrips(d.id), last=trips.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''))[0], where=driverWhere(d), args=escapeArg(d.id);
-      return [`<div class="record-media co-media"><span class="co-avatar co-initials co-avatar-sm">${esc(initials(d.name))}</span><div>${cell(d.name,[d.phone,d.kind].filter(Boolean).join(' · '))}</div></div>`,
+      return [`<div class="record-media co-media">${logoUploader('drivers',d)}<div>${cell(d.name,[d.phone,d.kind].filter(Boolean).join(' · '))}</div></div>`,
         cell(d.vehiclePlate||'—',d.vehicleType),papersChip(d),`<div class="addr-cell">${statusChip(where.kind,where.text)}${mapBtn(where.trip?.mapUrl)}</div>`,
         `<span class="co-count">${trips.length}</span> <span class="num">${esc(nfmt(tripKm(trips),1))} km</span><div class="sub">${esc(last?'Last: '+fmtDate(last.date)+' · '+last.no:'No trips yet')}</div>`,
         actionGroup(button('View',`driverView(${args})`,'btn-sm btn-view','search'),small('Edit',`driverEdit(${args})`),
