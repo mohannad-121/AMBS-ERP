@@ -953,23 +953,23 @@ body[data-page="tracking"]{--pc:#06b6d4} body[data-page="drivers"]{--pc:#f97316}
    Loaded last so it overrides the earlier colourful theme.
    ===================================================================== */
 :root{
-  --o-accent:#714b67; --o-accent-d:#5d3d55; --o-accent-soft:#f4eff3;
+  --o-accent:#9b1c1c; --o-accent-d:#7f1515; --o-accent-soft:#fbeeee;
   --o-text:#212529; --o-text-2:#4b5563; --o-muted:#6c757d; --o-border:#dee2e6; --o-border-2:#e9ecef;
   --o-bg:#f9fafb; --o-hover:#f2f4f6; --o-head:#ffffff;
-  --red:#714b67; --red-d:#5d3d55; --red-l:#8f6a86; --red-soft:#f4eff3;
+  --red:#9b1c1c; --red-d:#7f1515; --red-l:#b93a3a; --red-soft:#fbeeee;
   --yellow:#ced4da; --yellow-d:#adb5bd; --yellow-soft:#f8f9fa;
   --ink:#212529; --ink-2:#374151; --paper:#f9fafb; --line:#dee2e6; --line-2:#e9ecef; --muted:#6c757d; --muted-2:#8a929a;
   --ok:#28a745; --ok-bg:#eef7f0; --ok-bd:#cfe8d6; --warn:#a8741a; --warn-bg:#fbf6ea; --warn-bd:#efe2c2;
   --bad:#c0392b; --bad-bg:#fbefee; --bad-bd:#f0d2ce; --info:#017e84; --info-bg:#eef6f7; --info-bd:#cfe5e7;
-  --ring:0 0 0 3px rgba(113,75,103,.15);
+  --ring:0 0 0 3px rgba(155,28,28,.15);
   --radius:4px; --radius-lg:6px;
   --sh-xs:none; --sh-sm:0 1px 2px rgba(0,0,0,.04); --sh-md:0 2px 6px rgba(0,0,0,.08); --sh-lg:0 8px 28px rgba(0,0,0,.18);
-  --viz-1:#714b67; --viz-2:#adb5bd; --viz-3:#9c7c94; --viz-4:#6c757d; --viz-ok:#5f9e6e; --viz-bad:#c0392b; --viz-neutral:#ced4da; --viz-grid:#eef0f2;
+  --viz-1:#9b1c1c; --viz-2:#adb5bd; --viz-3:#c46a6a; --viz-4:#6c757d; --viz-ok:#5f9e6e; --viz-bad:#c0392b; --viz-neutral:#ced4da; --viz-grid:#eef0f2;
 }
-body[data-page][data-page]{--pc:#714b67}
+body[data-page][data-page]{--pc:#9b1c1c}
 body{background:#fff!important;color:var(--o-text);font-size:13.5px}
 body::before,body::after{display:none!important}
-::selection{background:rgba(113,75,103,.15)}
+::selection{background:rgba(155,28,28,.15)}
 .hazard,.hz{display:none!important}
 
 /* ---------- shell: top menu bar, no sidebar ---------- */
