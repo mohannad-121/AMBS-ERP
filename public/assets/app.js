@@ -2738,7 +2738,7 @@ const Nest={ _docId:'', _sets:1, _kerf:5, _minOff:500, _stock:{}, _res:null, _ra
 };
 
 
-// Open access workspace. Records remain in this browser; the cloud database stays private.
+// Localhost (127.0.0.1) is an isolated demo saved in this browser. The hosted website uses Supabase: one shared workspace for everyone.
 const DEMO_STORE = {
   db: null,
   async open() {
@@ -2786,7 +2786,7 @@ const DEMO_STORE = {
 };
 
 const CLOUD = {
-  demo: true,
+  demo: ['localhost', '127.0.0.1'].includes(location.hostname),
   session: null,
   role: null,
   email: null,
@@ -2835,7 +2835,15 @@ const CLOUD = {
     if (!remote.snapshot) {
       const data=emptyStateData();
       addWorkbookParts(data);
-      const snapshot={state:data,legacy:Object.fromEntries(LEGACY.map(name=>[name,[]]))};
+      let snapshot={state:data,legacy:Object.fromEntries(LEGACY.map(name=>[name,[]]))};
+      // First sign-in to an empty cloud: offer the records this browser saved before the cloud was connected.
+      if(!this.demo&&remote.role==='admin'){
+        try{
+          const local=(await DEMO_STORE.read()).snapshot;
+          const count=local?.state?LIVE.filter(k=>k!=='parts'&&k!=='locations').reduce((n,k)=>n+(local.state[k]?.length||0),0):0;
+          if(count&&confirm('This browser has '+count+' AMBS records saved before the cloud was connected. Copy them to the cloud so everyone sees them?'))snapshot=local;
+        }catch{}
+      }
       try { await this.api('PUT',{revision:remote.revision,snapshot}); }
       catch(e) { if(e.status!==409)throw e; }
     }else if(remote.role==='admin'){
@@ -4036,26 +4044,28 @@ function mapField(title,value,hint){
     `<p class="sub full map-help">${ic('pin')} In Google Maps open the place, tap <b>Share → Copy link</b> and paste it here. Coordinates like <b>25.2048, 55.2708</b> also work.</p>`;
 }
 function deliverySite(s,type,id){return s.locations.find(l=>l.ownerType===type&&l.ownerId===id&&l.delivery);}
-/* Customers: name, code, phone, position, delivery address. Vendors: name, code, phone, address, materials supplied. */
+/* Customers: name, code, phone, position, delivery address. Vendors: name, code, phone, address, materials supplied.
+   Processing companies: name, code, phone, email, address, map — their site holds AMBS stock so parts can be transferred there. */
 function simpleCompanyEdit(type,id){
-  const old=get(state,type,id), row=old||{}, vendor=type==='suppliers', title=ENTITY[type];
+  const old=get(state,type,id), row=old||{}, vendor=type==='suppliers', proc=type==='processors', title=ENTITY[type];
   const address=row.address||deliverySite(state,type,id)?.address||'';
   const form=formModal((old?'Edit ':'Add ')+title,`<div class="form-grid">
-    ${input('Name','name',row.name,{full:true,extra:`placeholder="${vendor?'e.g. Metal Solution Trading':'e.g. Emaar Construction LLC'}"`})}
+    ${input('Name','name',row.name,{full:true,extra:`placeholder="${proc?'e.g. Gulf Galvanizing Factory':vendor?'e.g. Metal Solution Trading':'e.g. Emaar Construction LLC'}"`})}
     ${input('Code','code',row.code||nextCode(state,type),{extra:'placeholder="Left empty, a code is given automatically"'})}
     ${phoneField('Phone number','phone',row.phone)}
-    ${vendor?'':input('Position','position',row.position,{extra:'placeholder="e.g. Project Manager"'})}
-    ${input(vendor?'Address':'Delivery address','address',address,{full:true,extra:`placeholder="${vendor?'e.g. Al Quoz Industrial Area 3, Dubai':'e.g. Dubai Hills, Building 3, Gate 2'}"`})}
+    ${proc?input('Email','email',row.email,{type:'email',extra:'placeholder="e.g. orders@gulfgalv.ae"'}):vendor?'':input('Position','position',row.position,{extra:'placeholder="e.g. Project Manager"'})}
+    ${input(vendor||proc?'Address':'Delivery address','address',address,{full:true,extra:`placeholder="${proc?'e.g. Jebel Ali Industrial Area 1, Dubai':vendor?'e.g. Al Quoz Industrial Area 3, Dubai':'e.g. Dubai Hills, Building 3, Gate 2'}"`})}
     ${vendor?input('Address 2','address2',row.address2,{full:true,extra:'placeholder="e.g. Warehouse 12, Jebel Ali Free Zone (second branch or store)"'}):''}
-    ${mapField(vendor?'Google Maps location':'Customer location (Google Maps link)',companyMap(type,row),'e.g. https://maps.app.goo.gl/…')}
-    ${imageField(row.image,'Logo / photo')}
+    ${mapField(vendor||proc?'Google Maps location':'Customer location (Google Maps link)',companyMap(type,row),'e.g. https://maps.app.goo.gl/…')}
+    ${proc?'':imageField(row.image,'Logo / photo')}
     </div>`+(vendor?`<h4 class="erp-sub-head">Materials this vendor supplies</h4>
     <p class="sub" style="margin:-4px 0 10px">Pick a material and how many bundles. A new line appears by itself when you fill the last one.</p>
     <div data-supplies></div>`:''),async f=>{
     const data={...old,id:id||key(),name:valOf(f,'name'),code:valOf(f,'code'),phone:readPhone(f,'phone'),
-      position:vendor?old?.position||'':valOf(f,'position'),address:valOf(f,'address'),mapUrl:readMapUrl(f,'mapUrl'),active:old?.active!==false};
+      position:vendor||proc?old?.position||'':valOf(f,'position'),address:valOf(f,'address'),mapUrl:readMapUrl(f,'mapUrl'),active:old?.active!==false};
+    if(proc){data.email=valOf(f,'email');need(!data.email||/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(data.email),'Enter a valid email address.');}
     if(vendor)data.address2=valOf(f,'address2');
-    data.image=await imageValue(f,old?.image);
+    data.image=proc?old?.image||'':await imageValue(f,old?.image);
     if(vendor){
       data.supplies=supplyLines().map(l=>({sku:fieldValue(l,'sku'),bundles:qty(fieldValue(l,'bundles')||0,'Bundles',true)}));
       need(new Set(data.supplies.map(x=>x.sku)).size===data.supplies.length,'Each material can be listed once per vendor.');
@@ -4066,10 +4076,11 @@ function simpleCompanyEdit(type,id){
       codeCheck(s,type,data);
       for(const x of data.supplies||[])need(get(s,'materials',x.sku),'Choose a raw material for every line.');
       add(s[type],{...data,at:now()});
-      if(type!=='customers')return;
-      const site=deliverySite(s,type,data.id);
-      if(data.address||data.mapUrl)add(s.locations,{...(site||{id:key(),name:'Delivery address',city:'',url:'',notes:'',lat:null,lng:null}),
-        address:data.address,url:data.mapUrl,stock:site?.stock??false,active:true,delivery:true,ownerType:type,ownerId:data.id});
+      if(vendor)return;
+      const site=deliverySite(s,type,data.id)||(proc?s.locations.find(l=>l.ownerType===type&&l.ownerId===data.id&&l.active!==false):null);
+      // a processing company always gets a site that holds AMBS stock, so parts can be transferred there and back
+      if(proc||data.address||data.mapUrl)add(s.locations,{...(site||{id:key(),name:proc?'Processing site':'Delivery address',city:'',url:'',notes:'',lat:null,lng:null}),
+        address:data.address,url:data.mapUrl,stock:proc?true:site?.stock??false,active:true,delivery:true,ownerType:type,ownerId:data.id});
       else if(site&&!locationUsed(s,site.id))site.active=false;
     });
     return old?'Saved.':title+' added.';
@@ -4079,74 +4090,7 @@ function simpleCompanyEdit(type,id){
     ${input('Bundles',n+'_bundles',x.bundles??'',{type:'number',extra:'min="0" step="any" placeholder="e.g. 10"'})}</div>`,
     vendorSupplies(row),'Add material',{min:1,filled:line=>!!fieldValue(line,'sku'),complete:line=>!!fieldValue(line,'sku')&&Number(fieldValue(line,'bundles'))>0}):null;
 }
-function companyEdit(type,id){
-  if(type!=='processors')return simpleCompanyEdit(type,id);
-  const old=get(state,type,id), row=old||{}, title=ENTITY[type];
-  const general=`<div class="form-grid">
-    ${input('Code','code',row.code,{required:true})}${input('Name','name',row.name,{required:true})}
-    ${input('TRN / VAT number (optional)','trn',row.trn,{extra:'maxlength="30" placeholder="e.g. 100123456700003"'})}
-    ${input('Tags (comma separated)','tags',(row.tags||[]).join(', '),{extra:'placeholder="e.g. VIP, Contractor, Dubai"'})}
-    ${input('Email','email',row.email,{type:'email'})}${input('Phone','phone',row.phone)}
-    ${input('Website','website',row.website,{type:'url',extra:'placeholder="https://"'})}
-    ${input(type==='processors'?'Services (comma separated)':'Business / Supply details','details',row.details)}
-    ${input('Address','address',row.address,{full:true})}
-    ${input('City / emirate','city',row.city)}${input('Country','country',row.country??'United Arab Emirates')}
-    ${imageField(row.image,'Logo')}</div>`;
-  const commercial=`<div class="form-grid">
-    ${suggestedInput('Payment terms','paymentTerms',row.paymentTerms||'',PAYMENT_TERMS)}
-    ${type==='customers'?input('Credit limit (AED, optional)','creditLimit',row.creditLimit??'',{type:'number',extra:'min="0" step="0.01"'}):
-      input('Typical lead time (days, optional)','leadTime',row.leadTime??'',{type:'number',extra:'min="0" step="1"'})}
-    ${input(type==='customers'?'Account manager / salesperson':'Buyer / account manager','manager',row.manager)}</div>
-    ${type==='customers'?note('The credit limit is a reminder only: the customer page warns you when open sales orders go above it.'):''}`;
-  const form=formModal((old?'Edit ':'Add ')+title,formTabs([
-    ['general','General',general],
-    ['contacts','Contacts',note('Add the people you deal with at this company. The first one is shown as the main contact person in lists.')+'<div data-contacts></div>'],
-    ['locations','Locations','<div data-locations></div>'],
-    ['terms',type==='customers'?'Sales & payment':type==='suppliers'?'Purchasing & payment':'Terms',commercial],
-    ['notes','Notes',area('Notes','notes',row.notes)]
-  ]),async f=>{
-    const tags=[...new Set(valOf(f,'tags').split(',').map(t=>t.trim()).filter(Boolean))].slice(0,12);
-    const people=contactLines().map(l=>({name:fieldValue(l,'cname'),job:fieldValue(l,'job'),phone:fieldValue(l,'cphone'),email:fieldValue(l,'cemail')}));
-    need(people.every(p=>p.name),'Enter a name for every contact person (Contacts tab).');
-    const website=valOf(f,'website');
-    need(!website||/^https?:\/\/\S+$/i.test(website),'Enter a website that starts with https://');
-    const data={...old,id:id||key(),code:valOf(f,'code'),name:valOf(f,'name'),trn:valOf(f,'trn'),tags,email:valOf(f,'email'),phone:valOf(f,'phone'),
-      website,details:valOf(f,'details'),address:valOf(f,'address'),city:valOf(f,'city'),country:valOf(f,'country'),
-      contacts:people,contact:people[0]?.name||'',paymentTerms:valOf(f,'paymentTerms'),manager:valOf(f,'manager'),
-      notes:valOf(f,'notes'),active:old?.active!==false};
-    if(type==='customers'){const v=valOf(f,'creditLimit');data.creditLimit=v===''?null:qty(v,'Credit limit',true);}
-    else{const v=valOf(f,'leadTime');data.leadTime=v===''?null:whole(v,'Lead time',true);}
-    data.image=await imageValue(f,old?.image);
-    const locations=locationLines().map(l=>readLocation(l,true));
-    await commit(s=>{
-      const existing=get(s,type,data.id);
-      need(!old||sameCloudRecord(old,existing),'This record changed. Reopen it before saving.');
-      if(old)need(sameCloudRecord(companyLocations(s,type,id),companyLocations(state,type,id)),
-        'This company’s locations changed. Reopen it before saving.');
-      codeCheck(s,type,data); activeCheck(s,type,data,existing);
-      add(s[type],{...data,at:now()});
-      const previous=companyLocations(s,type,data.id);
-      for(const l of previous.filter(p=>!locations.some(x=>x.id===p.id))){
-        need(!locationUsed(s,l.id),'This location is used by stock or an open operation.');
-        l.active=false;
-      }
-      const names=new Set();
-      for(const l of locations){
-        const prior=get(s,'locations',l.id);
-        need(!prior||prior.ownerId===data.id,'Invalid location owner.');
-        need(!names.has(l.name.toLowerCase()),'Use distinct names for this company’s locations.');
-        need(!prior?.stock||l.stock||!locationUsed(s,l.id),'This location is used by stock or an open operation.');
-        names.add(l.name.toLowerCase());
-        add(s.locations,{...l,ownerType:type,ownerId:data.id});
-      }
-    });
-  });
-  wireFormTabs(form);
-  const contactLines=repeat(form,'[data-contacts]',(c,n)=>`<legend>${esc(c.name||'Contact person')}</legend><div class="form-grid">
-    ${input('Name',n+'_cname',c.name,{required:true})}${input('Job title',n+'_job',c.job)}
-    ${input('Phone',n+'_cphone',c.phone)}${input('Email',n+'_cemail',c.email,{type:'email'})}</div>`,companyContacts(row),'Add Contact');
-  const locationLines=repeat(form,'[data-locations]',(l,n)=>locationFields(l,n,true),companyLocations(state,type,id),'Add Location');
-}
+function companyEdit(type,id){return simpleCompanyEdit(type,id);}
 function companyView(type,id){
   const r=get(state,type,id), sites=companyLocations(state,type,id,false), siteIds=new Set(sites.map(l=>l.id));
   const contacts=companyContacts(r), stock=stockRows(state).filter(b=>siteIds.has(b.location));
@@ -4180,10 +4124,11 @@ function companyView(type,id){
   const link=(href,text)=>text?`<a href="${esc(href)}" class="co-link"${href.startsWith('http')?' target="_blank" rel="noopener noreferrer"':''}>${esc(text)}</a>`:'—';
   const supplies=type==='suppliers'?vendorSupplies(r):[];
   if(type==='suppliers')smart.unshift(['stack','Materials supplied',supplies.length,nfmt(supplies.reduce((n,x)=>n+x.bundles,0),2)+' bundles in total','co-supplies']);
-  const simple=type!=='processors';
+  const simple=true;
   if(simple)for(let i=smart.length-1;i>=0;i--)if(!smart[i][2]||smart[i][2]==='—')smart.splice(i,1);
   const details=simple?[['Code',esc(r.code)],...(type==='customers'?[['Position',esc(r.position||'—')]]:[]),
     ['Phone',r.phone?link('tel:'+r.phone.replace(/[^\d+]/g,''),r.phone):'—'],
+    ...(type==='processors'?[['Email',r.email?link('mailto:'+r.email,r.email):'—']]:[]),
     [type==='customers'?'Delivery address':'Address',esc(r.address||deliverySite(state,type,id)?.address||'—')],
     ...(type==='suppliers'?[['Address 2',esc(r.address2||'—')]]:[]),
     ['Location on map',companyMap(type,r)?mapBtn(companyMap(type,r),'Open in Google Maps'):'<span class="sub">No Google Maps link yet — click Edit to add it</span>']]:[
@@ -4565,9 +4510,12 @@ function materialPage(){
           `<span class="num">${esc(qfmt(onHand+onOrder))}</span>`,statusChip(health.kind,health.label)])}});
 }
 function simpleCompanyPage(type){
-  const title=ENTITY[type], vendor=type==='suppliers';
+  const title=ENTITY[type], vendor=type==='suppliers', proc=type==='processors';
   const openCount=r=>vendor?state.purchases.filter(p=>p.supplierId===r.id&&['Draft','Ordered'].includes(p.status)).length:
+    proc?state.orders.filter(o=>o.processorId===r.id&&['Draft','Released'].includes(o.status)).length:
     state.sales.filter(o=>o.customerId===r.id&&SALES_OPEN.includes(o.status)).length;
+  const held=r=>{if(!proc)return 0;const ids=new Set(companyLocations(state,type,r.id).map(l=>l.id));return stockRows(state).filter(b=>ids.has(b.location)).length;};
+  const noun=proc?'processing companies':vendor?'vendors':'customers';
   const address=r=>r.address||deliverySite(state,type,r.id)?.address||companyLocations(state,type,r.id)[0]?.address||'';
   const rows=state[type].slice().sort((a,b)=>a.name.localeCompare(b.name));
   return head('Contacts',TITLES[type],button('New','masterEdit('+escapeArg(type)+')','btn-primary'))+
@@ -4576,15 +4524,16 @@ function simpleCompanyPage(type){
       return {open:`masterView(${escapeArg(type)},${escapeArg(r.id)})`,
         search:[r.code,r.name,r.position,r.phone,address(r),r.address2,...supplies.map(x=>label(get(state,'materials',x.sku)))].filter(Boolean).join(' '),
         html:`${companyAvatar(r,'co-avatar-md')}<div class="o-card-main"><div class="o-card-title">${esc(r.name)}</div>
-          ${!vendor&&r.position?`<div class="o-card-line">${esc(r.position)}</div>`:''}
+          ${!vendor&&!proc&&r.position?`<div class="o-card-line">${esc(r.position)}</div>`:''}
           ${r.phone?`<div class="o-card-line">${ic('phone')}${esc(r.phone)}</div>`:''}
           ${address(r)?`<div class="o-card-line o-muted">${esc(address(r))}</div>`:''}
-          <div class="o-card-tags">${vendor&&supplies.length?`<span class="o-tag">${supplies.length} material${supplies.length===1?'':'s'}</span>`:''}${open?`<span class="o-tag">${open} open ${vendor?'purchase':'order'}${open===1?'':'s'}</span>`:''}${r.active===false?'<span class="o-tag">Archived</span>':''}</div></div>`};
-    }),{placeholder:vendor?'Search vendors by name, phone, address or material…':'Search customers by name, phone, position or address…',
-      noun:vendor?'vendors':'customers',empty:'No '+title.toLowerCase()+'s yet. Click New to add the first one.',
-      list:{columns:['Name',...(vendor?[]:['Position']),'Phone',vendor?'Address':'Delivery address','Code',vendor?'Open purchases':'Open orders'],
+          <div class="o-card-tags">${vendor&&supplies.length?`<span class="o-tag">${supplies.length} material${supplies.length===1?'':'s'}</span>`:''}${held(r)?`<span class="o-tag">${held(r)} item${held(r)===1?'':'s'} here</span>`:''}${open?`<span class="o-tag">${open} open ${vendor?'purchase':proc?'production order':'order'}${open===1?'':'s'}</span>`:''}${r.active===false?'<span class="o-tag">Archived</span>':''}</div></div>`};
+    }),{placeholder:'Search '+noun+' by name, phone or address…',
+      noun,empty:'No '+noun+' yet. Click New to add the first one.',
+      list:{columns:['Name',...(vendor||proc?[]:['Position']),'Phone',vendor||proc?'Address':'Delivery address','Code',
+          ...(proc?['Items held']:[]),vendor?'Open purchases':proc?'Open production':'Open orders'],
         rows:rows.map(r=>[`<div class="record-media co-media">${companyAvatar(r)}<div>${cell(r.name)}</div></div>`+openBtn(`masterView(${escapeArg(type)},${escapeArg(r.id)})`),
-          ...(vendor?[]:[esc(r.position||'—')]),esc(r.phone||'—'),esc(address(r)||'—'),esc(r.code),esc(openCount(r)||'—')])}});
+          ...(vendor||proc?[]:[esc(r.position||'—')]),esc(r.phone||'—'),esc(address(r)||'—'),esc(r.code),...(proc?[esc(held(r)||'—')]:[]),esc(openCount(r)||'—')])}});
 }
 /* Odoo-style kanban: cards several per row, with a Kanban / List switch (remembered per page). */
 function savedView(){try{return localStorage.getItem('ambs-view-'+App.route)||'kanban';}catch{return 'kanban';}}
@@ -4605,26 +4554,7 @@ function kanban(cards,{placeholder='Search…',noun='records',empty='Nothing her
       onclick="${c.open}" onkeydown="if(event.key==='Enter')this.click()">${c.html}</div>`).join(''):`<div class="o-empty">${esc(empty)}</div>`}</div>
     ${list?`<div class="o-listview">${table(list.columns,list.rows,empty,cards.map(c=>c.search))}</div>`:''}</div>`;
 }
-function companyPage(type){
-  if(type!=='processors')return simpleCompanyPage(type);
-  const title=ENTITY[type];
-  const openLabel={customers:'Open sales',suppliers:'Open purchases',processors:'Open production'}[type];
-  const openCount=r=>type==='customers'?state.sales.filter(o=>o.customerId===r.id&&SALES_OPEN.includes(o.status)).length:
-    type==='suppliers'?state.purchases.filter(p=>p.supplierId===r.id&&['Draft','Ordered'].includes(p.status)).length:
-    state.orders.filter(o=>o.processorId===r.id&&['Draft','Released'].includes(o.status)).length;
-  return head('Overview',TITLES[type],button('Add '+title,`masterEdit(${escapeArg(type)})`,'btn-primary','plus'))+
-    searchableTable(['Code','Company','Contact person','Phone','Locations',openLabel,'Status'],state[type].map(r=>{
-      const args=`${escapeArg(type)},${escapeArg(r.id)}`, open=openCount(r), contacts=companyContacts(r);
-      return [esc(r.code),
-        `<div class="record-media co-media">${companyAvatar(r)}<div>${cell(r.name,[r.city,r.details].filter(Boolean).join(' · '))}${tagChips(r.tags)}</div></div>`,
-        cell(contacts[0]?.name||'—',contacts[0]?.job||(contacts.length>1?'+'+(contacts.length-1)+' more':'')),
-        esc(r.phone||contacts[0]?.phone||'—'),esc(companyLocations(state,type,r.id).length),
-        open?`<span class="co-count">${open}</span>`:'<span class="sub">0</span>',
-        chip(r.active===false?'Archived':'Active')+openBtn(`masterView(${args})`)];
-    }),'Add your first '+title.toLowerCase()+'.',
-    state[type].map(r=>[r.code,r.name,r.trn,r.email,r.phone,r.city,r.details,...(r.tags||[]),...companyContacts(r).flatMap(c=>[c.name,c.phone,c.email])].filter(Boolean).join(' ')),
-    {placeholder:'Search by name, code, contact, phone, tag or TRN…',noun:type==='customers'?'customers':type==='suppliers'?'suppliers':'companies'});
-}
+function companyPage(type){return simpleCompanyPage(type);}
 function masterPage(type){
   if(type==='materials')return materialPage();
   if(COMPANIES.includes(type))return companyPage(type);
@@ -5059,7 +4989,7 @@ function inventoryForm(mode){
   ]));
   const form=formModal(titles[mode],`<div class="form-grid">
     ${searchable('Item / SKU','sku',pair(skus()))}${select(move?'From location':'Custody location','location',locOptions())}
-    ${move?select('To location','to',locOptions())+`<div class="field full">${note('To hold stock at a customer site, enable stock custody for that site in the Customer record.')}</div>`:''}
+    ${move?select('To location','to',locOptions())+`<div class="field full">${note('Processing companies appear here automatically (their site holds AMBS stock). To hold stock at a customer site, enable stock custody for that site in the Customer record.')}</div>`:''}
     ${searchable('Related company (optional)','relatedParty',parties)}
     ${select('Related company site (optional)','relatedSite',[],'',false,'No linked site')}
     <div class="field full"><div class="hint">Stock locations owned by one company are linked automatically if no company is selected.</div></div>
