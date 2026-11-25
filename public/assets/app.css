@@ -1277,3 +1277,17 @@ tr.o-group td{background:#f8f9fa!important;font-weight:600;cursor:pointer;color:
 .o-bc-parent{color:var(--o-muted);font-weight:400;white-space:nowrap}
 .o-bc-list .o-bc-sep{color:#adb5bd}
 @media(max-width:620px){.o-bc-list,.o-bc-list .h1{font-size:17px!important}.o-cp .o-bc-parent,.o-cp .o-bc-parent+.o-bc-sep{display:none}}
+
+/* Kanban like Odoo contacts: several compact cards per row; Kanban / List switch */
+.o-kanban{grid-template-columns:repeat(auto-fill,minmax(280px,1fr))!important;gap:10px!important}
+.o-card{padding:10px!important;min-height:104px}
+.o-card .co-avatar-md{width:72px;height:72px;flex:0 0 72px}
+.o-search-hero .pill-legend{margin-left:auto}
+.o-view-switch{display:flex;border:1px solid var(--o-border);border-radius:4px;overflow:hidden}
+.o-view-btn{display:grid;place-items:center;width:34px;height:32px;border:0;background:#fff;color:var(--o-muted);cursor:pointer}
+.o-view-btn+.o-view-btn{border-left:1px solid var(--o-border)}
+.o-view-btn svg{width:16px;height:16px}
+.o-view-btn.on{background:#e9ecef;color:var(--o-text)}
+.o-kanban-wrap.is-list .o-kanban{display:none}
+.o-kanban-wrap:not(.is-list) .o-listview{display:none}
+.o-listview{border:1px solid var(--o-border);border-radius:4px;background:#fff}

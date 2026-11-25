@@ -47,6 +47,7 @@ const IP = {
   pin:'M12 22s7-6.2 7-12a7 7 0 10-14 0c0 5.8 7 12 7 12zm0-9a3 3 0 100-6 3 3 0 000 6z',
   alert:'M12 3l10 18H2L12 3zm0 7v5m0 3v.5',
   xls:'M6 2h9l5 5v15H6V2zm8 0v6h6M9 11l5 6m0-6l-5 6',
+  list:'M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01',
   phone:'M5 4h4l2 5-2.5 1.5a11 11 0 005 5L15 13l5 2v4a2 2 0 01-2 2A16 16 0 013 6a2 2 0 012-2'
 };
 function ic(name,cls){return `<svg class="${cls||''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="${IP[name]||''}"/></svg>`;}
@@ -4195,6 +4196,11 @@ function companyView(type,id){
       small('View',`closeModal();salesView(${escapeArg(o.id)})`)]),'No sales orders yet.'))):'')+
     (type==='customers'&&jobs.length?section('co-jobs',panel('Dispatch jobs',table(['Job','Product','Delivered','Status','Action'],jobs.map(j=>[
       cell(j.no,j.name),esc(labelOf(state,j.productId)),esc(j.delivered+' / '+j.qty),chip(j.status),small('View',`closeModal();dispatchView(${escapeArg(j.id)})`)])))):'')+
+    (type==='customers'?section('co-trips',panel('Deliveries',table(['Trip','Date','Driver','Deliver to','Km','Status'],
+      state.trips.filter(t=>t.customerId===id).sort((x,y)=>String(y.date).localeCompare(String(x.date))).map(t=>[
+        cell(t.no,t.description)+openBtn(`tripView(${escapeArg(t.id)})`),esc(fmtDate(t.date)),esc(get(state,'drivers',t.driverId)?.name||'—'),
+        `<div class="addr-cell"><span>${esc(t.location||'—')}</span>${mapBtn(t.mapUrl)}</div>`,esc(t.km?nfmt(t.km,1):'—'),tripChip(t)]),
+      'No deliveries for this customer yet.'))):'')+
     (type==='suppliers'?section('co-purchases',panel('Purchases',table(['Request','Receiving location','Lines','Status','Action'],purchases.map(p=>[
       esc(p.no),esc(locName(state,p.location)),esc(p.lines.length),chip(p.status==='Ordered'&&p.lines.some(l=>l.received>0)?'Partially received':p.status),
       small('View',`closeModal();purchaseView(${escapeArg(p.id)})`)]),'No purchase requests yet.'))):'')+
@@ -4470,7 +4476,11 @@ function filterTable(el){
   if(card.querySelector('.tbl tbody')&&!card.querySelector('.o-card')){listState(card).q=el.value;listState(card).page=0;applyList(card);return;}
   const query=searchKey(el.value).split(' ').filter(Boolean);
   let matches=0;
-  card.querySelectorAll('tbody tr, .o-card').forEach(tr=>{
+  card.querySelectorAll('.o-listview tbody tr').forEach(tr=>{
+    const text=searchKey(tr.dataset.search||tr.textContent), words=text.split(' ');
+    tr.hidden=!query.every(token=>text.includes(token)||words.some(word=>word.startsWith(token)||(token.length>=4&&searchDistance(token,word)<=(token.length>=8?2:1))));
+  });
+  card.querySelectorAll('.o-card').forEach(tr=>{
     const text=searchKey(tr.dataset.search||tr.textContent), words=text.split(' ');
     tr.hidden=!query.every(token=>text.includes(token)||words.some(word=>word.startsWith(token)||
       (token.length>=4&&searchDistance(token,word)<=(token.length>=8?2:1))));
@@ -4519,15 +4529,29 @@ function simpleCompanyPage(type){
           ${address(r)?`<div class="o-card-line o-muted">${esc(address(r))}</div>`:''}
           <div class="o-card-tags">${vendor&&supplies.length?`<span class="o-tag">${supplies.length} materials</span>`:''}${open?`<span class="o-tag">${open} open ${vendor?'purchases':'orders'}</span>`:''}${r.active===false?'<span class="o-tag">Archived</span>':''}</div></div>`};
     }),{placeholder:vendor?'Search vendors by name, phone, address or material…':'Search customers by name, phone, position or address…',
-      noun:vendor?'vendors':'customers',empty:'No '+title.toLowerCase()+'s yet. Click New to add the first one.'});
+      noun:vendor?'vendors':'customers',empty:'No '+title.toLowerCase()+'s yet. Click New to add the first one.',
+      list:{columns:['Name',...(vendor?[]:['Position']),'Phone',vendor?'Address':'Delivery address','Code',vendor?'Open purchases':'Open orders'],
+        rows:rows.map(r=>[`<div class="record-media co-media">${companyAvatar(r)}<div>${cell(r.name)}</div></div>`+openBtn(`masterView(${escapeArg(type)},${escapeArg(r.id)})`),
+          ...(vendor?[]:[esc(r.position||'—')]),esc(r.phone||'—'),esc(address(r)||'—'),esc(r.code),esc(openCount(r)||'—')])}});
 }
-/* Odoo-style kanban: a big centered search and clickable cards. */
-function kanban(cards,{placeholder='Search…',noun='records',empty='Nothing here yet.'}={}){
-  return `<div class="card o-kanban-wrap" data-noun="${esc(noun)}"><div class="o-search-hero"><div class="search">${ic('search')}
+/* Odoo-style kanban: cards several per row, with a Kanban / List switch (remembered per page). */
+function savedView(){try{return localStorage.getItem('ambs-view-'+App.route)||'kanban';}catch{return 'kanban';}}
+function switchView(btn,mode){
+  const wrap=btn.closest('.o-kanban-wrap');wrap.classList.toggle('is-list',mode==='list');
+  wrap.querySelectorAll('.o-view-btn').forEach(b=>b.classList.toggle('on',b.dataset.v===mode));
+  try{localStorage.setItem('ambs-view-'+App.route,mode);}catch{}
+}
+function kanban(cards,{placeholder='Search…',noun='records',empty='Nothing here yet.',list=null}={}){
+  const mode=list?savedView():'kanban';
+  return `<div class="card o-kanban-wrap${mode==='list'?' is-list':''}" data-noun="${esc(noun)}"><div class="o-search-hero"><div class="search">${ic('search')}
     <input class="inp" aria-label="Search" placeholder="${esc(placeholder)}" oninput="filterTable(this)" autocomplete="off"></div>
-    <span class="pill-legend">${cards.length} ${esc(noun)}</span></div>
+    <span class="pill-legend">${cards.length} ${esc(noun)}</span>
+    ${list?`<div class="o-view-switch" role="group" aria-label="View">
+      <button type="button" class="o-view-btn${mode==='kanban'?' on':''}" data-v="kanban" title="Kanban" aria-label="Kanban view" onclick="switchView(this,'kanban')">${ic('grid')}</button>
+      <button type="button" class="o-view-btn${mode==='list'?' on':''}" data-v="list" title="List" aria-label="List view" onclick="switchView(this,'list')">${ic('list')}</button></div>`:''}</div>
     <div class="o-kanban">${cards.length?cards.map(c=>`<div class="o-card" role="button" tabindex="0" data-search="${esc(c.search)}"
-      onclick="${c.open}" onkeydown="if(event.key==='Enter')this.click()">${c.html}</div>`).join(''):`<div class="o-empty">${esc(empty)}</div>`}</div></div>`;
+      onclick="${c.open}" onkeydown="if(event.key==='Enter')this.click()">${c.html}</div>`).join(''):`<div class="o-empty">${esc(empty)}</div>`}</div>
+    ${list?`<div class="o-listview">${table(list.columns,list.rows,empty,cards.map(c=>c.search))}</div>`:''}</div>`;
 }
 function companyPage(type){
   if(type!=='processors')return simpleCompanyPage(type);

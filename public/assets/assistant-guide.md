@@ -42,7 +42,7 @@ Keywords: edit, save, discard, status bar, tabs, history, sort, filter, group by
 Keywords: menu, top bar, open record, click row, breadcrumb, new button, search
 
 - The menu is a **top bar**: Overview, Contacts & Products, Master Data, Operations, System — hover or click a group to see its pages.
-- **Customers, Vendors and Drivers** open with a big search box in the middle and cards below. Type to filter, click a card to open it.
+- **Customers, Vendors and Drivers** show cards, several per row. Type in the search box to filter, click a card to open it. Customers and Vendors have a **Kanban / List** switch at the top right (cards or table rows); the choice is remembered. A customer's page has a **Deliveries** tab listing every trip for that customer.
 - In every list, **click a row** to open the record as a full page. The breadcrumb at the top (e.g. *Customers / Emaar*) goes back to the list.
 - **Edit** and **Delete** (and BOM, Variants, Archive where they apply) are at the top of the record page — no buttons on every row.
 - **New** (top right of a list) adds a record.
