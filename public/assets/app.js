@@ -6915,64 +6915,50 @@ function liveChip(){
 }
 
 /* ---------------- Dashboard ---------------- */
+/* Main dashboard: a few big numbers, what to do now, what is on the road, and the latest stock movements — in plain words. */
 function dashboard(){
   Live.start();
-  const today=todayISO(), dayMs=864e5, balances=stockRows(state);
-  const days=Array.from({length:14},(_,i)=>{const d=new Date(Date.now()-(13-i)*dayMs), iso=d.toISOString().slice(0,10);
-    return {iso,label:d.toLocaleDateString('en-GB',{weekday:'short',day:'2-digit',month:'short'}),short:d.toLocaleDateString('en-GB',{day:'2-digit',month:'short'}),in:0,out:0};});
-  const byDay=new Map(days.map(d=>[d.iso,d]));
-  for(const e of state.events){const d=byDay.get((e.at||'').slice(0,10));if(d)for(const l of e.lines)l.delta>0?d.in++:d.out++;}
-  const since30=new Date(Date.now()-30*dayMs).toISOString(), moved=new Map();
-  for(const e of state.events)if((e.at||'')>=since30)for(const l of e.lines)moved.set(l.sku,(moved.get(l.sku)||0)+1);
-  const byLoc=new Map();for(const b of balances)if(b.qty>EPS)byLoc.set(b.location,(byLoc.get(b.location)||0)+1);
-  const month=state.trips.filter(t=>monthKey(t.date)===thisMonth()&&t.status!=='Cancelled');
-  const moving=state.trips.filter(t=>t.status==='On the way'), waiting=state.trips.filter(t=>t.status==='Next');
-  const blocked=state.drivers.filter(d=>d.active!==false&&!papersOk(d)), soon=state.drivers.filter(d=>d.active!==false&&papersOk(d)&&papersSoon(d).length);
-  const openSales=state.sales.filter(o=>SALES_OPEN.includes(o.status)), openJobs=state.jobs.filter(j=>['Open','Partially delivered'].includes(j.status));
+  const balances=stockRows(state), held=new Set(balances.filter(b=>b.qty>EPS).map(b=>b.sku)).size;
+  const moving=state.trips.filter(t=>t.status==='On the way'), ready=state.trips.filter(t=>t.status==='Next');
+  const month=state.trips.filter(t=>t.status==='Delivered'&&monthKey(t.deliveredAt||t.date)===thisMonth());
+  let queue=0;try{queue=deliveryQueue().length;}catch{}
+  let warn=0;try{warn=warningRows().length;}catch{}
   const used=new Set(state.recipes.flatMap(r=>r.lines.map(l=>l.sku||l.variantId||l.partId)));
-  const out=current(state,'materials').filter(m=>used.has(m.id)&&physical(state,m.id)<=EPS);
-  const warnings=warningRows(), todayMoves=state.events.filter(e=>(e.at||'').slice(0,10)===today);
-  const driverRows=state.drivers.map(d=>{const t=month.filter(x=>x.driverId===d.id);return {label:d.name,value:t.length,sub:nfmt(tripKm(t),0)+' km',
-    tip:d.name+': '+t.length+' trips, '+nfmt(tripKm(t),1)+' km this month',go:`driverView(${escapeArg(d.id)})`};}).filter(r=>r.value).sort((a,b)=>b.value-a.value).slice(0,8);
-  const statusCounts=TRIP_STATUS.map(s=>state.trips.filter(t=>t.status===s).length);
+  const out=current(state,'materials').filter(m=>used.has(m.id)&&physical(state,m.id)<=EPS).length;
+  const n=(t,f)=>(state[t]||[]).filter(f).length, plural=(c,one,many)=>c+' '+(c===1?one:many);
+  const badPapers=state.drivers.filter(d=>d.active!==false&&!papersOk(d)).length;
+  const todo=[
+    [queue,`🚚 ${plural(queue,'order is','orders are')} waiting for a driver`,'deliveries','Assign driver'],
+    [ready.length,`🛻 ${plural(ready.length,'trip is','trips are')} ready to leave`,'deliveries','Start trip'],
+    [moving.length,`🛣️ ${plural(moving.length,'delivery is','deliveries are')} on the road — mark Delivered when done`,'deliveries','Open'],
+    [n('sales',o=>o.status==='Draft'),`🧾 ${plural(n('sales',o=>o.status==='Draft'),'sales order is','sales orders are')} still a draft`,'sales','Confirm'],
+    [n('purchases',x=>x.status==='Draft'),`🛒 ${plural(n('purchases',x=>x.status==='Draft'),'purchase is','purchases are')} not ordered yet`,'purchase','Mark ordered'],
+    [n('purchases',x=>x.status==='Ordered'),`📥 ${plural(n('purchases',x=>x.status==='Ordered'),'purchase is','purchases are')} waiting to be received`,'purchase','Receive'],
+    [n('orders',o=>o.status==='Draft'),`🏭 ${plural(n('orders',o=>o.status==='Draft'),'production order is','production orders are')} waiting to start`,'production','Release'],
+    [n('orders',o=>o.status==='Released'),`⚙️ ${plural(n('orders',o=>o.status==='Released'),'production order is','production orders are')} being made`,'production','Mark completed'],
+    [badPapers,`🛂 ${plural(badPapers,'driver has','drivers have')} missing or expired papers`,'drivers','Fix papers'],
+    [out+warn,`⚠️ ${plural(out+warn,'item is','items are')} out of stock or running low`,'materials','Check']].filter(x=>x[0]);
+  const hour=new Date().getHours(), hello=hour<12?'Good morning':hour<18?'Good afternoon':'Good evening';
+  const who=typeof CLOUD!=='undefined'&&CLOUD.name?', '+CLOUD.name.split(' ')[0]:'';
+  const big=(value,label,sub,go)=>`<button type="button" class="ow-big" onclick="App.go('${go}')"><b>${esc(value)}</b><span>${esc(label)}</span><small>${esc(sub)}</small></button>`;
+  const road=[...moving,...ready].slice(0,8), moves=activity().filter(r=>r.kind==='stock').slice(0,10);
   return head('Overview','Dashboard',liveChip())+
-    kpiRow([['layers','Items in stock',new Set(balances.filter(b=>b.qty>EPS).map(b=>b.sku)).size,byLoc.size+' locations holding stock','k-ink','tracking'],
-      ['swap','Movements today',todayMoves.length,todayMoves.reduce((n,e)=>n+e.lines.length,0)+' item lines moved','k-ok','tracking'],
-      ['truck','On the road',moving.length,waiting.length+' trips waiting to leave','k-yellow','deliveries'],
-      ['route','Deliveries this month',month.length,nfmt(tripKm(month),0)+' km driven','k-ink','deliveries'],
-      ['invoice','Open sales orders',openSales.length,openJobs.length+' open dispatch jobs','k-ink','sales'],
-      ['wrench','Production in progress',state.orders.filter(o=>['Draft','Released'].includes(o.status)).length,'Draft or released orders','k-ink','production'],
-      ['idcard','Driver papers',blocked.length,blocked.length?'Drivers who cannot deliver':soon.length?soon.length+' expiring within 30 days':'All drivers cleared',blocked.length?'k-red':'k-ok','drivers'],
-      ['alert','Stock alerts',out.length+warnings.length,out.length?out.length+' BOM materials out of stock':'No shortages',out.length+warnings.length?'k-red':'k-ok','materials']])+
-    (blocked.length?note('⛔ Cannot deliver until papers are fixed: '+blocked.map(d=>d.name+' — '+papersIssues(d)[0]).join(' · '),'bad'):'')+
+    `<h2 class="ow-hello">${hello}${esc(who)}.</h2><p class="sub ow-sub">Here is what is happening now and what needs doing. Click any line to open it.</p>`+
     (state.reviews.some(r=>!r.resolved)?note('Legacy data is available under Settings & Data for review.','warn'):'')+
-    `<div class="grid cols-2 dash-grid">
-      ${panel('Stock movements · last 14 days',`<div class="card-body">${columns(days,[{key:'in',label:'Stock in',color:VIZ[0]},{key:'out',label:'Stock out',color:VIZ[1]}])}</div>`)}
-      ${panel('Deliveries by status',`<div class="card-body">${segbar(TRIP_STATUS.map((s,i)=>({label:s,value:statusCounts[i],color:['var(--viz-neutral)','var(--viz-1)','var(--viz-ok)','var(--viz-bad)'][i]})))}
-        <h5 class="viz-h">Trips per driver · this month</h5>${hbars(driverRows,{empty:'No trips this month yet.',fmt:v=>v+' trips'})}</div>`)}
-      ${panel('Where stock is held · distinct items',`<div class="card-body">${hbars([...byLoc].sort((a,b)=>b[1]-a[1]).slice(0,8).map(([l,n])=>({label:locName(state,l),value:n,
-        tip:locName(state,l)+': '+n+' different items'})),{empty:'No stock recorded yet.',fmt:v=>nfmt(v,0)+' items'})}</div>`)}
-      ${panel('Most moved items · 30 days',`<div class="card-body">${hbars([...moved].sort((a,b)=>b[1]-a[1]).slice(0,8).map(([id,n])=>({label:item(state,id)?.name||'—',value:n,
-        tip:labelOf(state,id)+': '+n+' movements',go:`trackItem(${escapeArg(id)})`})),{empty:'No movements in the last 30 days.',fmt:v=>nfmt(v,0)+' moves'})}</div>`)}
-    </div>`+
-    `<div class="grid cols-2 dash-grid">
-      ${panel('Live movement feed',table(['When','Movement','Items','Change'],state.events.slice().sort(dateSort).slice(0,8).map(e=>[
-        esc(stamp(e.at)),esc(evType(e.type)),esc([...new Set(e.lines.map(l=>item(state,l.sku)?.name))].join(', ')),
-        e.lines.map(l=>`<span class="num ${l.delta<0?'trk-out':'trk-in'}">${l.delta<0?'':'+'}${esc(qfmt(l.delta,item(state,l.sku)?.unit))}</span>`).join(' ')]),'No movements yet.'))}
-      ${panel('Deliveries to watch',table(['Trip','Driver','Customer','Status'],[...moving,...waiting.sort((a,b)=>(b.priority==='Urgent')-(a.priority==='Urgent'))].slice(0,8).map(t=>[
-        `<button type="button" class="link-btn" onclick="tripView(${escapeArg(t.id)})">${esc(t.no)}</button>`,esc(get(state,'drivers',t.driverId)?.name||'—'),
-        cell(t.customerName||'—',t.location)+mapBtn(t.mapUrl),tripChip(t)]),'No open deliveries.'))}
-    </div>`+
-    (out.length||warnings.length?panel('Stock alerts',textTable(['Item','Alert','Location','Shortfall'],[
-      ...out.map(m=>[label(m),'Out of stock (used in a BOM)','All locations',qfmt(0,m.unit)]),...warnings])):'')+
-    (openSales.length?panel('Open sales orders',table(['Order','Customer','Requested delivery','Delivered','Status','Actions'],
-      openSales.sort((a,b)=>(a.due||'9999').localeCompare(b.due||'9999')).slice(0,8).map(o=>[
-        esc(o.no),esc(get(state,'customers',o.customerId)?.name),esc(o.due?fmtDate(o.due):'—'),
-        `<div class="viz-mini"><span style="width:${salesProgress(o)}%"></span></div>${esc(salesProgress(o)+'%')}`,chip(o.status),
-        small('View',`salesView(${escapeArg(o.id)})`)]))):'')+
-    `<div class="grid cols-2 dash-grid">${panel('Production orders',`<div class="card-body">${segbar(['Draft','Released','Completed','Cancelled'].map((s,i)=>({label:s,
-        value:state.orders.filter(o=>o.status===s).length,color:['var(--viz-neutral)','var(--viz-4)','var(--viz-ok)','var(--viz-bad)'][i]})))}</div>`)}
-      ${panel('Raw material stock by category',materialSummary())}</div>`;
+    `<div class="ow-bigs">${big(held,'Items in stock','different items in the stores','tracking')}
+      ${big(queue,'Waiting for a driver',queue?'orders ready to go out':'nothing waiting','deliveries')}
+      ${big(moving.length,'On the road',moving.length?moving.map(t=>get(state,'drivers',t.driverId)?.name).filter(Boolean).slice(0,2).join(', '):'no truck out right now','deliveries')}
+      ${big(month.length,'Delivered this month',month.length?nfmt(tripKm(month),0)+' km driven':'no deliveries yet','deliveries')}</div>`+
+    `<div class="ow-grid"><section class="card"><div class="card-head"><div class="card-title">What to do now</div></div>
+      <div class="ow-list">${todo.length?todo.map(([,text,go,act])=>`<button type="button" class="ow-line" onclick="App.go('${go}')"><span>${esc(text)}</span><em>${esc(act)} →</em></button>`).join(''):
+        '<div class="ow-ok">✅ All done — nothing is waiting.</div>'}</div></section>
+    <section class="card"><div class="card-head"><div class="card-title">Trucks out and waiting</div><button type="button" class="link-btn" onclick="App.go('deliveries')">All deliveries →</button></div>
+      <div class="ow-list">${road.length?road.map(t=>`<button type="button" class="ow-line" onclick="tripView(${escapeArg(t.id)})">
+        <span><span class="ow-who"><b>${esc(t.no)}</b> · ${esc(get(state,'drivers',t.driverId)?.name||'No driver')} → ${esc(t.customerName||'—')}</span><small>${esc(t.location||'')}</small></span>
+        <em>${t.status==='On the way'?'On the road':'Ready to leave'}</em></button>`).join(''):'<div class="ow-ok">No trips out or waiting.</div>'}</div></section></div>`+
+    `<section class="card"><div class="card-head"><div class="card-title">Latest stock movements</div><button type="button" class="link-btn" onclick="App.go('tracking')">Live Tracking →</button></div>
+      <div class="ow-list">${moves.map(r=>`<button type="button" class="ow-line" onclick="${r.open}"><span>${esc(activitySentence(r))}</span><em>${esc(agoText(r.at))}</em></button>`).join('')||
+        '<div class="ow-ok">No stock has moved yet.</div>'}</div></section>`;
 }
 
 /* ---------------- Odoo-style global search: menus as "AMBS / Group / Page", then matching records ---------------- */
