@@ -3387,11 +3387,11 @@ async function imageValue(form,existing=''){
   need(validImage(value)&&value.length<=350000,'This image is too detailed to save. Choose a smaller image.');
   return value;
 }
-function imageField(old){
+function imageField(old,title='Image'){
   return `<div class="image-picker full" data-image-picker><div class="image-preview" role="status">
     ${validImage(old)?thumb(old,'Current image','thumb-preview'):
       `<div class="image-preview-empty">${ic('box')}<span>No image selected</span></div>`}</div>
-    ${input('Image','photo','',{type:'file',full:true,extra:'accept="image/png,image/jpeg,image/webp,image/gif"'})}
+    ${input(title,'photo','',{type:'file',full:true,extra:'accept="image/png,image/jpeg,image/webp,image/gif"'})}
     <div class="image-hint">PNG, JPEG, WebP or GIF · The image is optimized when you save.</div>
     ${old?tick('Remove saved image','removeImage'):''}</div>`;
 }
@@ -3800,6 +3800,7 @@ function materialFields(row,old){
   return input('Material name','name',row.name,{full:true,extra:'autofocus'})+
     input('Code','code',row.code||nextMaterialCode(state))+
     input('Category','category',row.category,{extra:'list="erp-categories"'})+
+    imageField(row.image,'Material photo')+
     suggestedInput('Unit','unit',row.unit||'PCS',unitChoices(),true)+
     number('Bundle quantity (units per bundle)','bundle',row.bundle??0,0,1)+
     (old?input('Opening / initial stock','opening',qfmt(opening),{extra:'readonly'}):
@@ -3812,7 +3813,7 @@ function materialFields(row,old){
     number('Rate (AED per piece)','ratePc',row.ratePc??0)+
     input('Dimensions / specifications','dimensions',row.dimensions,{full:true})+
     `<div class="field full material-help">Opening stock is posted once to the selected location. Later changes go through Inventory &amp; Stock Movements. Bundle quantities round purchase suggestions.</div>`+
-    imageField(row.image)+tick('Active (available for planning and movements)','active',row.active!==false);
+    tick('Active (available for planning and movements)','active',row.active!==false);
 }
 /* Companies (customers, suppliers, processing companies): tabbed profile form and overview page. */
 const PAYMENT_TERMS=['Advance payment','Cash on delivery','Immediate payment','7 days','15 days','30 days','45 days','60 days','90 days'];
@@ -3827,6 +3828,12 @@ function logoUploader(type,r,size='co-avatar-sm'){
     <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden aria-label="Upload logo for ${esc(r.name)}"
       onchange="uploadCompanyLogo(${escapeArg(type)},${escapeArg(r.id)},this)"></label>`;
 }
+function photoUploader(type,r,size='thumb-record'){
+  return `<label class="photo-up" data-tip="${validImage(r.image)?'Change photo':'Upload a photo'}" onclick="event.stopPropagation()">
+    ${recordPicture(r,size)}<span class="co-avatar-cam" aria-hidden="true">${ic('plus')}</span>
+    <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden aria-label="Upload photo for ${esc(r.name)}"
+      onchange="uploadCompanyLogo(${escapeArg(type)},${escapeArg(r.id)},this)"></label>`;
+}
 async function uploadCompanyLogo(type,id,inputEl){
   if(!inputEl.files[0])return;
   const holder=document.createElement('form'), viewing=!!inputEl.closest('.modal');
@@ -3836,7 +3843,7 @@ async function uploadCompanyLogo(type,id,inputEl){
     const image=await imageValue(holder,'');
     await commit(s=>{const row=get(s,type,id);need(row,'This record no longer exists.');row.image=image;row.at=now();});
     if(viewing){closeModal();type==='drivers'?driverView(id):masterView(type,id);}
-    App.render();toast(type==='drivers'?'Photo saved.':'Logo saved.','ok');
+    App.render();toast(COMPANIES.includes(type)?'Logo saved.':'Photo saved.','ok');
   }catch(e){toast(e.message,'bad');}
   finally{inputEl.value='';}
 }
@@ -3891,7 +3898,7 @@ function mapField(title,value,hint){
     `<p class="sub full map-help">${ic('pin')} In Google Maps open the place, tap <b>Share → Copy link</b> and paste it here. Coordinates like <b>25.2048, 55.2708</b> also work.</p>`;
 }
 function deliverySite(s,type,id){return s.locations.find(l=>l.ownerType===type&&l.ownerId===id&&l.delivery);}
-/* Customers and vendors: one short form — name, code, phone, position and (delivery) address. */
+/* Customers: name, code, phone, position, delivery address. Vendors: name, code, phone, address, materials supplied. */
 function simpleCompanyEdit(type,id){
   const old=get(state,type,id), row=old||{}, vendor=type==='suppliers', title=ENTITY[type];
   const address=row.address||deliverySite(state,type,id)?.address||'';
@@ -3899,15 +3906,15 @@ function simpleCompanyEdit(type,id){
     ${input('Name','name',row.name,{full:true,extra:`placeholder="${vendor?'e.g. Metal Solution Trading':'e.g. Emaar Construction LLC'}"`})}
     ${input('Code','code',row.code||nextCode(state,type),{extra:'placeholder="Left empty, a code is given automatically"'})}
     ${phoneField('Phone number','phone',row.phone)}
-    ${input('Position','position',row.position,{extra:`placeholder="${vendor?'e.g. Sales Manager':'e.g. Project Manager'}"`})}
+    ${vendor?'':input('Position','position',row.position,{extra:'placeholder="e.g. Project Manager"'})}
     ${input(vendor?'Address':'Delivery address','address',address,{full:true,extra:`placeholder="${vendor?'e.g. Al Quoz Industrial Area 3, Dubai':'e.g. Dubai Hills, Building 3, Gate 2'}"`})}
     ${mapField(vendor?'Google Maps location':'Customer location (Google Maps link)',companyMap(type,row),'e.g. https://maps.app.goo.gl/…')}
-    ${imageField(row.image).replace('>Image</label>','>Logo / photo</label>')}
+    ${imageField(row.image,'Logo / photo')}
     </div>`+(vendor?`<h4 class="erp-sub-head">Materials this vendor supplies</h4>
     <p class="sub" style="margin:-4px 0 10px">Pick a material and how many bundles. A new line appears by itself when you fill the last one.</p>
     <div data-supplies></div>`:''),async f=>{
     const data={...old,id:id||key(),name:valOf(f,'name'),code:valOf(f,'code'),phone:readPhone(f,'phone'),
-      position:valOf(f,'position'),address:valOf(f,'address'),mapUrl:readMapUrl(f,'mapUrl'),active:old?.active!==false};
+      position:vendor?old?.position||'':valOf(f,'position'),address:valOf(f,'address'),mapUrl:readMapUrl(f,'mapUrl'),active:old?.active!==false};
     data.image=await imageValue(f,old?.image);
     if(vendor){
       data.supplies=supplyLines().map(l=>({sku:fieldValue(l,'sku'),bundles:qty(fieldValue(l,'bundles')||0,'Bundles',true)}));
@@ -3944,7 +3951,7 @@ function companyEdit(type,id){
     ${input(type==='processors'?'Services (comma separated)':'Business / Supply details','details',row.details)}
     ${input('Address','address',row.address,{full:true})}
     ${input('City / emirate','city',row.city)}${input('Country','country',row.country??'United Arab Emirates')}
-    ${imageField(row.image).replace('>Image</label>','>Logo</label>')}</div>`;
+    ${imageField(row.image,'Logo')}</div>`;
   const commercial=`<div class="form-grid">
     ${suggestedInput('Payment terms','paymentTerms',row.paymentTerms||'',PAYMENT_TERMS)}
     ${type==='customers'?input('Credit limit (AED, optional)','creditLimit',row.creditLimit??'',{type:'number',extra:'min="0" step="0.01"'}):
@@ -4035,7 +4042,7 @@ function companyView(type,id){
   if(type==='suppliers')smart.unshift(['stack','Materials supplied',supplies.length,nfmt(supplies.reduce((n,x)=>n+x.bundles,0),2)+' bundles in total','co-supplies']);
   const simple=type!=='processors';
   if(simple)for(let i=smart.length-1;i>=0;i--)if(['Contacts','Locations'].includes(smart[i][1])&&!smart[i][2])smart.splice(i,1);
-  const details=simple?[['Code',esc(r.code)],['Position',esc(r.position||'—')],
+  const details=simple?[['Code',esc(r.code)],...(type==='customers'?[['Position',esc(r.position||'—')]]:[]),
     ['Phone',r.phone?link('tel:'+r.phone.replace(/[^\d+]/g,''),r.phone):'—'],
     [type==='customers'?'Delivery address':'Address',esc(r.address||deliverySite(state,type,id)?.address||'—')],
     ['Location on map',companyMap(type,r)?mapBtn(companyMap(type,r),'Open in Google Maps'):'<span class="sub">No Google Maps link yet — click Edit to add it</span>']]:[
@@ -4306,7 +4313,7 @@ function masterView(type,id){
   const r=get(state,type,id);
   const locations=COMPANIES.includes(type)?companyLocations(state,type,id,false):[];
   const packing=type==='products'?productPacking(state,r,get(state,'recipes',id)):null;
-  infoModal(label(r),(!COMPANIES.includes(type)?`<div class="record-detail-image">${recordPicture(r,'thumb-detail')}</div>`:'')+
+  infoModal(label(r),(!COMPANIES.includes(type)?`<div class="record-detail-image">${type==='materials'?photoUploader(type,r,'thumb-detail'):recordPicture(r,'thumb-detail')}</div>`:'')+
     kv([['Status',r.active===false?'Archived':'Active'],['Category',r.category],['Specifications',r.dimensions],
     ['Type',type==='products'?packingCategory(r.category)?.type:''],['Default order quantity',r.orderQty],['Size',type==='products'?'':r.size],['Color',type==='products'?'':r.color],['Unit',r.unit],['Source',r.source],['Contact person',r.contact],['Email',r.email],['Phone',r.phone],['Services / supply',r.details],['Notes',r.notes]])+
     (locations.length?panel('Linked locations',table(['Name','Address','City','Notes','Status','Map'],
@@ -4358,7 +4365,7 @@ function materialPage(){
     const onOrder=state.purchases.filter(p=>p.status==='Ordered').reduce((total,p)=>total+
       p.lines.filter(line=>line.sku===material.id).reduce((sum,line)=>sum+Math.max(0,line.qty-line.received),0),0);
     const health=materialHealth(material,onHand),args=`'materials',${escapeArg(material.id)}`;
-    return [esc(material.code),`<div class="record-media">${recordPicture(material)}<div>${cell(material.name,material.category)}</div></div>`,
+    return [esc(material.code),`<div class="record-media">${photoUploader('materials',material)}<div>${cell(material.name,material.category)}</div></div>`,
       `<span class="num">${esc(qfmt(materialOpening(state,material.id)))}</span>`,
       `<span class="material-balance ${health.cell}"><strong class="num">${esc(qfmt(onHand))}</strong> <span>${esc(material.unit)}</span></span>`,
       `<span class="num">${esc(qfmt(material.bundle??0))}</span>`,
@@ -4380,11 +4387,11 @@ function simpleCompanyPage(type){
     state.sales.filter(o=>o.customerId===r.id&&SALES_OPEN.includes(o.status)).length;
   const address=r=>r.address||deliverySite(state,type,r.id)?.address||companyLocations(state,type,r.id)[0]?.address||'';
   return head('Contacts',TITLES[type],button('Add '+title,`masterEdit(${escapeArg(type)})`,'btn-primary','plus'))+
-    searchableTable(['Code','Name','Position','Phone',vendor?'Address':'Delivery address',...(vendor?['Materials']:[]),vendor?'Open purchases':'Open sales','Actions'],
+    searchableTable(['Code','Name',...(vendor?[]:['Position']),'Phone',vendor?'Address':'Delivery address',...(vendor?['Materials']:[]),vendor?'Open purchases':'Open sales','Actions'],
     state[type].map(r=>{
       const args=`${escapeArg(type)},${escapeArg(r.id)}`, open=openCount(r), supplies=vendorSupplies(r);
       return [esc(r.code),`<div class="record-media co-media">${logoUploader(type,r)}<div>${cell(r.name)}${r.active===false?chip('Archived'):''}</div></div>`,
-        esc(r.position||companyContacts(r)[0]?.job||'—'),
+        ...(vendor?[]:[esc(r.position||companyContacts(r)[0]?.job||'—')]),
         r.phone?`<a class="co-link" href="tel:${esc(r.phone.replace(/[^\d+]/g,''))}">${esc(r.phone)}</a>`:'—',
         `<div class="addr-cell"><span>${esc(address(r)||'—')}</span>${mapBtn(companyMap(type,r))}</div>`,
         ...(vendor?[supplies.length?`<span class="co-count">${supplies.length}</span> <span class="sub">${esc(nfmt(supplies.reduce((n,x)=>n+x.bundles,0),2))} bundles</span>`:'<span class="sub">0</span>']:[]),
@@ -4393,7 +4400,7 @@ function simpleCompanyPage(type){
           dangerSmall('Delete',`deleteMaster(${args})`))];
     }),'Add your first '+title.toLowerCase()+'.',
     state[type].map(r=>[r.code,r.name,r.position,r.phone,address(r),...vendorSupplies(r).map(x=>label(get(state,'materials',x.sku)))].filter(Boolean).join(' ')),
-    {placeholder:'Search by name, code, phone, position or address…',noun:vendor?'vendors':'customers'});
+    {placeholder:vendor?'Search by name, code, phone, address or material…':'Search by name, code, phone, position or address…',noun:vendor?'vendors':'customers'});
 }
 function companyPage(type){
   if(type!=='processors')return simpleCompanyPage(type);
@@ -5967,7 +5974,7 @@ function driverEdit(id){
     <div class="field full papers-confirm"><label><input name="hasPapers" type="checkbox" ${d.hasPapers?'checked':''}>
       <span><b>Official papers checked and on file</b><small>Licence, Emirates ID and vehicle registration were seen and copies are kept.</small></span></label></div>
     ${area('Notes','notes',d.notes)}
-    ${imageField(d.image).replace('>Image</label>','>Driver photo</label>')}</div>`,async f=>{
+    ${imageField(d.image,'Driver photo')}</div>`,async f=>{
     const data={...old,id:id||key(),name:valOf(f,'name'),phone:readPhone(f,'phone'),kind:valOf(f,'kind')||DRIVER_KINDS[0],
       vehiclePlate:valOf(f,'vehiclePlate'),vehicleType:valOf(f,'vehicleType'),vehicleExpiry:valOf(f,'vehicleExpiry'),
       licenseNo:valOf(f,'licenseNo'),licenseExpiry:valOf(f,'licenseExpiry'),emiratesId:valOf(f,'emiratesId'),idExpiry:valOf(f,'idExpiry'),

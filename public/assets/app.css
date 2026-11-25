@@ -919,3 +919,10 @@ body[data-page="tracking"]{--pc:#06b6d4} body[data-page="drivers"]{--pc:#f97316}
 .co-avatar-lg+.co-avatar-cam,.co-avatar-up:has(.co-avatar-lg) .co-avatar-cam{width:26px;height:26px}
 .co-avatar-up:has(.co-avatar-lg) .co-avatar-cam svg{width:14px;height:14px}
 .co-avatar-up:focus-within{outline:3px solid color-mix(in srgb,var(--pc,var(--red)) 40%,transparent);outline-offset:2px}
+/* Click-to-upload photos on raw materials */
+.photo-up{position:relative;display:inline-grid;flex:0 0 auto;cursor:pointer}
+.photo-up img,.photo-up .thumb-ph{transition:filter .15s}
+.photo-up:hover img,.photo-up:hover .thumb-ph{filter:brightness(.85)}
+.photo-up:focus-within{outline:3px solid color-mix(in srgb,var(--pc,var(--red)) 40%,transparent);outline-offset:2px;border-radius:12px}
+.record-detail-image .photo-up .co-avatar-cam{width:28px;height:28px;right:-6px;bottom:-6px}
+.record-detail-image .photo-up .co-avatar-cam svg{width:15px;height:15px}
