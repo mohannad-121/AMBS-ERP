@@ -381,13 +381,13 @@ function drawPDFTable(doc,options){
   const head=options.head[0], margin=options.margin||{}, left=margin.left??40, right=margin.right??40;
   const width=doc.internal.pageSize.getWidth()-left-right, stop=doc.internal.pageSize.getHeight()-(margin.bottom??40);
   const fontSize=options.styles?.fontSize||8.5, pad=options.styles?.cellPadding||4;
-  const step=fontSize*1.2, col=width/head.length;
+  const step=fontSize*1.2, cols=options.widths?options.widths.map(w=>w*width):head.map(()=>width/head.length);
   let y=options.startY??margin.top??70;
   function content(row){
     let x=left;
     return row.map((raw,index)=>{
       const cell=raw&&typeof raw==='object'?raw:{content:raw};
-      const span=Math.min(cell.colSpan||1,head.length-index), area=col*span;
+      const span=Math.min(cell.colSpan||1,head.length-index), area=cols.slice(index,index+span).reduce((n,w)=>n+w,0);
       const strings=doc.splitTextToSize(String(cell.content??''),area-pad*2);
       const result={x,area,strings,style:cell.styles||{}};
       x+=area;return result;
@@ -3418,11 +3418,33 @@ function infoModal(title,body,footer=''){
     const sheet=$('.o-sheet',view), header=$(':scope > .o-form-header',sheet);
     if(header)view.querySelector('.o-form-wrap').before(header);
     makeNotebook(sheet);
+    gearActions(view);
     return view;
   }
   return openModal(`<div class="modal-head"><h3>${esc(title)}</h3><button class="x" aria-label="Close" onclick="closeModal()">${ic('x')}</button></div>
     <div class="modal-body erp-modal-body">${body}</div><div class="modal-foot">${footer}<button class="btn btn-ghost" onclick="closeModal()">Close</button></div>`,'lg');
 }
+/* Odoo keeps only the next step visible; PDF, Delete, Archive, Cancel and links live under one ⚙ Actions menu. */
+const GEAR=/^(PDF|Download PDF|Excel|Delete|Archive|Restore|Cancel|Partial delivery|Variants|Driver|Sales order|Dispatch job|View company|Packing list)\b/;
+function gearActions(view){
+  const cp=view.querySelector('.o-cp-actions');if(!cp)return;
+  const spots=[cp,view.querySelector('.o-form-header .o-fh-actions')].filter(Boolean);
+  const moved=spots.flatMap(s=>[...s.querySelectorAll('button,a.btn,a.o-pin')].filter(b=>GEAR.test(b.textContent.trim())));
+  if(!moved.length)return;
+  const menu=document.createElement('details');menu.className='o-gear';
+  menu.innerHTML=`<summary class="btn btn-sm" title="More actions">${ic('gear')}Actions</summary><div class="o-gear-menu" role="menu"></div>`;
+  const list=menu.querySelector('.o-gear-menu');
+  const isDanger=b=>/^Delete/.test(b.textContent.trim());
+  for(const b of [...moved.filter(b=>!isDanger(b)),...moved.filter(isDanger)]){
+    const danger=isDanger(b);
+    b.className='o-gear-item'+(danger?' danger':'');b.setAttribute('role','menuitem');
+    if(danger&&list.children.length&&!list.querySelector('.o-gear-sep'))list.insertAdjacentHTML('beforeend','<div class="o-gear-sep"></div>');
+    list.append(b);
+  }
+  menu.addEventListener('click',e=>{if(e.target.closest('.o-gear-item'))menu.open=false;});
+  cp.prepend(menu);
+}
+document.addEventListener('click',e=>{document.querySelectorAll('details.o-gear[open]').forEach(d=>{if(!d.contains(e.target))d.open=false;});});
 function approval(title,description,work,text='Confirm'){
   return formModal(title,note(description),async()=>{
     await commit(work);
@@ -3584,7 +3606,7 @@ function mapsLink(location){
 }
 function mapAction(l){
   const url=mapsLink(l);
-  return url?`<a class="btn btn-sm" href="${esc(url)}" target="_blank" rel="noopener noreferrer">Open in Google Maps</a>`:'';
+  return url?`<a class="o-pin o-pin-text" href="${esc(url)}" target="_blank" rel="noopener noreferrer" title="Open in Google Maps">${ic('pin')}Map</a>`:'';
 }
 function locationFields(l,n,owned){
   return `<legend>${esc(l.name||'Location')}</legend><div class="form-grid">
@@ -4003,7 +4025,10 @@ function readMapUrl(form,name){
   return url;
 }
 function mapBtn(url,text='Map'){
-  return url?`<a class="btn btn-sm btn-map" href="${esc(url)}" target="_blank" rel="noopener noreferrer" data-tip="Open in Google Maps">${ic('pin')}${esc(text)}</a>`:'';
+  if(!url)return '';
+  const tip='Open in Google Maps';
+  return text==='Map'?`<a class="o-pin" href="${esc(url)}" target="_blank" rel="noopener noreferrer" title="${tip}" aria-label="${tip}">${ic('pin')}</a>`:
+    `<a class="o-pin o-pin-text" href="${esc(url)}" target="_blank" rel="noopener noreferrer" title="${tip}">${ic('pin')}${esc(text)}</a>`;
 }
 const companyMap=(type,r)=>r?r.mapUrl||deliverySite(state,type,r.id)?.url||'':'';
 function mapField(title,value,hint){
@@ -4156,7 +4181,7 @@ function companyView(type,id){
   const supplies=type==='suppliers'?vendorSupplies(r):[];
   if(type==='suppliers')smart.unshift(['stack','Materials supplied',supplies.length,nfmt(supplies.reduce((n,x)=>n+x.bundles,0),2)+' bundles in total','co-supplies']);
   const simple=type!=='processors';
-  if(simple)for(let i=smart.length-1;i>=0;i--)if(['Contacts','Locations'].includes(smart[i][1])&&!smart[i][2])smart.splice(i,1);
+  if(simple)for(let i=smart.length-1;i>=0;i--)if(!smart[i][2]||smart[i][2]==='—')smart.splice(i,1);
   const details=simple?[['Code',esc(r.code)],...(type==='customers'?[['Position',esc(r.position||'—')]]:[]),
     ['Phone',r.phone?link('tel:'+r.phone.replace(/[^\d+]/g,''),r.phone):'—'],
     [type==='customers'?'Delivery address':'Address',esc(r.address||deliverySite(state,type,id)?.address||'—')],
@@ -4191,21 +4216,21 @@ function companyView(type,id){
     (simple&&!sites.length?'':section('co-locations',panel('Locations',table(['Name','Address','City','Holds AMBS stock','Status','Map'],sites.map(l=>[
       esc(l.name),esc(l.address),esc(l.city),l.stock?statusChip('ok','Yes'):'No',chip(l.active===false?'Archived':'Active'),mapAction(l)]),
       'No locations yet. Click Edit → Locations to add sites.'))))+
-    (type==='customers'?section('co-sales',panel('Sales orders',table(['Order','Order date','Requested','Delivered','Value (AED)','Status','Action'],sales.map(o=>[
+    (type==='customers'?section('co-sales',panel('Sales orders',table(['Order','Order date','Requested','Delivered','Value (AED)','Status',''],sales.map(o=>[
       cell(o.no,o.reference),esc(fmtDate(o.date)),esc(o.due?fmtDate(o.due):'—'),esc(salesProgress(o)+'%'),esc(salesTotal(o)?nfmt(salesTotal(o),2):'—'),chip(o.status),
-      small('View',`closeModal();salesView(${escapeArg(o.id)})`)]),'No sales orders yet.'))):'')+
-    (type==='customers'&&jobs.length?section('co-jobs',panel('Dispatch jobs',table(['Job','Product','Delivered','Status','Action'],jobs.map(j=>[
-      cell(j.no,j.name),esc(labelOf(state,j.productId)),esc(j.delivered+' / '+j.qty),chip(j.status),small('View',`closeModal();dispatchView(${escapeArg(j.id)})`)])))):'')+
+      openBtn(`salesView(${escapeArg(o.id)})`)]),'No sales orders yet.'))):'')+
+    (type==='customers'&&jobs.length?section('co-jobs',panel('Dispatch jobs',table(['Job','Product','Delivered','Status'],jobs.map(j=>[
+      cell(j.no,j.name)+openBtn(`dispatchView(${escapeArg(j.id)})`),esc(labelOf(state,j.productId)),esc(j.delivered+' / '+j.qty),chip(j.status)])))):'')+
     (type==='customers'?section('co-trips',panel('Deliveries',table(['Trip','Date','Driver','Deliver to','Km','Status'],
       state.trips.filter(t=>t.customerId===id).sort((x,y)=>String(y.date).localeCompare(String(x.date))).map(t=>[
         cell(t.no,t.description)+openBtn(`tripView(${escapeArg(t.id)})`),esc(fmtDate(t.date)),esc(get(state,'drivers',t.driverId)?.name||'—'),
         `<div class="addr-cell"><span>${esc(t.location||'—')}</span>${mapBtn(t.mapUrl)}</div>`,esc(t.km?nfmt(t.km,1):'—'),tripChip(t)]),
       'No deliveries for this customer yet.'))):'')+
-    (type==='suppliers'?section('co-purchases',panel('Purchases',table(['Request','Receiving location','Lines','Status','Action'],purchases.map(p=>[
+    (type==='suppliers'?section('co-purchases',panel('Purchases',table(['Request','Receiving location','Lines','Status',''],purchases.map(p=>[
       esc(p.no),esc(locName(state,p.location)),esc(p.lines.length),chip(p.status==='Ordered'&&p.lines.some(l=>l.received>0)?'Partially received':p.status),
-      small('View',`closeModal();purchaseView(${escapeArg(p.id)})`)]),'No purchase requests yet.'))):'')+
-    (orders.length?section('co-orders',panel('Production orders',table(['Order','Part / SKU','Qty','Status','Action'],orders.map(o=>[
-      esc(o.no),esc(labelOf(state,o.sku)),esc(o.qty),chip(o.status),small('View',`closeModal();orderView(${escapeArg(o.id)})`)])))):'')+
+      openBtn(`purchaseView(${escapeArg(p.id)})`)]),'No purchase requests yet.'))):'')+
+    (orders.length?section('co-orders',panel('Production orders',table(['Order','Part / SKU','Qty','Status'],orders.map(o=>[
+      esc(o.no)+openBtn(`orderView(${escapeArg(o.id)})`),esc(labelOf(state,o.sku)),esc(o.qty),chip(o.status)])))):'')+
     section('co-stock',panel('Stock at this company’s sites',textTable(['Item / SKU','Location','Balance'],stock.map(b=>[
       labelOf(state,b.sku),locName(state,b.location),qfmt(b.qty,item(state,b.sku)?.unit)]),'No stock is held at this company’s sites.')))+
     section('co-moves',panel('Recent stock movements',events.length?eventsTable(events.slice(0,15)):table(['Movement'],[],'No stock movements linked to this company yet.'))),
@@ -4426,8 +4451,8 @@ function connectedPanels(type,row){
   const history=movements.length?panel('Recent linked stock movements',eventsTable(movements.slice(-15))):'';
   const bomOwners=type==='materials'?state.recipes.filter(recipe=>recipe.kind==='part'&&recipe.lines.some(line=>line.sku===row.id)):
     type==='parts'?state.recipes.filter(recipe=>recipe.kind==='product'&&recipe.lines.some(line=>line.partId===row.id)):[];
-  const boms=bomOwners.length?panel('Used in BOMs',table(['Owner','Type','Action'],bomOwners.map(recipe=>[
-    esc(label(item(state,recipe.id))),esc(recipe.kind),small('Open BOM',`closeModal();recipeEdit(${escapeArg(recipe.kind==='part'?'parts':'products')},${escapeArg(recipe.id)})`)
+  const boms=bomOwners.length?panel('Used in BOMs',table(['Owner','Type'],bomOwners.map(recipe=>[
+    esc(label(item(state,recipe.id)))+openBtn(`recipeView(${escapeArg(recipe.kind==='part'?'parts':'products')},${escapeArg(recipe.id)})`),esc(recipe.kind)
   ]))):'';
   return stock+related+boms+history;
 }
@@ -4465,7 +4490,6 @@ function masterView(type,id){
     connectedPanels(type,r),
     actionGroup(button('Edit',`masterEdit(${escapeArg(type)},${escapeArg(id)})`,'btn-sm btn-primary'),
       type==='parts'?small('Variants',`variantsView(${escapeArg(id)})`):'',
-      ['parts','products'].includes(type)?small(get(state,'recipes',id)?'BOM':'Create BOM',`recipeEdit(${escapeArg(type)},${escapeArg(id)})`):'',
       type!=='materials'||r.active===false?small(r.active===false?'Restore':'Archive',`masterArchive(${escapeArg(type)},${escapeArg(id)})`):'',
       dangerSmall('Delete',`deleteMaster(${escapeArg(type)},${escapeArg(id)})`)));
 
@@ -4707,21 +4731,20 @@ function recipeView(type,id){
       ${chip(recipe.approved?'Approved':'Review required')}</div></div></div>`+
     note(isPart?'Quantities are for one part. Wastage is added on top.':'Quantities are for one complete product.')+
     panel((isPart?'Raw materials':'Parts')+' in this BOM · '+recipe.lines.length+' lines',body),
-    small('Edit BOM',`closeModal();recipeEdit(${escapeArg(type)},${escapeArg(id)})`));
+    actionGroup(button('Edit BOM',`closeModal();recipeEdit(${escapeArg(type)},${escapeArg(id)})`,'btn-sm btn-primary'),
+      dangerSmall('Delete BOM',`deleteRecipe(${escapeArg(id)})`)));
 }
 function recipePage(){
   const rows=[...state.parts.map(x=>['parts',x]),...state.products.map(x=>['products',x])];
   return head('Master Data',TITLES.bom,button('New','createBOM()','btn-primary'))+
-    searchableTable(['Owner','Recipe type','Sizes','Colors','Lines','Status','Actions'],rows.map(([type,r])=>{
+    searchableTable(['Owner','Recipe type','Sizes','Colors','Lines','Status'],rows.map(([type,r])=>{
       const recipe=get(state,'recipes',r.id), isPart=type==='parts';
       const variants=isPart?current(state,'variants').filter(v=>v.partId===r.id):
         (recipe?.lines||[]).map(l=>get(state,'variants',l.variantId)).filter(Boolean);
       const options=name=>r[name]||[...new Set(variants.map(v=>v[name]).filter(Boolean))].join(', ')||'—';
-      return [cell(r.name,r.code),esc(isPart?'Part → Raw Materials':'Product → Parts'),esc(options('size')),esc(options('color')),
-        String(recipe?.lines.length||0),chip(recipe?(recipe.approved?'Approved':'Review required'):'Missing'),
-        actionGroup(recipe?button('View',`recipeView(${escapeArg(type)},${escapeArg(r.id)})`,'btn-sm btn-view','search'):'',
-          small(recipe?'Edit BOM':'Create BOM',`recipeEdit(${escapeArg(type)},${escapeArg(r.id)})`),
-          recipe?dangerSmall('Delete BOM',`deleteRecipe(${escapeArg(r.id)})`):'')];
+      return [cell(r.name,r.code)+openBtn(`${recipe?'recipeView':'recipeEdit'}(${escapeArg(type)},${escapeArg(r.id)})`),
+        esc(isPart?'Part → Raw Materials':'Product → Parts'),esc(options('size')),esc(options('color')),
+        String(recipe?.lines.length||0),chip(recipe?(recipe.approved?'Approved':'Review required'):'Missing')];
     }));
 }
 function bomVariantOptions(partId,selected=''){
@@ -4916,7 +4939,8 @@ function planView(id){
     panel('Products',textTable(['Product','Quantity'],p.products.map(x=>[labelOf(state,x.productId),x.qty])))+
     panel('Parts',partsTable(p.parts))+panel('Consolidated raw materials',requireTable(state,p.materials,p.location,p.id))+
     panel('BOM trace',traceTable(p.source)),
-    button('Download PDF',`recordPDF('plans',${escapeArg(id)})`,'btn-sm','pdf'));
+    actionGroup(button('Download PDF',`recordPDF('plans',${escapeArg(id)})`,'btn-sm','pdf'),
+      dangerSmall('Delete',`deleteOperation('plans',${escapeArg(id)})`)));
 }
 function planTransition(id,status){
   approval(status==='Reserved'?'Reserve plan demand':'Close planning reservation',
@@ -5010,28 +5034,20 @@ function orderTransition(id,status){
   },word);
 }
 function productionPage(){
-  return head('Operations','Production',button('New Production Plan','planEdit()','','plan'),
-    button('New','orderEdit()','btn-primary'))+
-    panel('Production orders',table(['Order','Part / SKU','Qty','Fabrication location','Customer / site','Processor / site','Status','Actions'],state.orders.slice().sort(dateSort).map(o=>[
+  return head('Operations','Production',button('New','orderEdit()','btn-primary'))+
+    panel('Production orders',table(['Order','Part / SKU','Qty','Fabrication location','Customer / site','Processor / site','Status'],state.orders.slice().sort(dateSort).map(o=>[
       esc(o.no),esc(labelOf(state,o.sku)),esc(qfmt(o.qty,item(state,o.sku)?.unit)),esc(locName(state,o.location)),
       esc([get(state,'customers',o.customerId)?.name,get(state,'locations',o.customerSiteId)?.name].filter(Boolean).join(' / ')),
-      esc([get(state,'processors',o.processorId)?.name,get(state,'locations',o.processorSiteId)?.name].filter(Boolean).join(' / ')),chip(o.status),
-      actionGroup(small('View',`orderView(${escapeArg(o.id)})`),
-        o.status!=='Completed'?small('Edit',`orderEdit('','',${escapeArg(o.id)})`):'',
-        o.status==='Draft'?small('Release',`orderTransition(${escapeArg(o.id)},'Released')`):'',
-        o.status==='Released'?small('Complete',`orderTransition(${escapeArg(o.id)},'Completed')`):'',
-        ['Draft','Released'].includes(o.status)?small('Cancel',`orderTransition(${escapeArg(o.id)},'Cancelled')`):'',
-        o.status!=='Completed'?dangerSmall('Delete',`deleteOperation('orders',${escapeArg(o.id)})`):'')
-    ])))+
-    panel('Production plans',table(['Plan','Project','Location','Customer / site','Status','Actions'],state.plans.slice().sort(dateSort).map(p=>[
+      esc([get(state,'processors',o.processorId)?.name,get(state,'locations',o.processorSiteId)?.name].filter(Boolean).join(' / ')),
+      chip(o.status)+openBtn(`orderView(${escapeArg(o.id)})`)
+    ]),'No production orders yet. Click New to make parts.'))+
+    panel('Production plans',`<div class="card-body o-panel-link"><button type="button" class="link-btn" onclick="planEdit()">+ New production plan</button>
+      <span class="sub">Plan several products at once and reserve their raw materials.</span></div>`+
+      table(['Plan','Project','Location','Customer / site','Status'],state.plans.slice().sort(dateSort).map(p=>[
       esc(p.no),esc(p.name),esc(locName(state,p.location)),
-      esc([get(state,'customers',p.customerId)?.name,get(state,'locations',p.customerSiteId)?.name].filter(Boolean).join(' / ')),chip(p.status),
-      actionGroup(small('View',`planView(${escapeArg(p.id)})`),
-        small('Edit',`planEdit(${escapeArg(p.id)})`),
-        p.status==='Draft'?small('Reserve',`planTransition(${escapeArg(p.id)},'Reserved')`):'',
-        p.status==='Reserved'?small('Close reservation',`planTransition(${escapeArg(p.id)},'Closed')`):'',
-        dangerSmall('Delete',`deleteOperation('plans',${escapeArg(p.id)})`))
-    ])))+legacySection('plans','Legacy production plans');
+      esc([get(state,'customers',p.customerId)?.name,get(state,'locations',p.customerSiteId)?.name].filter(Boolean).join(' / ')),
+      chip(p.status)+openBtn(`planView(${escapeArg(p.id)})`)
+    ]),'No production plans yet.'))+legacySection('plans','Legacy production plans');
 }
 
 /* Location-specific inventory and purchasing */
@@ -5251,12 +5267,9 @@ function purchaseView(id){
 }
 function purchasingPage(){
   return head('Operations','Purchasing',button('New','purchaseEdit()','btn-primary'))+
-    searchableTable(['Request','Vendor','Receiving location','Lines','Status',''],state.purchases.slice().sort(dateSort).map(p=>[
+    searchableTable(['Request','Vendor','Receiving location','Lines','Status'],state.purchases.slice().sort(dateSort).map(p=>[
       esc(p.no),esc(get(state,'suppliers',p.supplierId)?.name||'—'),esc(locName(state,p.location)),esc(p.lines.length),
-      chip(p.status==='Ordered'&&p.lines.some(l=>l.received>0)?'Partially received':p.status),
-      actionGroup(openBtn(`purchaseView(${escapeArg(p.id)})`),
-        p.status==='Draft'?small('Mark ordered',`purchaseStatus(${escapeArg(p.id)},'Ordered')`):'',
-        p.status==='Ordered'?small('Receive',`receiptEdit(${escapeArg(p.id)})`):'')
+      chip(p.status==='Ordered'&&p.lines.some(l=>l.received>0)?'Partially received':p.status)+openBtn(`purchaseView(${escapeArg(p.id)})`)
     ]),'No purchases yet. Click New to request materials from a vendor.',
     state.purchases.map(p=>[p.no,get(state,'suppliers',p.supplierId)?.name,p.status,...p.lines.map(l=>labelOf(state,l.sku))].join(' ')),
     {placeholder:'Search purchases…',noun:'purchases'})+panel('Vendor receipts',eventsTable(state.events.filter(e=>e.type==='Supplier receipt')))+
@@ -5330,6 +5343,7 @@ function dispatchView(id){
       trip?button('Trip '+trip.no+' · '+trip.status,`tripView(${escapeArg(trip.id)})`,'btn-sm'):'',
       open?small('Partial delivery',`deliveryEdit(${args})`):'',
       j.delivered===0&&open?small('Edit',`dispatchEdit(${args})`):'',
+      button('Print packing list',`packingListPDF('job',${args})`,'btn-sm','pdf'),
       open?small('Cancel job',`cancelJob(${args})`):''],
       ['Open','Partially delivered','Delivered'].filter(s=>s!=='Partially delivered'||j.status==='Partially delivered'),j.status)+kv([['Product',labelOf(state,j.productId)],['Customer',label(get(state,'customers',j.customerId))],
     ['Delivery site',[destination.name,destination.address,destination.city].filter(Boolean).join(' · ')],
@@ -5388,12 +5402,10 @@ function cancelJob(id){
 }
 function dispatchPage(){
   return head('Operations',TITLES.dispatch,button('New','dispatchEdit()','btn-primary'))+
-    searchableTable(['Job','Customer / site','Product','Requested','Delivered','Outstanding','Status','Actions'],state.jobs.slice().sort(dateSort).map(j=>[
+    searchableTable(['Job','Customer / site','Product','Requested','Delivered','Outstanding','Status'],state.jobs.slice().sort(dateSort).map(j=>[
       cell(j.no,j.name),cell(get(state,'customers',j.customerId)?.name,j.destinationSnapshot.name),
-      esc(labelOf(state,j.productId)),esc(j.qty),esc(j.delivered),esc(j.qty-j.delivered),chip(j.status),
-      actionGroup(openBtn(`dispatchView(${escapeArg(j.id)})`),
-        ['Open','Partially delivered'].includes(j.status)&&!activeTrip('jobId',j.id)?small('Assign driver',`assignDelivery('job',${escapeArg(j.id)})`):'')
-    ]));
+      esc(labelOf(state,j.productId)),esc(j.qty),esc(j.delivered),esc(j.qty-j.delivered),chip(j.status)+openBtn(`dispatchView(${escapeArg(j.id)})`)
+    ]),'No dispatch jobs yet. Click New to pack a product for a customer.');
 }
 
 /* Sales orders: customer orders for any stock item, delivered in one or more shipments. */
@@ -5522,6 +5534,7 @@ function salesView(id){
         l.price?nfmt(l.price,2):'—',l.price?nfmt(l.price*l.qty,2):'—'];
     }))+panel('Deliveries',eventsTable(state.events.filter(e=>e.salesId===id))),
     actionGroup(button('PDF',`recordPDF('sales',${escapeArg(id)})`,'btn-sm','pdf'),
+      o.status==='Draft'||o.status==='Cancelled'?'':small('Packing list',`packingListPDF('sale',${escapeArg(id)})`),
       o.lines.every(l=>l.delivered===0)?dangerSmall('Delete',`deleteOperation('sales',${escapeArg(id)})`):''));
 }
 function salesPage(){
@@ -5531,16 +5544,13 @@ function salesPage(){
   const value=open.reduce((n,o)=>n+salesTotal(o),0);
   return head('Operations',TITLES.sales,button('New','salesEdit()','btn-primary'))+
     (due?note(due+' open order'+(due>1?'s are':' is')+' past the requested delivery date.','warn'):'')+
-    searchableTable(['Order','Customer / site','Order date','Requested','Lines','Delivered','Value (AED)','Status','Actions'],orders.map(o=>{
+    searchableTable(['Order','Customer / site','Order date','Requested','Lines','Delivered','Value (AED)','Status'],orders.map(o=>{
       const late=SALES_OPEN.includes(o.status)&&o.due&&o.due<todayISO(), total=salesTotal(o), progress=salesProgress(o);
       return [cell(o.no,o.reference),cell(get(state,'customers',o.customerId)?.name||'—',get(state,'locations',o.siteId)?.name||''),
         esc(fmtDate(o.date)),late?`<span class="sales-late">${esc(fmtDate(o.due))}</span>`:esc(o.due?fmtDate(o.due):'—'),
         esc(o.lines.length+(o.lines.length===1?' item':' items')),
         `<div class="sales-progress" title="${progress}% delivered"><span style="width:${progress}%"></span></div><div class="sub">${progress}%</div>`,
-        esc(total?nfmt(total,2):'—'),chip(o.status),
-        actionGroup(openBtn(`salesView(${escapeArg(o.id)})`),
-          o.status==='Draft'?small('Confirm',`salesStatus(${escapeArg(o.id)},'Confirmed')`):'',
-          ['Confirmed','Partially delivered'].includes(o.status)&&!activeTrip('salesId',o.id)?small('Assign driver',`assignDelivery('sale',${escapeArg(o.id)})`):'')];
+        esc(total?nfmt(total,2):'—'),chip(o.status)+openBtn(`salesView(${escapeArg(o.id)})`)];
     }),'No sales orders yet. Click New Sales Order to record a customer order.',
     orders.map(o=>[o.no,o.reference,get(state,'customers',o.customerId)?.name,o.status,...o.lines.map(l=>labelOf(state,l.sku))].join(' ')),
     {placeholder:'Search by order, customer, item or status…',noun:'orders'})+
@@ -5604,6 +5614,76 @@ function pdf(title,columns,rows,{landscape=false}={}){
     }
   });
   doc.save('AMBS_'+title.replace(/[^a-z0-9_-]+/gi,'_')+'.pdf');
+}
+/* Packing list: what goes on the truck for one delivery, with tick boxes and signatures. */
+function packingContents(trip,job,sale){
+  const ev=trip&&state.events.find(e=>e.reference===trip.no&&(job?e.jobId===job.id:sale?e.salesId===sale.id:false));
+  const take=lines=>lines.map(l=>({sku:l.sku,qty:l.qty})).filter(l=>l.qty>0);
+  if(ev)return {count:ev.deliveredQty||0,lines:take(ev.lines.filter(l=>l.delta<0).map(l=>({sku:l.sku,qty:-l.delta})))};
+  if(job){
+    const left=job.qty-job.delivered;
+    if(left>0)return {count:left,lines:take(dispatchRows(state,job,left))};
+    return {count:job.qty,lines:take(job.finished?[{sku:job.productId,qty:job.qty}]:job.parts.map(p=>({sku:p.sku,qty:p.qty})))};
+  }
+  if(sale){
+    const open=sale.lines.filter(l=>l.qty-l.delivered>EPS);
+    return {count:0,lines:take((open.length?open:sale.lines).map(l=>({sku:l.sku,qty:open.length?l.qty-l.delivered:l.qty})))};
+  }
+  return {count:0,lines:[]};
+}
+function packingListPDF(kind,id){
+  if(!PDFR._ok())return;
+  let trip=kind==='trip'?get(state,'trips',id):null;
+  const job=kind==='job'?get(state,'jobs',id):trip?.jobId?get(state,'jobs',trip.jobId):null;
+  const sale=kind==='sale'?get(state,'sales',id):trip?.salesId?get(state,'sales',trip.salesId):null;
+  if(!trip)trip=job?activeTrip('jobId',job.id):sale?activeTrip('salesId',sale.id):null;
+  const driver=trip&&get(state,'drivers',trip.driverId);
+  const customer=get(state,'customers',job?.customerId||sale?.customerId||trip?.customerId);
+  const site=job?(job.destinationSnapshot||get(state,'locations',job.destination)):sale?get(state,'locations',sale.siteId):null;
+  const from=locName(state,job?.location||trip?.fromLocation||'')||trip?.from||'';
+  const {count,lines}=packingContents(trip,job,sale);
+  const no=trip?.no||job?.no||sale?.no;
+  const doc=PDFR._doc(), header=PDFR._hf(doc,'Packing list');
+  header();
+  const W=doc.internal.pageSize.getWidth();
+  doc.setTextColor(30,35,43);doc.setFont('helvetica','bold');doc.setFontSize(16);doc.text('PACKING LIST',40,84);
+  doc.setFontSize(12);doc.text(String(no||''),W-40,84,{align:'right'});
+  const where=[site?.name,site?.address,site?.city].filter(Boolean).join(', ')||trip?.location||'';
+  const meta=[['Date',fmtDate(trip?.date||todayISO())],['Customer',customer?.name||trip?.customerName||''],
+    ['Reference',[job?job.no+' · '+job.name:'',sale?sale.no+(sale.reference?' · PO '+sale.reference:''):''].filter(Boolean).join(' ')],['Ship from',from],
+    ['Driver',driver?driver.name+(driver.phone?' · '+driver.phone:''):'Not assigned yet'],['Vehicle',trip?.vehicle||driver?.vehiclePlate||''],
+    ['Deliver to',where],['Map',trip?.mapUrl||(site?mapsLink(site):'')||'']];
+  let y=106;doc.setFontSize(9);
+  const colW=(W-80)/2;
+  for(let i=0;i<meta.length;i+=2){
+    let h=0;
+    for(const j of [0,1]){const m=meta[i+j];if(!m)continue;const x=40+j*colW;
+      doc.setFont('helvetica','bold');doc.setTextColor(100);doc.text(m[0],x,y);
+      doc.setFont('helvetica','normal');
+      if(m[0]==='Map'&&m[1]){doc.setTextColor(26,115,232);doc.textWithLink('Open in Google Maps',x+70,y,{url:m[1]});h=Math.max(h,1);continue;}
+      doc.setTextColor(20);const t=doc.splitTextToSize(String(m[1]||'—'),colW-82);doc.text(t,x+70,y);h=Math.max(h,t.length);}
+    y+=Math.max(1,h)*11+5;
+  }
+  if(job){
+    const p=item(state,job.productId);
+    doc.setFillColor(248,240,240);doc.setDrawColor(155,28,28);doc.roundedRect(40,y,W-80,30,3,3,'FD');
+    doc.setFont('helvetica','bold');doc.setFontSize(11);doc.setTextColor(155,28,28);
+    doc.text('Product: '+(p?.name||labelOf(state,job.productId))+'   ×   '+(count||job.qty)+' '+(p?.unit||''),52,y+19);
+    doc.setFont('helvetica','normal');doc.setFontSize(8.5);doc.setTextColor(90);
+    doc.text(job.finished?'Complete products from finished stock':'Packed from parts — lines below',W-52,y+19,{align:'right'});
+    y+=42;
+  }
+  const rows=lines.length?lines.map((l,i)=>{const it=item(state,l.sku);
+      return [String(i+1),it?.code||'',it?.name||labelOf(state,l.sku),{content:qfmt(l.qty,it?.unit).replace(/\s+\S+$/,''),styles:{halign:'right',fontStyle:'bold'}},it?.unit||'','[   ]'];}):
+    [['1','',trip?.description||trip?.system||'—','','','[   ]']];
+  doc.autoTable({head:[['#','Code','Item','Qty','Unit','Packed']],body:rows,startY:y,widths:[.06,.16,.46,.11,.09,.12],
+    margin:{top:70,bottom:44,left:40,right:40},styles:{fontSize:9.5,cellPadding:6},headStyles:{fillColor:[31,35,43]},
+    didDrawPage(){if(doc.internal.getCurrentPageInfo().pageNumber>1)header();}});
+  let end=doc.lastAutoTable.finalY+14;
+  doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(60);
+  doc.text('Total lines: '+lines.length+(trip?.notes?'   ·   Notes: '+trip.notes:''),40,end);
+  PDFR._sig(doc,end,['Packed by','Driver','Received by (customer)']);
+  doc.save('AMBS_Packing_List_'+String(no||'').replace(/[^a-z0-9_-]+/gi,'_')+'.pdf');
 }
 function recordPDF(type,id){
   const row=get(state,type,id);
@@ -5800,7 +5880,11 @@ function locationView(id){
       esc(type),esc(no),chip(status),small('View',`closeModal();${action}`)
     ]))):'')+
     (movements.length?panel('Recent stock movements',eventsTable(movements.slice(-15))):''),
-    actionGroup(owner?small('View company',`closeModal();masterView(${escapeArg(location.ownerType)},${escapeArg(owner.id)})`):'',mapAction(location)));
+    actionGroup(owner?button('Edit company',`masterEdit(${escapeArg(location.ownerType)},${escapeArg(location.ownerId)})`,'btn-sm btn-primary'):
+        button('Edit',`locationEdit(${escapeArg(id)})`,'btn-sm btn-primary'),
+      owner?small('View company',`closeModal();masterView(${escapeArg(location.ownerType)},${escapeArg(owner.id)})`):'',
+      owner?'':small(location.active===false?'Restore':'Archive',`custodyArchive(${escapeArg(id)})`),
+      dangerSmall('Delete',`deleteLocation(${escapeArg(id)})`))+mapAction(location));
 }
 function settingsPage(){
   return head('System','Settings & Data',button('Add Custody Location','locationEdit()','btn-primary','plus'))+
@@ -5816,11 +5900,9 @@ function settingsPage(){
             button('Import Backup',"document.getElementById('backup-file').click()",'','refresh'))}
           <input type="file" id="backup-file" accept=".json,application/json" hidden onchange="previewBackup(this)"></div></section>
     </div>`+
-    panel('Locations',table(['Location','Company','Address','City','Status','Actions'],state.locations.map(l=>[
-      esc(l.name),esc(l.ownerId?get(state,l.ownerType,l.ownerId)?.name:'AMBS'),esc(l.address),esc(l.city),chip(l.active===false?'Archived':'Active'),
-      actionGroup(small('View',`locationView(${escapeArg(l.id)})`),mapAction(l),l.ownerId?small('Edit company',`masterEdit(${escapeArg(l.ownerType)},${escapeArg(l.ownerId)})`):
-        small('Edit',`locationEdit(${escapeArg(l.id)})`)+small(l.active===false?'Restore':'Archive',`custodyArchive(${escapeArg(l.id)})`),
-        dangerSmall('Delete',`deleteLocation(${escapeArg(l.id)})`))
+    panel('Locations',table(['Location','Company','Address','City','Status'],state.locations.map(l=>[
+      esc(l.name)+openBtn(`locationView(${escapeArg(l.id)})`),esc(l.ownerId?get(state,l.ownerType,l.ownerId)?.name:'AMBS'),
+      `<div class="addr-cell"><span>${esc(l.address||'—')}</span>${mapBtn(mapsLink(l))}</div>`,esc(l.city),chip(l.active===false?'Archived':'Active')
     ])))+reviewsSection();
 }
 function profileEdit(){
@@ -6327,6 +6409,7 @@ function tripView(id){
       t.status==='Next'?button('Start trip',`tripStatus(${args},'On the way')`,'btn-sm btn-primary'):'',
       t.status==='On the way'?button('Delivered',`tripStatus(${args},'Delivered')`,'btn-sm btn-primary'):'',
       ['Next','On the way'].includes(t.status)?small('Edit',`tripEdit(${args})`):'',
+      t.salesId||t.jobId?button('Print packing list',`packingListPDF('trip',${args})`,'btn-sm','pdf'):'',
       t.salesId?small('Sales order',`salesView(${escapeArg(t.salesId)})`):'',t.jobId?small('Dispatch job',`dispatchView(${escapeArg(t.jobId)})`):''],
       ['Next','On the way','Delivered'],t.status)+`<div class="co-details">${[
     ['Status',chip(t.status==='Next'?'Open':t.status==='On the way'?'In progress':t.status)+' '+(t.priority==='Urgent'?statusChip('bad','Urgent'):'')],
@@ -6404,16 +6487,13 @@ const Drv={
   results(){
     const rows=this.filtered();
     return `<div class="pill-legend" style="margin:0 0 8px">${rows.length} trips · ${esc(nfmt(tripKm(rows),1))} km</div>`+
-      table(['Packing no.','Customer / project','System','Driver / vehicle','Delivery location','Km','Status','Delivery papers','Actions'],rows.map(t=>{
+      table(['Packing no.','Customer / project','System','Driver / vehicle','Delivery location','Km','Status','Delivery papers'],rows.map(t=>{
         const d=get(state,'drivers',t.driverId), args=escapeArg(t.id);
         return [cell(t.no,fmtDate(t.date)),cell(t.customerName||'—',t.project),cell(t.system||'—',t.description),
           d?`<button type="button" class="link-btn" onclick="driverView(${escapeArg(d.id)})">${esc(d.name)}</button>${papersOk(d)?'':' '+statusChip('bad','Papers')}<div class="sub">${esc(t.vehicle||'')}</div>`:'—',
           `<div class="addr-cell"><span>${esc(t.location||'—')}</span>${mapBtn(t.mapUrl)}</div>`,`<span class="num">${esc(t.km?nfmt(t.km,1):'—')}</span>`,
           tripChip(t)+(t.deliveredAt?`<div class="sub">${esc(fmtDate(t.deliveredAt))}</div>`:''),
-          t.paperStatus==='Signed & returned'?statusChip('ok','Signed'):t.paperStatus==='Missing'?statusChip('bad','Missing'):statusChip('warn','Pending'),
-          actionGroup(openBtn(`tripView(${args})`),
-            t.status==='Next'?small('Start',`tripStatus(${args},'On the way')`):'',
-            t.status==='On the way'?small('Delivered',`tripStatus(${args},'Delivered')`):'')];
+          (t.paperStatus==='Signed & returned'?statusChip('ok','Signed'):t.paperStatus==='Missing'?statusChip('bad','Missing'):statusChip('warn','Pending'))+openBtn(`tripView(${args})`)];
       }),'No trips match. Create a delivery trip to start tracking.');
   }
 };
@@ -6809,7 +6889,7 @@ function dashboard(){
   const driverRows=state.drivers.map(d=>{const t=month.filter(x=>x.driverId===d.id);return {label:d.name,value:t.length,sub:nfmt(tripKm(t),0)+' km',
     tip:d.name+': '+t.length+' trips, '+nfmt(tripKm(t),1)+' km this month',go:`driverView(${escapeArg(d.id)})`};}).filter(r=>r.value).sort((a,b)=>b.value-a.value).slice(0,8);
   const statusCounts=TRIP_STATUS.map(s=>state.trips.filter(t=>t.status===s).length);
-  return head('Overview','Dashboard',liveChip(),link('tracking','Live tracking'),link('deliveries','Deliveries'))+
+  return head('Overview','Dashboard',liveChip())+
     kpiRow([['layers','Items in stock',new Set(balances.filter(b=>b.qty>EPS).map(b=>b.sku)).size,byLoc.size+' locations holding stock','k-ink','tracking'],
       ['swap','Movements today',todayMoves.length,todayMoves.reduce((n,e)=>n+e.lines.length,0)+' item lines moved','k-ok','tracking'],
       ['truck','On the road',moving.length,waiting.length+' trips waiting to leave','k-yellow','deliveries'],
@@ -6950,7 +7030,6 @@ const App={
         placeholder="Search menus and records…" aria-label="Search menus and records" aria-controls="o-gs-results"><kbd>/</kbd>
         <div class="o-gs-results" id="o-gs-results" role="listbox" hidden></div></div>
       <div class="o-nav-right">
-        <button class="o-nav-btn" onclick="App.go('purchase-new')">Purchase</button>
         <button class="o-nav-btn" onclick="refreshCloudWorkspace(true)" title="Refresh">${ic('refresh')}</button>
         ${CLOUD.demo?'':'<button class="o-nav-btn" onclick="CLOUD.signOut()">Sign out</button>'}
         <div class="clock" id="clock"></div>
@@ -6992,7 +7071,7 @@ for(const fn of ['masterView','companyView','driverView','tripView','recipeView'
   window[fn].orig=orig;
 }
 /* Odoo-style lists: click anywhere on a row to open it. The row's own "View" button is hidden. */
-const ROW_OPEN=/^(?:closeModal\(\);)?(?:masterView|companyView|driverView|tripView|recipeView|trackItem|salesView|purchaseView|dispatchView|orderView|planView|eventView|locationView|variantsView)\(/;
+const ROW_OPEN=/^(?:closeModal\(\);)?(?:recipeEdit|masterView|companyView|driverView|tripView|recipeView|trackItem|salesView|purchaseView|dispatchView|orderView|planView|eventView|locationView|variantsView)\(/;
 function enhanceRows(root){
   root.querySelectorAll?.('tbody tr:not([data-open])').forEach(tr=>{
     const b=[...tr.querySelectorAll('button[onclick]')].find(x=>ROW_OPEN.test(x.getAttribute('onclick'))&&/^(View|Track|Open)\b/.test(x.textContent.trim()));

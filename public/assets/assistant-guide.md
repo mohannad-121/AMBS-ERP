@@ -44,7 +44,10 @@ Keywords: menu, top bar, open record, click row, breadcrumb, new button, search
 - The menu is a **sidebar on the left**, grouped under Overview, Master Data, Operations and System. On a phone or narrow window, open it with the ☰ button at the top left.
 - **Customers, Vendors and Drivers** show cards, several per row. Type in the search box to filter, click a card to open it. Customers, Vendors, Drivers, **Raw Materials, Parts and Products** have a **Kanban / List** switch (part cards show on hand, source and BOM; a part or product page has a **Bill of Materials** tab with Edit BOM / Create BOM) (material cards show the photo, on-hand quantity, stock status, bundle size and number of vendors; a material's page shows on hand, on order, opening stock, bundle, stock length, rates and a **Vendors** tab) at the top right (cards or table rows); the choice is remembered. A customer's page has a **Deliveries** tab listing every trip for that customer.
 - In every list, **click a row** to open the record as a full page. The breadcrumb at the top (e.g. *Customers / Emaar*) goes back to the list.
-- **Edit** and **Delete** (and BOM, Variants, Archive where they apply) are at the top of the record page — no buttons on every row.
+- Lists have **no buttons on the rows** — click a row or card to open the record.
+- On a record page only the next step (Confirm, Assign driver, Receive, Start trip …) and **Edit** are visible. Everything else — **PDF**, **Excel**, **Packing list**, **Partial delivery**, **Cancel**, **Archive**, **Variants**, **Delete** — is under the **⚙ Actions** menu at the top right.
+- Map links are a small 📍 pin next to the address; click it to open Google Maps.
+- **Ask AMBS** is the small round chat button at the bottom right.
 - **New** (top right of a list) adds a record.
 - **Search bar in the top bar** (press `/` or Ctrl+K): type a page name, e.g. *customers*, and pick **AMBS / Contacts & Products / Customers**; matching records (customers, vendors, materials, parts, products, drivers, trips) are listed under it. ↑/↓ to move, Enter to open, Esc to close.
 
@@ -64,11 +67,10 @@ The Tools pages (Steel Weight Calculator `#/steel`, Market Sections `#/market`, 
 Most actions open a form in a pop-up window. Close a form with **Cancel**, the **×** button, a click outside it, or **Escape**.
 
 ## Top bar buttons
-Keywords: top bar, Purchase button, Refresh, Sign out, clock, header, user, reload data
+Keywords: top bar, Refresh, Sign out, clock, header, user, reload data
 
 The top bar shows the current page title and these items, from left to right:
 
-- 🛒 **Purchase** is a shortcut that opens a **New Purchase Request** form on the Purchasing page (`#/purchase-new`).
 - **Refresh** reloads the latest saved workspace data and shows "Workspace refreshed." It refuses with "Close the current form before refreshing." while a form is open. Use it when a colleague or another browser tab has saved changes.
 - In the browser workspace, a chip reads **Saved in this browser**. In the cloud workspace, a **Sign out** button appears instead.
 - A clock shows the date and time.
@@ -464,7 +466,7 @@ Status values:
 - **Review required**: saved but not approved, or a legacy recipe. Operations refuse it.
 - **Missing**: no BOM yet.
 
-Use **Create BOM** (top right) and pick the part or product, or click **Create BOM** / **Edit BOM** on a row. **Delete BOM** removes only the recipe. You can also open BOMs from **Parts** or **Products** with the **BOM** button.
+Use **New** (top right) and pick the part or product, or click a row: a row with a BOM opens it (with **Edit BOM**; **Delete BOM** is under ⚙ Actions), a row marked **Missing** opens the BOM editor. **Delete BOM** removes only the recipe. A part or product page also has a **Bill of Materials** tab with **Edit BOM**.
 
 Purchased and Stocked parts don't need a Part BOM. Manufactured parts do.
 
@@ -528,14 +530,14 @@ The **Production** page (`#/production`) has two tables:
 - **Production orders** (numbers start with **MO-**): actually manufacture a **Manufactured part** or one of its variants. Completing an order consumes raw materials and adds the part to stock.
 - **Production plans** (numbers start with **PLAN-**): plan finished products. A plan explodes products → parts → raw materials, compares demand with stock and can **reserve** raw material demand. A plan never moves physical stock.
 
-Buttons at the top right are **New Production Plan** and **Create Production Order**. You can also open a new plan directly with `#/plan-new`.
+**New** (top right) creates a production order. **+ New production plan** is at the top of the **Production plans** section. You can also open a new plan directly with `#/plan-new`.
 
 Production orders make **parts**, not finished products. See "How do I get finished product stock?".
 
 ## Create a production plan
 Keywords: production plan, plan products, material requirement, MRP, demand, خطة إنتاج
 
-1. On **Production** (`#/production`), click **New Production Plan**.
+1. On **Production** (`#/production`), click **+ New production plan** in the Production plans section.
 2. Fill **Reference / project** (required) and choose a **Production location** (a custody location).
 3. Optionally choose **Customer (optional)** and **Customer site (optional)**.
 4. In each **Product line**, choose a **Product** and the **Requested product quantity** (whole number). The product's parts appear with **Standard quantity**, an editable **Adjusted quantity** and, for parts with variants, a required **Part variant**.
@@ -831,6 +833,16 @@ Errors:
 - "Enter a new delivery reference." The reference is empty or already used on this job.
 - "This dispatch job is closed."
 - "This delivery changed in another tab. Reopen it to review current quantities."
+
+## Packing list (print for the truck)
+Keywords: packing list, print packing list, PL number, loading list, delivery note, what goes on the truck, signatures, قائمة التعبئة
+
+A packing list shows exactly what goes on the truck for one delivery.
+1. Create the dispatch job (**Packing & Dispatch → New**): customer, delivery site, product and quantity. AMBS fills the parts from the product's BOM; adjust quantities if this job needs more or less.
+2. **Deliveries → To deliver → Assign driver**. The trip gets a packing-list number **PL<year>-<month>-<nnn>**.
+3. Open the dispatch job or the trip and click **Print packing list**. (On a sales order it is under **⚙ Actions → Packing list**.)
+
+The PDF has the PL number, date, customer, reference, ship-from store, driver and phone, vehicle, delivery address with a Google Maps link, the product and quantity, then every part with code, quantity, unit and a **Packed [ ]** tick column, and signature lines for **Packed by**, **Driver** and **Received by (customer)**. Before a driver is assigned it still prints, with "Not assigned yet". After delivery it prints exactly what was delivered on that trip.
 
 ## Dispatch job statuses and cancelling
 Keywords: dispatch status, open, partially delivered, delivered, cancelled, cancel job, إلغاء الشحنة
