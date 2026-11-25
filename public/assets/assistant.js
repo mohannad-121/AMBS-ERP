@@ -365,7 +365,7 @@
 
   function build(){
     const fab=document.createElement('button');
-    fab.type='button';fab.className='as-fab';fab.setAttribute('aria-label','Open AMBS Assistant');fab.setAttribute('aria-expanded','false');
+    fab.type='button';fab.className='as-fab';fab.title='Ask AMBS';fab.setAttribute('aria-label','Open AMBS Assistant');fab.setAttribute('aria-expanded','false');
     fab.innerHTML=`<span class="as-fab-icon" aria-hidden="true">💬</span><span class="as-fab-label">Ask AMBS</span>`;
     const panel=document.createElement('section');
     panel.className='as-panel';panel.setAttribute('role','dialog');panel.setAttribute('aria-label','AMBS Assistant');panel.hidden=true;

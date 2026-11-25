@@ -1334,3 +1334,28 @@ tr.o-group td{background:#f8f9fa!important;font-weight:600;cursor:pointer;color:
 .o-sheet .record-detail-image{float:right;margin:0 0 12px 20px;padding:0!important;background:none!important;border:0!important}
 .o-sheet .record-detail-image .thumb-detail,.o-sheet .record-detail-image .thumb-ph.thumb-detail{width:140px!important;height:140px!important;border-radius:4px!important}
 .o-sheet .o-notebook-nav,.o-sheet>section.card{clear:both}
+
+/* ⚙ Actions menu on record pages (Odoo "Action" dropdown) */
+.o-gear{position:relative}
+.o-gear>summary{list-style:none;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.o-gear>summary::-webkit-details-marker{display:none}
+.o-gear>summary svg{width:14px;height:14px}
+.o-gear-menu{position:absolute;right:0;top:calc(100% + 4px);z-index:60;min-width:190px;padding:4px 0;background:#fff;border:1px solid var(--o-border);border-radius:4px;box-shadow:0 8px 24px rgba(0,0,0,.12)}
+.o-gear-item{display:flex!important;align-items:center;gap:8px;width:100%;padding:7px 14px!important;border:0!important;background:none!important;color:var(--o-text)!important;font:inherit;font-size:13px;text-align:left;cursor:pointer;border-radius:0!important;box-shadow:none!important;height:auto!important;text-decoration:none}
+.o-gear-item svg{width:14px;height:14px;opacity:.7}
+.o-gear-item:hover{background:var(--o-border-2)!important}
+.o-gear-item.danger{color:#b42318!important}
+.o-gear-sep{height:1px;margin:4px 0;background:var(--o-border-2)}
+/* Map: a small pin next to the address instead of a button */
+.o-pin{display:inline-flex;align-items:center;gap:4px;color:var(--info,#1a73e8);text-decoration:none;font-size:13px;vertical-align:middle;white-space:nowrap}
+.o-pin svg{width:15px;height:15px}
+.o-pin:not(.o-pin-text){width:26px;height:26px;justify-content:center;border-radius:50%}
+.o-pin:hover{background:#eef4ff}
+.o-pin-text{padding:2px 6px;border-radius:4px}
+.addr-cell{display:flex;align-items:center;gap:6px}
+.o-panel-link{display:flex;align-items:center;gap:12px;padding-bottom:4px}
+/* Ask AMBS: a small round button, label on hover */
+.as-fab{height:48px!important;width:48px;padding:0!important;justify-content:center;right:20px;bottom:20px}
+.as-fab .as-fab-label{display:none}
+.as-fab .as-fab-icon{background:none;width:auto;height:auto;font-size:20px}
+.o-gear:not([open]) .o-gear-menu{display:none}
