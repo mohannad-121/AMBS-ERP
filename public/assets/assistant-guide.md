@@ -7,13 +7,13 @@ Keywords: vendor, supplier renamed, driver, delivery, trip, papers, tracking, li
 
 - **Nothing is marked "Required"** any more. Empty codes are filled in automatically (C-001 customers, V-001 vendors, RM-0001 raw materials, PT-001 parts, PR-001 products). A save only stops when something truly cannot work, for example a record without a name.
 - **Customers** need only: **Name**, **Code**, **Phone number**, **Position** and **Delivery address**. The phone box already shows **+971**; type the rest, e.g. `50 123 4567`. The delivery address is also kept as the customer's "Delivery address" site for dispatch.
-- **Google Maps location**: customers, vendors and delivery trips have a **Google Maps link** box. In Google Maps open the place → **Share → Copy link** and paste it (coordinates like `25.2048, 55.2708` also work). A **Map** button then opens the location from the customer list, the trip list, the driver's "Where now" and Live Tracking's "On the road now". A new trip takes the customer's map link automatically, and the link is included in the Excel export.
-- **Logo / photo** for customers and vendors: choose it in the **Logo / photo** box of the form, or simply click the round avatar (with the small **+**) in the list or in **View** to upload or replace it straight away. PNG, JPEG, WebP or GIF up to 10 MB; it is optimized automatically. Drivers work the same way: a **Driver photo** box in the driver form, or click the driver's avatar in the Drivers list or the driver's View.
-- **Suppliers are now called Vendors**. Short form (name, code, phone, address, **Address 2** for a second branch or store — no position) plus **Materials this vendor supplies**: pick a raw material and the number of **bundles**. Click **View** on a vendor to see its materials, bundles, units per bundle and stock on hand.
-- **Raw materials**: the form starts with **Material name**, followed by code, category and a **Material photo** box. You can also click the material's picture (small **+**) in the list or in **View** to upload or replace the photo straight away. **Parts** and **Products** work the same way: a **Part photo** / **Product photo** box in the form, and a clickable picture in the list and in **View**. Safety / minimum stock and the Archive button were removed.
-- **Bills of Materials**: **Create BOM** opens a large window with a search box and the full list, each item shown with its photo — type part of a name or code to narrow it down. Item search boxes elsewhere (BOM lines, sales, stock) also show photos. Each BOM has a **View** button that lists what is inside. In the BOM form there is no "Add line" button: it opens with one line, and the next line appears by itself only after the current one is complete (raw material + formula, or part + quantity); empty lines are ignored.
-- **Drivers & Deliveries** (`#/drivers`): add drivers with phone, vehicle, licence, Emirates ID, vehicle registration and the **Official papers checked and on file** box. **A trip cannot be created, started or delivered with a driver whose papers are missing or expired.** Each trip has a packing number (PL2026-11-001), customer, project, system, short description, from / delivery location, distance in km, priority, status (Next → On the way → Delivered), delivery date and delivery paper status. Export everything with **PDF** or **Excel** (Excel has a Deliveries sheet and a Drivers sheet); each driver's View has its own PDF / Excel.
-- **Live Tracking** (`#/tracking`): every movement reads **From → To** (vendor → store, store → store, store → production, store → customer site with a **Map** button) with the **trip and driver** that carried it; a **Waiting to be delivered** panel lists open dispatch jobs and sales orders per item with from → to and the assigned trip (or an **Assign driver** button). Also: where every item is now, every movement with the balance left at that location, filters for item type, location, movement type and dates, a **Track** timeline per item, and an Excel export. Dashboard, Live Tracking and Drivers refresh themselves every 30 seconds.
+- **Google Maps location**: customers, vendors and delivery trips have a **Google Maps link** box. In Google Maps open the place → **Share → Copy link** and paste it (coordinates like `25.2048, 55.2708` also work). A small 📍 **pin** next to the address then opens the location — on the customer page, the trip list, the driver's "Where now" and Live Tracking. A new trip takes the customer's map link automatically, and the link is included in the Excel export.
+- **Logo / photo** for customers and vendors: choose it in the **Logo / photo** box of the form, or simply click the round avatar (with the small **+**) in the list or on its page to upload or replace it straight away. PNG, JPEG, WebP or GIF up to 10 MB; it is optimized automatically. Drivers work the same way: a **Driver photo** box in the driver form, or click the driver's avatar in the Drivers list or on the driver's page.
+- **Suppliers are now called Vendors**. Short form (name, code, phone, address, **Address 2** for a second branch or store — no position) plus **Materials this vendor supplies**: pick a raw material and the number of **bundles**. Open a vendor (click its card) to see its materials, bundles, units per bundle and stock on hand.
+- **Raw materials**: the form starts with **Material name**, followed by code, category and a **Material photo** box. You can also click the material's picture (small **+**) in the list or on its page to upload or replace the photo straight away. **Parts** and **Products** work the same way: a **Part photo** / **Product photo** box in the form, and a clickable picture in the list and on the record page. Safety / minimum stock and the Archive button were removed.
+- **Bills of Materials**: **Create BOM** opens a large window with a search box and the full list, each item shown with its photo — type part of a name or code to narrow it down. Item search boxes elsewhere (BOM lines, sales, stock) also show photos. Click a BOM row to see what is inside. In the BOM form there is no "Add line" button: it opens with one line, and the next line appears by itself only after the current one is complete (raw material + formula, or part + quantity); empty lines are ignored.
+- **Drivers & Deliveries** (`#/drivers`): add drivers with phone, vehicle, licence, Emirates ID, vehicle registration and the **Official papers checked and on file** box. **A trip cannot be created, started or delivered with a driver whose papers are missing or expired.** Each trip has a packing number (PL2026-11-001), customer, project, system, short description, from / delivery location, distance in km, priority, status (Next → On the way → Delivered), delivery date and delivery paper status. Export everything with **PDF** or **Excel** (Excel has a Deliveries sheet and a Drivers sheet); each driver's page has its own PDF / Excel under **⚙ Actions**.
+- **Live Tracking** (`#/tracking`): every movement reads **From → To** (vendor → store, store → store, store → production, store → customer site with a 📍 map pin) with the **trip and driver** that carried it; a **Waiting to be delivered** panel lists open dispatch jobs and sales orders per item with from → to and the assigned trip (or an **Assign driver** button). Also: where every item is now, every movement with the balance left at that location, filters for item type, location, movement type and dates, a **Track** timeline per item, and an Excel export. Dashboard, Live Tracking and Drivers refresh themselves every 30 seconds.
 - **Dashboard**: live KPI cards, stock movements over 14 days, deliveries by status and per driver, where stock is held, most moved items, the live movement feed and deliveries to watch.
 
 ## Master data vs operations (Nov 2026)
@@ -50,6 +50,158 @@ Keywords: menu, top bar, open record, click row, breadcrumb, new button, search
 - **Ask AMBS** is the small round chat button at the bottom right.
 - **New** (top right of a list) adds a record.
 - **Search bar in the top bar** (press `/` or Ctrl+K): type a page name, e.g. *customers*, and pick **AMBS / Contacts & Products / Customers**; matching records (customers, vendors, materials, parts, products, drivers, trips) are listed under it. ↑/↓ to move, Enter to open, Esc to close.
+
+## Where did the button go? (⚙ Actions menu)
+Keywords: where is delete, where is pdf, missing button, button gone, button disappeared, actions menu, gear, settings icon, archive button, cancel button, partial delivery, excel button, packing list button, fewer buttons, وين زر, وين الحذف, اختفى الزر
+
+AMBS shows only the buttons you need right now (like Odoo):
+- **Lists** have no buttons on the rows. **Click the row or card** to open the record.
+- On a record page, the **next step** (Confirm, Assign driver, Mark ordered, Receive, Release, Mark completed, Start trip, Delivered) and **Edit** are at the top.
+- Everything else is in the **⚙ Actions** menu at the top right of the record: **PDF**, **Excel**, **Packing list** (sales orders), **Partial delivery**, **Cancel** / **Cancel order** / **Cancel job**, **Archive** / **Restore**, **Variants** (parts), links such as **Driver**, **Sales order**, **Dispatch job**, and **Delete** (always last, in red).
+- **Print packing list** stays visible on dispatch jobs and trips.
+- Production plans: **+ New production plan** is at the top of the **Production plans** section on Production.
+- Store locations: open **Settings & Data**, click the location row → **Edit**, and **⚙ Actions → Archive / Delete**.
+- Map links are a small 📍 pin next to the address.
+
+If a button is not in the menu either, the record's status does not allow it (for example **Delete** disappears after the first delivery or receipt).
+
+## Get started: first-day setup checklist ✅
+Keywords: start, getting started, first time, setup, new system, empty system, where do I begin, first steps, begin, onboarding, من وين ابدا, بداية
+
+Do these once, in this order:
+1. **Company profile**: **Settings & Data** (`#/settings`) → **Edit company profile** — company name, operator name, address, phone, logo (used on every PDF).
+2. **Store**: in **Settings & Data**, check you have a store such as **Main Store · DIP**. If not, click **Add Custody Location**.
+3. **Raw materials**: **Master Data → Raw Materials → New** (`#/materials`).
+4. **Vendors**: **Overview → Vendors → New** (`#/suppliers`), with the materials each vendor supplies.
+5. **Parts** and **Products**: **Master Data → Parts / Products → New**.
+6. **Bills of Materials**: **Master Data → Bills of Materials → New** (`#/bom`) — one for each manufactured part and each product.
+7. **Customers** and **Drivers**: **Overview → Customers / Drivers → New**.
+
+Then the daily work is in **Operations**: buy (Purchasing), make (Production), sell (Sales Orders or Packing & Dispatch), deliver (Deliveries). Ask me *"job 1"*, *"job 2"* or *"job 3"* for a full walk-through.
+
+## Job 1 (A to Z): buy raw materials and receive them 🛒
+Keywords: job 1, first job, test job, buy, purchase walkthrough, receive goods, how to buy steel, purchase to stock, A to Z, step by step, شراء خطوة بخطوة
+
+Goal: the store has the raw materials, received from a vendor.
+1. **Add the raw materials**: **Master Data → Raw Materials → New** (`#/materials`). Example: `MS SHS 50×50×2.5 mm` (unit TUBE, bundle 10) and `Galvanized bolt M12×100` (unit PCS, bundle 100). Opening stock 0 → **Save**.
+2. **Add the vendor**: **Overview → Vendors → New** (`#/suppliers`). Name, phone, address, Google Maps link. Under **Materials this vendor supplies** pick the SHS tube and enter bundles; a second line appears by itself for the bolts → **Save**.
+3. **Create the purchase**: **Operations → Purchasing → New** (`#/purchase`). Vendor, receiving location **Main Store · DIP**, lines SHS 50 and bolts 500 → **Save** (status Draft).
+4. **Order it**: open the purchase → **Mark ordered**.
+5. **Receive it**: click **Receive** → delivery note (e.g. `DN-1001`) → quantities → **Confirm Receipt**.
+
+Check: Raw Materials shows 50 TUBE and 500 PCS; **Live Tracking** shows *Vendor → Main Store*; the vendor's page has the purchase in its **Purchases** tab.
+
+## Job 2 (A to Z): make parts and a product 🏭
+Keywords: job 2, second job, make parts, production walkthrough, manufacture, bom then production, A to Z, build product, تصنيع خطوة بخطوة
+
+Goal: parts are made in the store and a product is defined.
+1. **Add the parts**: **Master Data → Parts → New** (`#/parts`), source **Manufactured**, unit PCS. Example: `Edge protection post 1.2 m` and `Handrail tube 2.0 m`.
+2. **Part BOMs**: **Master Data → Bills of Materials → New** (`#/bom`) → pick the part → raw material + formula (post: SHS `1/5`, then bolts `2`; handrail: SHS `1/4`). The next line appears when the current one is complete → **Create BOM**.
+3. **Product**: **Master Data → Products → New** (`#/products`) — `Edge Protection Kit`, unit SET → **Save**. Then **Bills of Materials → New** → the kit → post **2**, handrail **2** → **Create BOM**.
+4. **Make the parts**: **Operations → Production → New** (`#/production`) → part, quantity 20, location Main Store → **Save** → open it → **Release** → **Mark completed**. Repeat for the handrail.
+
+Check: Parts show 20 posts and 20 handrails; raw materials went down (SHS 50 → 41, bolts 500 → 460); Live Tracking shows *Main Store → Used in production* and *Made in production → Main Store*.
+
+## Job 3 (A to Z): sell, pack, deliver with a driver, export 🚚
+Keywords: job 3, third job, sell and deliver, dispatch walkthrough, delivery walkthrough, assign driver steps, packing list steps, customer delivery, A to Z, export reports, تسليم خطوة بخطوة
+
+Goal: a product is packed, delivered to a customer by a driver with valid papers, and the reports are exported.
+1. **Customer**: **Overview → Customers → New** (`#/customers`) — name, phone (+971 is already there), position, delivery address, Google Maps link → **Save**.
+2. **Drivers**: **Overview → Drivers → New** (`#/drivers`) — one driver with licence / Emirates ID / vehicle expiry dates in the future and **Official papers checked and on file** ticked; one without (to test the block).
+3. **Dispatch job**: **Operations → Packing & Dispatch → New** (`#/dispatch`) — reference, source store, customer, delivery site, product, quantity 5, fulfilment **Pack from parts** → **Save Job**.
+4. **Assign a driver**: **Operations → Deliveries** (`#/deliveries`) → the job is under **To deliver** → **Assign driver**. The driver without papers is **blocked** (correct). Choose the good driver, km → **Assign driver**. The trip gets a number like **PL2026-11-001**.
+5. **Packing list**: open the trip (click its row) → **Print packing list**. Tick each line while loading; get the signatures.
+6. **Deliver**: on the trip → **Start trip** → **Delivered** → confirm. This takes the goods out of stock and closes the job.
+7. **Export**: **Deliveries → PDF / Excel**; the driver's page → **⚙ Actions → PDF / Excel**; **Live Tracking → Export movements**; **Reports → Stock PDF**.
+
+Check: the parts went down by (5 × parts per kit); Live Tracking shows *Main Store → customer* with the trip and driver; the customer's **Deliveries** tab shows the trip; the Dashboard counts it.
+
+## Add a driver 🚗
+Keywords: add driver, new driver, driver form, truck driver, vehicle, plate, licence, license, emirates id, mulkiya, papers, driver photo, سائق, اضافة سائق, رخصة
+
+1. **Overview → Drivers** (`#/drivers`) → **New**.
+2. Fill **Driver name**, **Phone number** (+971 is already there), **Driver type** (AMBS driver, Outside driver, Client pickup), **Vehicle plate**, **Vehicle type** (Pickup, 3-ton truck …).
+3. Papers: **Licence no.** and expiry, **Emirates ID** and expiry, **Vehicle registration (Mulkiya) expiry**.
+4. Tick **Official papers checked and on file** only after you have seen the papers.
+5. Optional **Driver photo** → **Save driver**.
+
+The driver card shows the photo, vehicle, papers status (✓ OK or the problem) and where the driver is now (*At base* or *On the way → customer*). Click the card for the driver's page: trips, km, papers and **⚙ Actions → PDF / Excel / Delete**. **New trip** is on the page when papers are OK.
+
+## Driver papers rule (why a driver is blocked) 🛂
+Keywords: blocked driver, papers missing, expired licence, cannot assign driver, driver not allowed, papers expired, no papers, cannot start trip, السائق ممنوع, اوراق ناقصة
+
+A driver can only be given a trip when **all** of these are true:
+- **Official papers checked and on file** is ticked,
+- the licence, Emirates ID and vehicle registration expiry dates are not in the past.
+
+Otherwise **Assign driver**, **Start trip** and **Delivered** are refused with a message naming the problem (e.g. "papers not on file", "licence expired"). Fix it: open the driver → **Edit** → update the dates / tick the box → **Save**. The Dashboard card **Driver papers** counts drivers with problems.
+
+## Deliveries page: what is waiting and what is on the road 📦
+Keywords: deliveries page, to deliver, waiting for driver, ready to leave, on the road, delivery trips, trip list, filter trips, delivery status, التوصيلات
+
+**Operations → Deliveries** (`#/deliveries`):
+- Cards: **To deliver** (waiting for a driver), **Ready to leave** (driver assigned), **On the road**, **This month** (trips and km).
+- **To deliver**: every **confirmed sales order** and **open dispatch job** without a trip, with customer, address (📍 pin), items and requested date, and the **Assign driver** button. Nothing is typed in — it appears automatically.
+- **Delivery trips**: all trips with packing no., customer / project, system, driver / vehicle, delivery location (📍), km, status and delivery papers. Filter by search, driver, status, priority and month. Click a row to open the trip.
+- Top right: **PDF** and **Excel** export the filtered trips; **Other trip** creates a trip not linked to an order.
+
+## Assign a driver to an order (create the trip)
+Keywords: assign driver, give to driver, create trip, send with driver, choose driver, ship from, km, تعيين سائق, ارسال مع سائق
+
+1. **Deliveries → To deliver** → **Assign driver** on the order (also on the sales order or dispatch job page).
+2. Pick the **Driver** — drivers with missing or expired papers are refused.
+3. For a sales order choose **Ship from** (the store); AMBS suggests the store that has the stock.
+4. Check the **Vehicle**, enter **Distance (km)**, **Trip date**, **Priority** and **Delivery papers** status → **Assign driver**.
+
+A trip is created with status **Next** and a packing number **PL<year>-<month>-<nnn>**. The order leaves *To deliver* and shows under *Ready to leave*.
+
+## Start a trip and mark it delivered
+Keywords: start trip, on the way, delivered, mark delivered, finish delivery, close trip, delivery done, بدء الرحلة, تم التسليم
+
+1. Open the trip (click its row in **Deliveries**).
+2. **Start trip** (one click) → status **On the way**; Live Tracking and the driver card show it on the road.
+3. When the customer has the goods → **Delivered** → confirm.
+
+**Delivered** takes the goods out of the store (parts for *Pack from parts*, products for *Finished stock*, or the sales order lines), posts the movement *store → customer* with the trip and driver, and closes the order (**Delivered**). Edit the trip's **Delivery papers** status (Pending / Signed & returned / Missing) with **Edit**. **⚙ Actions** has **Driver**, **Sales order** / **Dispatch job** links and **Delete trip**.
+
+## Other trip (not linked to an order)
+Keywords: other trip, manual trip, trip without order, return trip, collect, transfer trip, رحلة اخرى
+
+**Deliveries → Other trip** creates a trip with any customer, project, system, description, from / to, map link, km, priority and driver. It does **not** move stock. Use it for collections, returns or site visits.
+
+## Delivery and driver reports (PDF / Excel)
+Keywords: export deliveries, delivery report, driver report, trips excel, trips pdf, driver pdf, km report, monthly deliveries, تقرير التوصيل, تقرير السائق
+
+- **Deliveries → PDF / Excel**: the trips currently shown (use the filters first, e.g. a month or a driver). Excel has a **Deliveries** sheet and a **Drivers** sheet (papers, trips, km, status).
+- **Driver page → ⚙ Actions → PDF / Excel**: that driver's trips and papers.
+- PDFs open in a new tab and are saved to **Downloads**. Excel files go to **Downloads** (Ctrl+J); Excel may ask you to click **Enable Editing**.
+
+## Live Tracking: where every item is and where it went 🛰️
+Keywords: live tracking, track item, where is my item, item history, from to, movement trail, who delivered, which driver, track, تتبع, وين البضاعة
+
+**Overview → Live Tracking** (`#/tracking`):
+- **On the road now**: trips on the way with driver and 📍 destination.
+- **Waiting to be delivered**: open orders per item, from → to, and their trip (or **Assign driver**).
+- **Where every item is now**: balance per item and location.
+- **Every movement**: every stock change as **From → To** (vendor → store, store → production, store → customer …) with the trip and driver, and the balance left. Filter by item type, location, movement type and dates.
+- Click an item (**Track**) for its full timeline from receipt to delivery.
+- **Export movements** downloads everything to Excel.
+
+The page refreshes itself every 30 seconds.
+
+## Google Maps link (copy and paste a location) 🗺️
+Keywords: google maps, map link, location link, share location, coordinates, pin, map, خريطة, رابط الموقع
+
+1. In Google Maps (phone or computer) open the place.
+2. **Share → Copy link**.
+3. Paste it in the **Google Maps link** box of the customer, vendor, location or trip. Coordinates like `25.2048, 55.2708` also work.
+
+A 📍 pin then appears next to the address everywhere (customer page, deliveries, trips, Live Tracking) and the link is on the packing list and in Excel exports. A new trip copies the customer's link automatically.
+
+## Search bar (find any page or record)
+Keywords: search, global search, find record, find customer, find part, quick search, ctrl k, slash, بحث
+
+Press `/` or **Ctrl+K**, or click the search bar at the top. Type a page name (e.g. *deliveries*) or a record (customer, vendor, material, part, product, driver, trip number). Use ↑/↓ and **Enter** to open, **Esc** to close. Inside each list there is also a small search box at the left to filter that list.
 
 ## Navigating the app (sidebar and pages)
 Keywords: menu, sidebar, navigation, pages, where is, find page, القائمة, صفحة
@@ -171,7 +323,7 @@ Keywords: search, filter, find record, picker, dropdown, typo, بحث
 Keywords: add customer, new supplier, processor, vendor, client, company, contact, TRN, VAT, tags, payment terms, credit limit, logo, عميل, مورد, شركة, زبون
 
 1. Open **Customers** (`#/customers`), **Suppliers** (`#/suppliers`) or **Processing Companies** (`#/processors`) from the sidebar group **Overview**.
-2. Click **Add Customer**, **Add Supplier** or **Add Processing Company** (top right). The form has tabs:
+2. Click **New** (top right). Customers and vendors use a short form (see "What changed in November 2026"); processing companies use the full form with tabs:
    - **General**: **Code** and **Name** (required; codes must be unique per company type), **TRN / VAT number (optional)**, **Tags (comma separated)** such as "VIP, Contractor", **Email**, **Phone**, **Website**, **Business / Supply details** (processing companies: **Services (comma separated)**), **Address**, **City / emirate**, **Country** and a **Logo**.
    - **Contacts**: click **Add Contact** for each person (**Name**, **Job title**, **Phone**, **Email**). The first contact is shown as the main contact person in lists.
    - **Locations**: click **Add Location** to add sites (see "Add company locations (sites)").
@@ -184,18 +336,18 @@ The list shows the logo (or initials), name, tags, main contact person, phone, n
 ## Customer, supplier and processor page (smart buttons)
 Keywords: customer page, customer profile, customer details, smart buttons, customer history, supplier page, open orders of customer, credit limit warning, صفحة العميل, ملف العميل
 
-Click **View** on a company to open its page:
+Click a company card (or row) to open its page:
 
 - **Header**: logo, name, code, type, status and tags.
-- **Smart buttons** with live numbers. Click one to jump to its section:
+- **Smart buttons** with live numbers (boxes with nothing to show are hidden). Click one to jump to its tab:
   - Customers: **Sales orders**, **Ordered value**, **Deliveries**, **Dispatch jobs**
   - Suppliers: **Purchases**, **Receipts**, **Items supplied**
   - Processing companies: **Production orders**
   - All: **Stock at sites**, **Contacts**, **Locations**
 - **Details**: TRN, email and phone (click to email or call), website, address, payment terms, credit limit or lead time, account manager.
-- Sections listing the company's contacts, locations, sales orders, dispatch jobs, purchases, production orders, stock held at its sites and recent stock movements, each with **View** buttons.
+- Tabs listing the company's locations, sales orders, dispatch jobs, deliveries, purchases, production orders, stock held at its sites and recent stock movements. Click a row to open it.
 
-If a customer's open sales orders are worth more than its **Credit limit**, the page shows a warning and an **Over limit** badge. The limit is a reminder only; it doesn't block orders. Click **Edit** at the bottom to change the company.
+If a customer's open sales orders are worth more than its **Credit limit**, the page shows a warning and an **Over limit** badge. The limit is a reminder only; it doesn't block orders. **Edit** is at the top right; **Delete** is under **⚙ Actions**.
 
 ## Add company locations (sites) 📍
 Keywords: site, location, address, project site, delivery site, Google Maps, latitude, longitude, موقع, عنوان
@@ -269,7 +421,7 @@ Keywords: edit location, archive location, delete location, rename warehouse, re
 
 Go to **Settings & Data** → **Locations** (`#/settings`). Every location, both AMBS and company sites, is listed with these actions:
 
-- **View** shows company, address, custody flag, current stock, linked operations and recent movements.
+- Click the location row: its page shows company, address, custody flag, current stock, linked operations and recent movements, with **Edit** and **⚙ Actions → Archive / Delete**.
 - **Open in Google Maps** appears when a map link or coordinates exist.
 - **Edit** (AMBS locations) opens the location form. For company sites, the button is **Edit company** and opens the company record. "Edit company locations from their company record."
 - **Archive** / **Restore** (AMBS locations) removes the location from new selections or brings it back. Archiving is blocked while it has a balance or open plans, orders, purchases or dispatch jobs: "Resolve balance and open operations at this location first."
@@ -319,7 +471,7 @@ The **Raw Materials** table (`#/materials`) shows these columns:
 - **Status**: **Low** (red) when on hand is below safety, **Watch** (amber) when it is within 125% of safety, otherwise **OK**. With safety 0 it is always OK.
 - **State**: Active or Archived.
 
-Actions are **View**, **Edit**, **Archive**/**Restore** and **Delete**. **Stock report** (top right) opens **Reports**. Materials below safety stock also appear in **Stock alerts** on the Dashboard and in **Shortages and safety stock** on Reports.
+Click a card or row to open the material; **Edit** is at the top and **Delete** under **⚙ Actions**. **Stock report** (top right) opens **Reports**. Materials below safety stock also appear in **Stock alerts** on the Dashboard and in **Shortages and safety stock** on Reports.
 
 ## Units of measure
 Keywords: unit, UOM, PCS, KG, meter, M², unit error, وحدة
@@ -342,7 +494,7 @@ Keywords: add part, component, new part, manufactured, purchased, stocked, part 
    - **Stocked**: an item simply held in stock. It can also be purchased and needs no BOM.
 4. Optionally add **Image** and **Notes**, then click **Save**.
 
-The Parts list shows **Quantity on hand** (including variant stock) with actions **View**, **Edit**, **Variants**, **BOM**, **Archive**/**Restore** and **Delete**. You can't change the source while draft or released production orders use the part: "Close open production orders before changing this part’s source."
+The Parts list shows **Quantity on hand** (including variant stock) Click a part to open it: **Edit** at the top, the **Bill of Materials** tab, and **⚙ Actions → Variants / Archive / Delete**. You can't change the source while draft or released production orders use the part: "Close open production orders before changing this part’s source."
 
 ## Part variants (size / color SKUs)
 Keywords: variant, size, color, SKU, yellow, red, net size, مقاس, لون
@@ -394,7 +546,7 @@ How it works:
 2. The two **net** rows act as inputs. When you change a net quantity, the dependent rows are recalculated. For example, horizontal aluminium rounds = nets × 2.
 3. You can still edit any quantity by hand before saving.
 
-Product **View** shows the template **Type** (STD, MAXI or VERTICAL NET). Templates only fill quantities, and the saved Product BOM is what operations use.
+The product page shows the template **Type** (STD, MAXI or VERTICAL NET). Templates only fill quantities, and the saved Product BOM is what operations use.
 
 ## Add or change a picture (image) 🖼️
 Keywords: image, picture, photo, upload, logo, change image, remove image, صورة, رفع صورة
@@ -413,29 +565,29 @@ Allowed: PNG, JPEG, WebP or GIF up to 10 MB ("Choose a PNG, JPEG, WebP or GIF un
 - "The image could not be opened."
 - "This image is too detailed to save. Choose a smaller image."
 
-Pictures appear as thumbnails in lists, in **View** windows and in the product parts table. Records without one show a box icon. The company logo appears on PDF headers.
+Pictures appear as thumbnails in lists, on record pages and in the product parts table. Records without one show a box icon. The company logo appears on PDF headers.
 
 ## Enlarge a picture (image viewer)
 Keywords: zoom image, enlarge photo, view picture big, full size, lightbox, تكبير الصورة
 
-Click any thumbnail picture in a list, a **View** window or the product parts table. It opens enlarged in the centre of the screen with its name as a caption.
+Click any thumbnail picture in a list, a record page or the product parts table. It opens enlarged in the centre of the screen with its name as a caption.
 
 To close it, click the **×** button, click anywhere outside the picture, or press **Escape**. The placeholder box icon shown for records without a picture does not open.
 
 ## View a record and its linked information
 Keywords: view, details, history, linked operations, where used, record details, تفاصيل
 
-Click **View** on any master record:
+Click any master record (card or row) to open its page:
 
 - The picture, status, category, specifications, unit, source and contact details.
 - **Linked locations** for companies, with **Open in Google Maps**.
 - **Product parts** for products.
 - **Stock by location** (or **Stock at linked sites** for companies): the current balances.
-- **Linked operations**: production plans, orders, purchases and dispatch jobs that use the record, each with a **View** button.
+- **Linked operations**: production plans, orders, purchases and dispatch jobs that use the record, click a row to open it.
 - **Used in BOMs**: for raw materials, the Part BOMs that use them; for parts, the Product BOMs. Each has an **Open BOM** button.
 - **Recent linked stock movements**: the last 15.
 
-Operation views (plans, orders, purchases, dispatch, stock events) have a **Download PDF** button.
+Operation pages (plans, orders, purchases, dispatch, stock events) have **PDF** under **⚙ Actions**.
 
 ## Archive, restore or delete master records
 Keywords: archive, deactivate, restore, delete, remove, inactive, أرشفة, حذف
@@ -553,16 +705,16 @@ Errors include "Enter a plan name.", "Add at least one product.", "Save the Prod
 ## Production plan statuses (Draft, Reserved, Closed)
 Keywords: plan status, reserve, close reservation, draft plan, حجز
 
-- **Draft**: saved, with no effect on availability. Actions: **View**, **Edit**, **Reserve**, **Delete**.
+- **Draft**: saved, with no effect on availability. On the plan page: **Reserve**, **Edit**; **⚙ Actions → Download PDF / Delete**.
 - **Reserved**: click **Reserve** → **Confirm** ("Record the saved material requirements as reserved planning demand. Physical stock stays the same."). The plan's raw materials now count as **Reserved elsewhere** for other plans and orders at the same location. They also produce **Reserved demand shortage** alerts when stock is short.
 - **Closed**: click **Close reservation** → **Confirm** to release the reservation. This is the final state.
 
-**View** shows products, parts, consolidated raw materials and the BOM trace, plus **Download PDF**. Closing a plan does not consume stock or produce anything. Actual production happens through production orders. If someone changed the plan meanwhile, you see "This plan status has changed." Click **Refresh** and try again.
+The plan page shows products, parts, consolidated raw materials and the BOM trace. Closing a plan does not consume stock or produce anything. Actual production happens through production orders. If someone changed the plan meanwhile, you see "This plan status has changed." Click **Refresh** and try again.
 
 ## Create a production order (manufacture a part)
 Keywords: production order, manufacture part, work order, MO, fabrication order, أمر إنتاج
 
-1. On **Production** (`#/production`), click **Create Production Order**.
+1. On **Production** (`#/production`), click **New**.
 2. Pick the **Part to manufacture**. Only active parts with source **Manufactured** are listed.
 3. Enter **Quantity to manufacture** (whole number) and choose the **Fabrication location**. Materials are consumed there and the finished part is received there.
 4. If the part has variants, choose the **Part variant**.
@@ -575,12 +727,12 @@ The order needs an approved Part BOM ("Approve the Part BOM for … first."). "C
 ## Production order statuses (Draft → Released → Completed)
 Keywords: release order, complete order, cancel order, order status, confirm completion, إكمال الإنتاج
 
-- **Draft**: editable. Actions: **View**, **Edit**, **Release**, **Cancel**, **Delete**.
+- **Draft**: editable. On the order page: **Release**, **Edit**; **⚙ Actions → Cancel / PDF / Delete**.
 - **Released**: click **Release** → **Release** ("Reserve the raw materials for this order. Physical balances stay the same."). The materials count as reserved at the fabrication location.
 - **Completed**: click **Complete** → **Confirm completion**. The app posts a "Production completion" movement. It **deducts** the BOM raw materials and **adds** the manufactured part (or variant) at the fabrication location. If any material is short, completion is refused with "Insufficient stock for …". Completed orders can't be edited or deleted.
 - **Cancelled**: **Cancel** → **Cancel order** from Draft or Released. This releases the requirement without any stock change.
 
-"The order already changed status." means someone else acted first. Click **Refresh**. **View** shows the requirements, the BOM trace and **Download PDF**.
+"The order already changed status." means someone else acted first. Click **Refresh**. The order page shows the requirements and the BOM trace; **PDF** is under **⚙ Actions**.
 
 ## Reading the raw material requirement table
 Keywords: shortage, covered, reserved elsewhere, pending purchases, physical, requirement table, نقص
@@ -598,7 +750,7 @@ Pending purchases are shown for information but do not reduce the shortage. Stoc
 ## Create a purchase request 🛒
 Keywords: purchase, buy, purchase request, PR, order material, supplier order, شراء, طلب شراء
 
-1. Open **Purchasing** (`#/purchase`) and click **New Purchase Request**, or use the **Purchase** button in the top bar.
+1. Open **Purchasing** (`#/purchase`) and click **New**.
 2. Choose the **Supplier** and optionally the **Supplier site (optional)**.
 3. Choose the **Receiving custody location** where the goods will arrive.
 4. Optionally add **Reference / notes**.
@@ -615,18 +767,18 @@ Errors:
 ## Purchase request statuses
 Keywords: purchase status, mark ordered, partially received, received, cancel purchase, حالة الشراء
 
-- **Draft**: actions **View**, **Edit**, **Mark Ordered**, **Cancel**, **Delete**.
-- **Ordered**: click **Mark Ordered** → **Confirm**. Quantities now show as **On order** on Raw Materials and as **Pending purchases** in requirement tables. Actions: **Record Receipt** and **Cancel**.
+- **Draft**: on the purchase page **Mark ordered**, **Edit**; **⚙ Actions → Cancel / PDF / Delete**.
+- **Ordered**: click **Mark ordered** → **Confirm**. Quantities now show as **On order** on Raw Materials and as **Pending purchases** in requirement tables. Next step: **Receive** (**Cancel** is under ⚙ Actions).
 - **Partially received**: shown while Ordered with some quantity received. **Edit** and **Delete** disappear after the first receipt.
 - **Received**: set automatically when every line is fully received.
 - **Cancelled**: from Draft or Ordered ("Cancel the unreceived requirement. Received stock remains in the ledger.").
 
-"This purchase status has changed." means another user or tab already changed it. **View** shows Ordered, Received and Outstanding per line, the receipts, and **Download PDF**.
+"This purchase status has changed." means another user or tab already changed it. The purchase page shows Ordered, Received and Outstanding per line and the receipts; **PDF** is under **⚙ Actions**.
 
 ## Receive goods from a supplier (record receipt) ✅
 Keywords: receive, receipt, goods received, GRN, delivery note, supplier delivery, استلام, استلام بضاعة
 
-1. On **Purchasing** (`#/purchase`), find the request in status **Ordered** and click **Record Receipt**.
+1. On **Purchasing** (`#/purchase`), click the request in status **Ordered** to open it and click **Receive**.
 2. The form **Supplier Receipt · PR-…** shows "Receiving into [location]".
 3. Enter **Delivery note / reference** (required, and unique for this purchase).
 4. For each line, enter the received quantity. The label shows the outstanding quantity. Leave 0 for items not delivered.
@@ -648,7 +800,7 @@ Keywords: inventory, stock, balance, stock movements, ledger, where is stock, م
 **Inventory & Stock Movements** (`#/movement`) is the stock control centre:
 
 - The top table lists every **Item / SKU** with its **Custody location** and **Physical balance**. Only non-zero balances are shown, and the table is searchable.
-- **Movement history** lists every stock event with Date, Event, Items / SKUs, Location (A → B for transfers), Change, Related company / site, Reference and **View**.
+- **Movement history** lists every stock event with Date, Event, Items / SKUs, Location (A → B for transfers), Change, Related company / site and Reference. Click a row to open the movement.
 
 Buttons at the top right:
 - **Transfer Stock**: move stock between custody locations.
@@ -705,7 +857,7 @@ Keywords: stock count, stock take, physical count, cycle count, reconcile, inven
 4. Enter **Reason / count reference**, for example "Monthly count Nov".
 5. Click **Confirm Count**.
 
-The app posts the difference (physical − system) as a "Physical Stock Check" event and stores both the system count and the physical count, which you can see in **View**. If the count equals the system balance, a zero-change record is still kept.
+The app posts the difference (physical − system) as a "Physical Stock Check" event and stores both the system count and the physical count, which you can see on the movement's page. If the count equals the system balance, a zero-change record is still kept.
 
 Errors:
 - "Enter a stock count reference."
@@ -717,7 +869,7 @@ Keywords: ledger, history, audit, movement log, undo movement, delete movement, 
 Every stock change is an **event** in the ledger: Opening stock, Supplier receipt, Production completion, Transfer Stock, Record Stock Adjustment, Physical Stock Check, Customer delivery and Verified legacy opening.
 
 - View the ledger on **Inventory & Stock Movements** → **Movement history** (`#/movement`) or **Reports** → **Movement ledger** (`#/reports`).
-- **View** on an event shows when and by whom it was recorded (the **Operator name** from the Company profile), the reference, related company, site and document, and each line's change and current balance. It has links such as **Open purchase**, **Open order** or **Open dispatch**, plus **Download PDF**.
+- Opening a movement shows when and by whom it was recorded (the **Operator name** from the Company profile), the reference, related company, site and document, and each line's change and current balance. It has links such as **Open purchase**, **Open order** or **Open dispatch**; **PDF** is under **⚙ Actions**.
 - Events **cannot be edited or deleted**. Correct mistakes with a new **Stock Adjustment** or **Stock Check**. Operations with posted stock (completed orders, purchases with receipts, jobs with deliveries) can't be deleted either.
 
 ## Sales Orders page 🧾
@@ -727,7 +879,7 @@ Keywords: sales order, sales orders, customer order, sell, selling, order from c
 
 - The cards at the top show **Open orders**, **Awaiting delivery**, **Past requested date** and **Open order value** (from unit prices).
 - The list shows each order with its customer, order date, requested delivery date (red when it has passed), number of items, a **Delivered** progress bar, value and status.
-- Actions per order: **View**, **Edit**, **Confirm**, **Deliver**, **Cancel** and **Delete** (only the ones allowed for its status appear).
+- Click an order to open it. The next step (**Confirm**, **Assign driver**) and **Edit** are at the top; **PDF**, **Packing list**, **Partial delivery**, **Cancel order** and **Delete** are under **⚙ Actions** (only the ones allowed for its status).
 - **Sales deliveries** at the bottom lists every delivery posted from sales orders.
 
 A sales order can contain **any stock item**: products, parts (for example loose safety nets), variants or raw materials, with several lines per order.
@@ -735,25 +887,27 @@ A sales order can contain **any stock item**: products, parts (for example loose
 ## Create a sales order
 Keywords: new sales order, add sales order, record customer order, create order for customer, quotation, PO from customer, طلبية جديدة, اضافة طلب
 
-1. Open **Sales Orders** (`#/sales`) and click **New Sales Order**.
+1. Open **Sales Orders** (`#/sales`) and click **New**.
 2. Choose the **Customer**. Optionally choose a **Customer delivery site (optional)** from that customer's locations.
 3. Optionally enter **Customer PO / reference (optional)**, change the **Order date**, and set a **Requested delivery date (optional)**.
 4. In **Order line**, pick the **Item / SKU**, enter the **Ordered quantity** and optionally a **Unit price (AED, optional)**. Click **Add Line** for more items (one line per item).
 5. The **Order total** appears when unit prices are entered.
 6. Click **Save Order**. The order gets a number starting **SO-** and status **Draft**.
 
-Then click **Confirm** when the customer's order is final.
+Then click **Confirm** when the customer's order is final. A confirmed order appears automatically in **Deliveries → To deliver**, ready for **Assign driver**.
 
 ## Deliver a sales order (full or partial)
 Keywords: deliver sales order, ship order, send to customer, partial delivery, give customer, deduct stock, delivery note, تسليم طلبية, تسليم جزئي, شحن للزبون
 
-1. On **Sales Orders** (`#/sales`), click **Deliver** on a **Confirmed** or **Partially delivered** order.
-2. Choose **Ship from (custody location)**: the store the goods leave from. **Available at source** shows the stock there for each line.
-3. Enter **Delivery note / reference** (required and new for this order).
-4. For each line, enter the quantity delivered now (up to the outstanding quantity). Leave 0 for lines not shipped yet.
-5. Click **Confirm Delivery**.
+**Normal way — with a driver:** confirm the order → **Deliveries → To deliver → Assign driver** → on the trip **Start trip** → **Delivered**. Delivered takes the outstanding quantities out of the chosen store and the order becomes **Delivered**. See "Assign a driver to an order" and "Start a trip and mark it delivered".
 
-The stock is deducted from that location immediately and a **Sales delivery** movement appears in **Inventory & Stock Movements**. The order becomes **Partially delivered** or **Delivered**. Repeat for later shipments.
+**Without a driver / part of the order now:** open the order → **⚙ Actions → Partial delivery**:
+1. Choose **Ship from (custody location)**: the store the goods leave from. **Available at source** shows the stock there for each line.
+2. Enter **Delivery note / reference** (required and new for this order).
+3. For each line, enter the quantity delivered now (up to the outstanding quantity). Leave 0 for lines not shipped yet.
+4. Click **Confirm Delivery**.
+
+The stock is deducted from that location immediately and a **Sales delivery** movement appears in **Inventory & Stock Movements**. The order becomes **Partially delivered** or **Delivered**.
 
 Errors:
 - "Insufficient stock for … at …": receive or transfer stock to that location first.
@@ -764,34 +918,35 @@ Errors:
 ## Sales order statuses
 Keywords: sales order status, draft, confirmed, partially delivered, delivered, cancelled, cancel sales order, حالة الطلبية
 
-- **Draft**: just saved. **Edit**, **Confirm**, **Cancel**, **Delete**.
-- **Confirmed**: ready to ship. **Edit** (until the first delivery), **Deliver**, **Cancel**, **Delete** (no deliveries yet).
-- **Partially delivered**: some quantity shipped. **Deliver** the rest or **Cancel** the remaining balance. It can no longer be edited or deleted.
+- **Draft**: just saved. **Confirm**, **Edit**; ⚙ Actions → **Cancel order**, **Delete**.
+- **Confirmed**: ready to ship — it is in **Deliveries → To deliver**. **Assign driver**, **Edit** (until the first delivery); ⚙ Actions → **Partial delivery**, **Packing list**, **Cancel order**, **Delete** (no deliveries yet).
+- **Partially delivered**: some quantity shipped. Assign a driver or use **Partial delivery** for the rest, or **Cancel order** for the remaining balance. It can no longer be edited or deleted.
 - **Delivered**: everything shipped.
 - **Cancelled**: the undelivered balance is closed. Deliveries already made stay in the stock history.
 
-**View** shows each line's ordered, delivered and outstanding quantities, total stock on hand, prices, and the delivery history, plus **Download PDF**.
+The order page shows each line's ordered, delivered and outstanding quantities, total stock on hand, prices and the delivery history; **PDF** is under **⚙ Actions**.
 
 ## Example: receive 20 safety nets and deliver 13 to a customer
 Keywords: receive 20 give 13, part of stock to customer, split stock, sell some nets, deliver some, جزء من الكمية, استلمت وبدي اعطي
 
-1. **Receive the 20**: on **Purchasing** (`#/purchase`) create a **New Purchase Request** for the safety net with quantity 20, click **Mark Ordered**, then **Record Receipt** when it arrives. Stock = 20 at your custody location.
-2. **Record the customer's order**: on **Sales Orders** (`#/sales`) click **New Sales Order**, choose the customer, add the safety net with quantity 13, save and click **Confirm**.
-3. **Deliver**: click **Deliver**, choose the location, enter the delivery note and 13, then **Confirm Delivery**. Stock = 7.
+1. **Receive the 20**: on **Purchasing** (`#/purchase`) click **New** for the safety net with quantity 20, open it → **Mark ordered**, then **Receive** when it arrives. Stock = 20 at your custody location.
+2. **Record the customer's order**: on **Sales Orders** (`#/sales`) click **New**, choose the customer, add the safety net with quantity 13, save and click **Confirm**.
+3. **Deliver**: **Assign driver** → trip **Start trip** → **Delivered** (or ⚙ Actions → **Partial delivery** with 13). Stock = 7.
 
 You can also deliver 8 now and 5 later; the order shows **Partially delivered** until all 13 are shipped.
 
 ## Create a dispatch job 🚚
 Keywords: dispatch, delivery, packing, ship, send to customer, DSP, job, شحن, تسليم, توصيل
 
-1. Open **Packing & Dispatch** (`#/dispatch`) and click **New Dispatch Job**.
+1. Open **Packing & Dispatch** (`#/dispatch`) and click **New**.
 2. Fill **Reference / project** (required) and choose the **Source custody location** where the goods leave from.
 3. Choose the **Customer** and the **Customer delivery site**. The customer must have at least one active location in its record.
 4. Choose the **Fulfilment**: **Pack from parts** or **Finished stock** (see the next section).
 5. Optionally tick **Keep delivered stock tracked at customer site**.
 6. In **Complete product**, choose the **Product**. **Requested product quantity** fills with the product's Default order quantity. Adjust the per-part quantities and variants if needed.
-7. Review the panel: destination with **Open in Google Maps**, plus **Packing requirements** or **Finished stock** availability.
-8. Click **Save Job**. The job is **Open**, with a number starting **DSP-**.
+7. Review the panel: destination with its 📍 map link, plus **Packing requirements** or **Finished stock** availability.
+8. Click **Save Job**. The job is **Open**, with a number starting **DSP-**, and appears in **Deliveries → To deliver**.
+9. Open it → **Print packing list** for the store team, then **Assign driver**.
 
 Each job holds one product. Errors include "Enter a dispatch reference.", "Select a delivery site belonging to this customer." and "Save the Product BOM for … first."
 
@@ -819,7 +974,8 @@ When the box is not ticked, delivered stock leaves AMBS stock completely ("Deliv
 ## Record a delivery (confirm dispatch)
 Keywords: confirm delivery, deliver, delivery note, partial delivery, record delivery, تأكيد التسليم
 
-1. On **Packing & Dispatch** (`#/dispatch`), click **Record Delivery** on an Open or Partially delivered job.
+Normally the job is delivered by its trip (**Start trip → Delivered**). To post a delivery by hand (e.g. part of the quantity, or collected by the customer):
+1. Open the job on **Packing & Dispatch** (`#/dispatch`) → **⚙ Actions → Partial delivery**.
 2. Enter **Quantity delivered (outstanding N)**, a whole number up to the outstanding quantity.
 3. Enter **Delivery note / reference** (required, and new for this job).
 4. Check the **Stock posting preview**: Exact SKU, To deduct, Available at source, and Customer site after if tracked.
@@ -847,12 +1003,12 @@ The PDF has the PL number, date, customer, reference, ship-from store, driver an
 ## Dispatch job statuses and cancelling
 Keywords: dispatch status, open, partially delivered, delivered, cancelled, cancel job, إلغاء الشحنة
 
-- **Open**: no deliveries yet. Actions: **View**, **Edit**, **Record Delivery**, **Cancel**, **Delete**.
-- **Partially delivered**: some quantity delivered. **Edit** and **Delete** are gone ("Jobs with confirmed deliveries cannot be edited."). **Record Delivery** and **Cancel** remain.
+- **Open**: no deliveries yet. **Assign driver**, **Print packing list**, **Edit**; ⚙ Actions → **Partial delivery**, **Cancel job**, **PDF**, **Delete**.
+- **Partially delivered**: some quantity delivered. **Edit** and **Delete** are gone ("Jobs with confirmed deliveries cannot be edited."). **Partial delivery** and **Cancel job** remain.
 - **Delivered**: delivered quantity equals ordered quantity.
 - **Cancelled**: **Cancel** → **Cancel remaining delivery** closes the outstanding balance. Confirmed deliveries and posted stock stay recorded.
 
-The list shows Requested, Delivered and Outstanding. **View** shows the delivery site, map, saved packing configuration and delivery history (with **View stock posting**), plus **Download PDF**. "A job with deliveries cannot be deleted."
+The list shows Requested, Delivered and Outstanding. The job page shows the delivery site, map, saved packing configuration and delivery history (with **View stock posting**). "A job with deliveries cannot be deleted."
 
 ## How do I get finished product stock?
 Keywords: product stock, finished goods, produce product, assemble product, make product stock, مخزون المنتج النهائي
@@ -867,14 +1023,14 @@ Note that option 2 doesn't consume the parts automatically. If you assemble kits
 ## End-to-end workflow: buy → receive → produce → dispatch → deliver
 Keywords: workflow, process, step by step, full cycle, how to start, دورة العمل
 
-1. **Setup**: add a custody location (**Settings & Data** → **Add Custody Location**). Then add suppliers, customers with their sites, raw materials, parts and products.
+1. **Setup**: add a custody location (**Settings & Data** → **Add Custody Location**). Then add vendors, customers with their sites, raw materials, parts and products.
 2. **BOMs**: create Part BOMs for manufactured parts and Product BOMs for products (`#/bom`).
 3. **Plan** (optional): on **Production**, use **New Production Plan** to see the raw material shortages for the products you need. Click **Reserve** to hold the demand.
-4. **Buy**: on **Purchasing**, use **New Purchase Request** → **Mark Ordered**.
-5. **Receive**: **Record Receipt** with the supplier's delivery note. Stock increases at the receiving location.
-6. **Produce**: on **Production**, use **Create Production Order** → **Release** → **Complete**. Raw materials are consumed and the part is added. Use **Transfer Stock** if materials are at another location.
-7. **Sell / dispatch**: record the customer order on **Sales Orders** and **Deliver** it (any item), or use **Packing & Dispatch** → **New Dispatch Job** with **Pack from parts** for packed product kits.
-8. **Deliver**: **Record Delivery** with the delivery note. Parts are deducted, or moved to the customer site if tracked.
+4. **Buy**: on **Purchasing**, **New** → open it → **Mark ordered**.
+5. **Receive**: **Receive** with the vendor's delivery note. Stock increases at the receiving location.
+6. **Produce**: on **Production**, **New** → open it → **Release** → **Mark completed**. Raw materials are consumed and the part is added. Use **Transfer Stock** if materials are at another location.
+7. **Sell / dispatch**: record the customer order on **Sales Orders** and **Confirm** it (any item), or use **Packing & Dispatch → New** with **Pack from parts** for packed product kits. **Print packing list**.
+8. **Deliver**: **Deliveries → Assign driver** → trip **Start trip** → **Delivered**. Parts are deducted, or moved to the customer site if tracked.
 9. **Close the plan**: **Close reservation**.
 10. **Control**: run **Stock Check** periodically and review **Reports**.
 
@@ -894,16 +1050,9 @@ Buttons at the top right:
 There are no date-range filters or valuation reports. Filter the CSV in Excel if needed.
 
 ## Download PDF of a plan, order, purchase, delivery or movement
-Keywords: PDF, print, download document, print order, print delivery note, طباعة, PDF
+Keywords: pdf, download pdf, print, print order, print purchase, export record, طباعة, تحميل
 
-Open the record's **View** window and click **Download PDF** (bottom). Available for:
-- **Production plans**: products, consolidated demand and BOM trace.
-- **Production orders**: part, quantity, location, customer or processor, and BOM trace.
-- **Purchase requests**: supplier, receiving location and lines with Ordered, Received and Outstanding.
-- **Dispatch jobs**: product, customer site, parts, stock tracking and deliveries.
-- **Stock events**: lines and related documents.
-
-PDFs carry the company name, address, phone, email, TRN and logo from the **Company profile**, so fill those in **Settings & Data**. If you see "PDF export is unavailable", the PDF library failed to load. Reload the page.
+Open the record and click **⚙ Actions → PDF** (plans: **Download PDF**). Available for production plans and orders, purchases, sales orders, dispatch jobs, stock movements and drivers. Dispatch jobs and trips also have **Print packing list** at the top. The PDF opens in a new tab and is saved to **Downloads**.
 
 ## Stock alerts and warnings ⚠️
 Keywords: alerts, warnings, low stock, reorder, shortage alert, safety stock alert, تنبيه
@@ -1074,7 +1223,7 @@ The app never allows a balance below zero at any location. It appears on transfe
 How to fix it:
 1. Check the balance per location on **Inventory & Stock Movements** (`#/movement`). The stock may be at a **different location**. Use **Transfer Stock**.
 2. Make sure you picked the right **SKU**. For parts with variants, stock is per variant (size or color).
-3. Receive pending purchases (**Purchasing** → **Record Receipt**) or complete production orders.
+3. Receive pending purchases (**Purchasing** → open the purchase → **Receive**) or complete production orders.
 4. If the physical stock really exists, record a **Stock Check** with the counted quantity.
 5. For dispatch, lower the quantity or the adjusted part quantities, or use the other **Fulfilment** option.
 
