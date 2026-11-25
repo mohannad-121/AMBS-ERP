@@ -4527,7 +4527,7 @@ function simpleCompanyPage(type){
           ${!vendor&&r.position?`<div class="o-card-line">${esc(r.position)}</div>`:''}
           ${r.phone?`<div class="o-card-line">${ic('phone')}${esc(r.phone)}</div>`:''}
           ${address(r)?`<div class="o-card-line o-muted">${esc(address(r))}</div>`:''}
-          <div class="o-card-tags">${vendor&&supplies.length?`<span class="o-tag">${supplies.length} materials</span>`:''}${open?`<span class="o-tag">${open} open ${vendor?'purchases':'orders'}</span>`:''}${r.active===false?'<span class="o-tag">Archived</span>':''}</div></div>`};
+          <div class="o-card-tags">${vendor&&supplies.length?`<span class="o-tag">${supplies.length} material${supplies.length===1?'':'s'}</span>`:''}${open?`<span class="o-tag">${open} open ${vendor?'purchase':'order'}${open===1?'':'s'}</span>`:''}${r.active===false?'<span class="o-tag">Archived</span>':''}</div></div>`};
     }),{placeholder:vendor?'Search vendors by name, phone, address or material…':'Search customers by name, phone, position or address…',
       noun:vendor?'vendors':'customers',empty:'No '+title.toLowerCase()+'s yet. Click New to add the first one.',
       list:{columns:['Name',...(vendor?[]:['Position']),'Phone',vendor?'Address':'Delivery address','Code',vendor?'Open purchases':'Open orders'],
