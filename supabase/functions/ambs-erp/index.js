@@ -90,6 +90,7 @@ Deno.serve(async request => {
     if (!current) return answer({ message: 'This account does not have AMBS access.' }, 403);
     if (request.method === 'GET') return answer({ ...current, identity: email });
 
+    if (current.role === 'owner') return answer({ message: 'The owner account is view-only — nothing can be changed from it.' }, 403);
     let data;
     try { data = await readBody(request); }
     catch { return answer({ message: 'Invalid workspace data or payload is too large.' }, 400); }

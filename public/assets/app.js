@@ -3151,6 +3151,7 @@ async function transaction(names,mode,work){
 }
 
 async function commit(change){
+  if(isOwner())throw Error('The owner account is view-only — nothing can be changed from it.');
   const next=await transaction(['erpV3'],'readwrite',(t,done,abort)=>{
     const store=t.objectStore('erpV3'), request=store.get('state');
     request.onsuccess=()=>{
@@ -3175,13 +3176,21 @@ const TITLES={owner:'Owner overview',team:'Team activity',items:'Items & stock',
   'plan-new':'Production','purchase-new':'Purchasing'};
 /* Owner (super admin) gets his own menu: the team's work, items and tracking. Admins see the same pages under "Owner view". */
 /* Build version: stamped by scripts/bump-version.py together with the ?v= links in index.html. */
-const AMBS_VERSION='2026.11.25-2227';
+const AMBS_VERSION='2026.11.25-2241';
 const isOwner=()=>typeof CLOUD!=='undefined'&&CLOUD.role==='owner';
 const canSeeOwner=()=>typeof CLOUD!=='undefined'&&['owner','admin'].includes(CLOUD.role);
 const OWNER_GROUPS=[
-  ['Owner',[['owner','chart'],['team','users'],['items','box']]],
-  ['Follow the work',[['tracking','route'],['deliveries','truck'],['sales','invoice'],['purchase','cart'],['production','wrench'],['reports','pdf']]]
+  ['Super admin',[['owner','chart'],['team','users'],['items','box']]],
+  ['View only',[['tracking','route'],['deliveries','truck'],['customers','users'],['suppliers','warehouse'],['processors','factory']]]
 ];
+const OWNER_ROUTES=new Set(OWNER_GROUPS.flatMap(([,rows])=>rows.map(([r])=>r)));
+/* The owner account only looks: no New / Edit / Delete / status buttons, no photo uploads, and saving is refused. */
+const WRITE_ACTION=/^(New|Edit|Delete|Archive|Restore|Assign driver|Start trip|Start|Delivered|Confirm|Cancel|Mark |Receive|Release|Reserve|Close reservation|Partial delivery|Other trip|Variants|Create BOM|Edit BOM|Add |Save|Import|Export Backup|Transfer Stock|Stock Adjustment|Stock Check|Remove|Copy|Duplicate|\+ New)/;
+function stripWrites(root){
+  if(!isOwner()||!root)return;
+  root.querySelectorAll('button,a.btn,.o-gear-item').forEach(b=>{if(WRITE_ACTION.test(b.textContent.trim()))b.remove();});
+  root.querySelectorAll('details.o-gear').forEach(g=>{g.querySelectorAll('.o-gear-sep').forEach(s=>{if(!s.nextElementSibling)s.remove();});if(!g.querySelector('.o-gear-item'))g.remove();});
+}
 const GROUPS=[
   ['Overview',[['dashboard','dashboard'],['tracking','route'],['customers','users'],['suppliers','warehouse'],['drivers','driver'],['processors','factory']]],
   ['Master Data',[['materials','stack'],['parts','nut'],['products','box'],['bom','tree']]],
@@ -3202,6 +3211,7 @@ const link=(r,text=TITLES[r])=>button(text,`App.go(${escapeArg(r)})`,'btn-sm');
 const menuGroup=()=>{const r=typeof App!=='undefined'?App.route:'';
   if(['steel','market','prodcalc','prodcalc-new','nesting'].includes(r))return 'System / Tools';
   if(['owner','team','items'].includes(r))return isOwner()?'Super admin':'Owner view';
+  if(isOwner()&&OWNER_ROUTES.has(r))return 'View only';
   return GROUPS.find(([,rows])=>rows.some(([x])=>x===r))?.[0]||'';};
 const crumbParent=()=>menuGroup()?`<span class="o-bc-parent">${esc(menuGroup())}</span><span class="o-bc-sep">/</span>`:'';
 const head=(group,title,...actions)=>`<div class="view-head"><div class="o-bc o-bc-list">${crumbParent()}<h1 class="h1">${esc(title)}</h1></div><div class="head-actions">${actions.join('')}</div></div>`;
@@ -3449,6 +3459,7 @@ function infoModal(title,body,footer=''){
     if(header)view.querySelector('.o-form-wrap').before(header);
     makeNotebook(sheet);
     gearActions(view);
+    stripWrites(view);
     return view;
   }
   return openModal(`<div class="modal-head"><h3>${esc(title)}</h3><button class="x" aria-label="Close" onclick="closeModal()">${ic('x')}</button></div>
@@ -6648,7 +6659,7 @@ function ownerPage(){
   const attention=[
     queue&&[`🚚 ${queue} order${queue>1?'s are':' is'} waiting for a driver`,'deliveries'],
     onRoad&&[`🛣️ ${onRoad} deliver${onRoad>1?'ies are':'y is'} on the road right now`,'tracking'],
-    toReceive&&[`📦 ${toReceive} purchase${toReceive>1?'s were':' was'} ordered but not received yet`,'purchase'],
+    toReceive&&[`📦 ${toReceive} purchase${toReceive>1?'s were':' was'} ordered but not received yet`,'team'],
     badPapers&&[`🛂 ${badPapers} driver${badPapers>1?'s have':' has'} missing or expired papers`,'deliveries'],
     warn&&[`⚠️ ${warn} stock warning${warn>1?'s':''} (items running low or short)`,'items']].filter(Boolean);
   return head(isOwner()?'Super admin':'Owner view','Overview',liveChip())+
@@ -6968,8 +6979,9 @@ function dashboard(){
 const TOOL_PAGES=[['steel','Tools'],['market','Tools'],['prodcalc','Tools'],['nesting','Tools']];
 function searchIndex(){
   const extra=canSeeOwner()?[[isOwner()?'Super admin':'Owner view',OWNER_GROUPS[0][1]]]:[];
-  const menus=[...extra,...GROUPS].flatMap(([group,rows])=>rows.map(([r])=>({kind:'menu',path:['AMBS',group,TITLES[r]],go:()=>App.go(r)})));
-  for(const [r,parent] of TOOL_PAGES)menus.push({kind:'menu',path:['AMBS','System',parent,TITLES[r]],go:()=>App.go(r)});
+  const menuGroups=isOwner()?OWNER_GROUPS:[...extra,...GROUPS];
+  const menus=menuGroups.flatMap(([group,rows])=>rows.map(([r])=>({kind:'menu',path:['AMBS',group,TITLES[r]],go:()=>App.go(r)})));
+  if(!isOwner())for(const [r,parent] of TOOL_PAGES)menus.push({kind:'menu',path:['AMBS','System',parent,TITLES[r]],go:()=>App.go(r)});
   const records=[
     ['customers','Customers',r=>[r.name,r.code,r.phone,r.position]],
     ['suppliers','Vendors',r=>[r.name,r.code,r.phone]],
@@ -6978,8 +6990,8 @@ function searchIndex(){
     ['products','Products',r=>[r.name,r.code,r.category]],
     ['processors','Processing Companies',r=>[r.name,r.code]]
   ].flatMap(([type,title,keys])=>state[type].map(r=>({kind:'record',path:[title,r.name],extra:keys(r).filter(Boolean).join(' '),
-    go:()=>{App.go(type);masterView(type,r.id);}})));
-  for(const d of state.drivers)records.push({kind:'record',path:['Drivers',d.name],extra:d.phone||'',go:()=>{App.go('drivers');driverView(d.id);}});
+    go:isOwner()&&!OWNER_ROUTES.has(type)?()=>{App.go('items');trackItem(r.id);}:()=>{App.go(type);masterView(type,r.id);}})));
+  if(!isOwner())for(const d of state.drivers)records.push({kind:'record',path:['Drivers',d.name],extra:d.phone||'',go:()=>{App.go('drivers');driverView(d.id);}});
   for(const t of state.trips)records.push({kind:'record',path:['Trips',t.no+(t.customerName?' · '+t.customerName:'')],extra:[t.project,t.location].join(' '),go:()=>{App.go('deliveries');tripView(t.id);}});
   return {menus,records};
 }
@@ -7048,7 +7060,7 @@ const App={
   nav(){
     const selected=['market','steel','prodcalc','prodcalc-new','nesting'].includes(this.route)?'tools':this.route;
     const ownerMenu=isOwner();
-    const groups=ownerMenu?[['Super admin',OWNER_GROUPS[0][1]],...GROUPS]:canSeeOwner()?[...GROUPS,['Owner view',OWNER_GROUPS[0][1]]]:GROUPS;
+    const groups=ownerMenu?OWNER_GROUPS:canSeeOwner()?[...GROUPS,['Owner view',OWNER_GROUPS[0][1]]]:GROUPS;
     return `<div class="o-side"><button type="button" class="o-brand o-side-brand" onclick="App.go('${ownerMenu?'owner':'dashboard'}')"><span class="o-brand-mark">AM</span><span>AMBS</span></button>
       <nav class="o-side-nav" aria-label="Main navigation">${groups.map(([group,rows])=>`<div class="o-side-group"><div class="o-side-head">${esc(group)}</div>
         ${rows.map(([r,i])=>`<a href="#/${r}" class="o-side-link${selected===r?' on':''}"${selected===r?' aria-current="page"':''}
@@ -7083,6 +7095,8 @@ const App={
       dispatch:dispatchPage,reports:reportPage,settings:settingsPage,bom:recipePage,tools:toolsPage,
       owner:ownerPage,team:teamPage,items:itemsPage};
     if(['owner','team','items'].includes(this.route)&&!canSeeOwner())this.route='dashboard';
+    if(isOwner()&&!OWNER_ROUTES.has(this.route)){this.route='owner';this.record=null;history.replaceState(null,'','#/owner');}
+    document.body.classList.toggle('o-viewonly',isOwner());
     const utilities={steel:Tools,market:Market,prodcalc:PWC,nesting:Nest};
     const utility=utilities[this.route];
     const view=$('#view');
@@ -7096,6 +7110,7 @@ const App={
       finally{this.recordRendering=false;}
     }
     document.body.classList.toggle('o-record',!!this.record);
+    stripWrites($('#view'));
     startClock();
   }
 };

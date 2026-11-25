@@ -1453,3 +1453,6 @@ tr.o-group td{background:#f8f9fa!important;font-weight:600;cursor:pointer;color:
 @media (max-width:900px){.ow-bigs{grid-template-columns:1fr 1fr}.ow-grid{grid-template-columns:1fr}}
 .ow-line .ow-who{display:block}
 .o-version{font-size:10.5px;color:var(--o-muted,#6c757d);opacity:.8}
+/* Owner = view only: no photo / logo uploads */
+.o-viewonly .co-avatar-cam{display:none!important}
+.o-viewonly .co-avatar-up,.o-viewonly .photo-up{pointer-events:none}
