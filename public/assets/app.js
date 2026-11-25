@@ -6624,27 +6624,46 @@ function activityRow(r){
   return [`<span class="sub">${esc(stamp(r.at))}</span><div class="sub">${esc(agoText(r.at))}</div>`,`<b>${esc(r.by)}</b>`,
     esc(r.what),esc(r.ref)+(r.open?openBtn(r.open):'')];
 }
+/* What happened, written as a sentence: "Utrkash created sales order SO-12AB". */
+function activitySentence(r){
+  const who=r.by==='—'?'Someone':r.by;
+  return r.kind==='stock'?`${who} recorded a ${r.what.toLowerCase()}${r.ref?' — '+r.ref:''}`:`${who} ${r.what.charAt(0).toLowerCase()+r.what.slice(1)} ${r.ref}`;
+}
 function ownerPage(){
   Live.start();
-  const rows=activity(), team=teamSummary(rows.filter(r=>Date.parse(r.at)>=Date.now()-30*864e5));
+  const rows=activity(), day=todayISO(), today=rows.filter(r=>String(r.at).slice(0,10)===day&&r.by!=='—');
+  const people=teamSummary(today);
   const held=aggregate(stockRows(state)).filter(b=>b.qty>EPS).length;
-  const openSales=state.sales.filter(o=>SALES_OPEN.includes(o.status));
   const month=state.trips.filter(t=>t.status==='Delivered'&&monthKey(t.deliveredAt||t.date)===thisMonth());
   let queue=0;try{queue=deliveryQueue().length;}catch{}
+  let warn=0;try{warn=warningRows().length;}catch{}
+  const toReceive=state.purchases.filter(p=>p.status==='Ordered').length;
+  const onRoad=state.trips.filter(t=>t.status==='On the way').length;
+  const badPapers=state.drivers.filter(d=>d.active!==false&&!papersOk(d)).length;
+  const hour=new Date().getHours(), hello=hour<12?'Good morning':hour<18?'Good afternoon':'Good evening';
+  const big=(value,label,sub,go)=>`<button type="button" class="ow-big" onclick="App.go('${go}')"><b>${esc(value)}</b><span>${esc(label)}</span><small>${esc(sub)}</small></button>`;
+  const attention=[
+    queue&&[`🚚 ${queue} order${queue>1?'s are':' is'} waiting for a driver`,'deliveries'],
+    onRoad&&[`🛣️ ${onRoad} deliver${onRoad>1?'ies are':'y is'} on the road right now`,'tracking'],
+    toReceive&&[`📦 ${toReceive} purchase${toReceive>1?'s were':' was'} ordered but not received yet`,'purchase'],
+    badPapers&&[`🛂 ${badPapers} driver${badPapers>1?'s have':' has'} missing or expired papers`,'deliveries'],
+    warn&&[`⚠️ ${warn} stock warning${warn>1?'s':''} (items running low or short)`,'items']].filter(Boolean);
   return head('Owner','Overview',liveChip())+
-    `<p class="sub owner-hello">Welcome${CLOUD.name?', '+esc(CLOUD.name.split(' ')[0]):''}. Everything your team did is below — click any line to open it.</p>`+
-    kpiRow([['box','Items in stock',held,'distinct items with stock','k-ink','items'],
-      ['users','Active today',team.filter(p=>p.today).length,team.filter(p=>p.today).map(p=>p.name).slice(0,3).join(', ')||'Nobody yet today','k-ok','team'],
-      ['invoice','Open sales orders',openSales.length,queue?queue+' waiting for a driver':'none waiting for a driver',queue?'k-red':'k-ink','sales'],
-      ['truck','Delivered this month',month.length,nfmt(tripKm(month),0)+' km','k-ok','deliveries'],
-      ['cart','Purchases to receive',state.purchases.filter(p=>p.status==='Ordered').length,'ordered, not yet received','k-yellow','purchase'],
-      ['wrench','Production in progress',state.orders.filter(o=>o.status==='Released').length,'released orders','k-ink','production']])+
-    `<section class="card"><div class="card-head"><div class="card-title">Team · last 30 days</div><button type="button" class="link-btn" onclick="App.go('team')">All activity →</button></div>
-      <div class="owner-team">${team.length?team.map(p=>`<button type="button" class="owner-person" onclick="Team.f.who=${escapeArg(p.name)};App.go('team')">
-        <span class="co-avatar co-avatar-md">${esc(String(p.name).slice(0,2).toUpperCase())}</span><span class="owner-person-main"><b>${esc(p.name)}</b>
-        <small>${p.today} today · ${p.week} this week · ${p.total} in 30 days</small><em>Last: ${esc(p.last.what)} · ${esc(agoText(p.last.at))}</em></span></button>`).join(''):
-        '<div class="viz-empty">No activity yet. When employees save records or move stock, they appear here.</div>'}</div></section>`+
-    panel('Latest activity',table(['When','Who','What','Record'],rows.slice(0,25).map(activityRow),'No activity yet.'));
+    `<h2 class="ow-hello">${hello}${CLOUD.name?', '+esc(CLOUD.name.split(' ')[0]):''}.</h2><p class="sub ow-sub">This page shows what your team did and what needs attention. Click anything to see the details.</p>`+
+    `<div class="ow-bigs">${big(today.length,'Things done today',people.length?'by '+people.map(p=>p.name).join(', '):'nobody has worked in the system yet today','team')}
+      ${big(month.length,'Deliveries this month',month.length?nfmt(tripKm(month),0)+' km driven':'no deliveries yet this month','deliveries')}
+      ${big(queue,'Waiting for a driver',queue?'orders ready to go out':'nothing waiting','deliveries')}
+      ${big(held,'Items in stock','different items in the stores','items')}</div>`+
+    `<div class="ow-grid"><section class="card"><div class="card-head"><div class="card-title">Needs your attention</div></div>
+      <div class="ow-list">${attention.length?attention.map(([text,go])=>`<button type="button" class="ow-line" onclick="App.go('${go}')"><span>${esc(text)}</span><em>Open →</em></button>`).join(''):
+        '<div class="ow-ok">✅ Nothing needs your attention right now.</div>'}</div></section>
+    <section class="card"><div class="card-head"><div class="card-title">Who worked today</div></div>
+      <div class="ow-list">${people.length?people.map(p=>`<button type="button" class="ow-line" onclick="Team.f.who=${escapeArg(p.name)};Team.f.days='1';App.go('team')">
+        <span><span class="ow-who"><b>${esc(p.name)}</b> · ${p.today} thing${p.today===1?'':'s'} today</span><small>Last: ${esc(activitySentence(p.last).replace(p.name+' ',''))} · ${esc(agoText(p.last.at))}</small></span><em>See all →</em></button>`).join(''):
+        '<div class="ow-ok">Nobody has saved anything today yet.</div>'}</div></section></div>`+
+    `<section class="card"><div class="card-head"><div class="card-title">What happened last</div><button type="button" class="link-btn" onclick="App.go('team')">See everything →</button></div>
+      <div class="ow-list">${rows.slice(0,10).map(r=>`<button type="button" class="ow-line" ${r.open?`onclick="${r.open}"`:'disabled'}><span>${esc(activitySentence(r))}</span><em>${esc(agoText(r.at))}</em></button>`).join('')||
+        '<div class="ow-ok">Nothing has happened yet.</div>'}</div></section>`;
 }
 const Team={f:{who:'',days:'7',q:''}};
 function teamPage(){
@@ -7038,13 +7057,12 @@ const App={
   },
   nav(){
     const selected=['market','steel','prodcalc','prodcalc-new','nesting'].includes(this.route)?'tools':this.route;
-    const ownerMenu=isOwner()&&!this.fullMenu;
+    const ownerMenu=isOwner();
     const groups=ownerMenu?OWNER_GROUPS:canSeeOwner()?[...GROUPS,['Owner view',OWNER_GROUPS[0][1]]]:GROUPS;
     return `<div class="o-side"><button type="button" class="o-brand o-side-brand" onclick="App.go('${ownerMenu?'owner':'dashboard'}')"><span class="o-brand-mark">AM</span><span>AMBS</span></button>
       <nav class="o-side-nav" aria-label="Main navigation">${groups.map(([group,rows])=>`<div class="o-side-group"><div class="o-side-head">${esc(group)}</div>
         ${rows.map(([r,i])=>`<a href="#/${r}" class="o-side-link${selected===r?' on':''}"${selected===r?' aria-current="page"':''}
           onclick="event.preventDefault();App.go('${r}')">${ic(i)}<span>${esc(TITLES[r])}</span></a>`).join('')}</div>`).join('')}</nav>
-      ${isOwner()?`<button type="button" class="o-side-switch" onclick="App.fullMenu=!App.fullMenu;App.go(App.fullMenu?'dashboard':'owner')">${ic(this.fullMenu?'chart':'list')}${this.fullMenu?'Back to owner menu':'Open the full ERP menu'}</button>`:''}
       <div class="o-side-foot">${esc(SET.company)}${isOwner()?'<br><b class="o-owner-tag">Owner · super admin</b>':''}</div></div>`;
   },
   toggleNavigation(open){
@@ -7075,6 +7093,7 @@ const App={
       dispatch:dispatchPage,reports:reportPage,settings:settingsPage,bom:recipePage,tools:toolsPage,
       owner:ownerPage,team:teamPage,items:itemsPage};
     if(['owner','team','items'].includes(this.route)&&!canSeeOwner())this.route='dashboard';
+    if(isOwner()&&!OWNER_GROUPS.some(([,rows])=>rows.some(([r])=>r===this.route)))this.route='owner';
     const utilities={steel:Tools,market:Market,prodcalc:PWC,nesting:Nest};
     const utility=utilities[this.route];
     const view=$('#view');
