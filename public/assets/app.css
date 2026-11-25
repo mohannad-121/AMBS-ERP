@@ -1452,3 +1452,4 @@ tr.o-group td{background:#f8f9fa!important;font-weight:600;cursor:pointer;color:
 .ow-ok{padding:16px;color:var(--o-muted,#6c757d)}
 @media (max-width:900px){.ow-bigs{grid-template-columns:1fr 1fr}.ow-grid{grid-template-columns:1fr}}
 .ow-line .ow-who{display:block}
+.o-version{font-size:10.5px;color:var(--o-muted,#6c757d);opacity:.8}

@@ -52,7 +52,7 @@ for name, text in [*js.items(), ('assistant-guide.md', guide)]:
         raise SystemExit(f'build-test-html: {name} contains </script')
 
 index = (ROOT / 'public' / 'index.html').read_text(encoding='utf-8')
-head = index.split('<link rel="stylesheet" href="/assets/app.css">')[0]
+head = index.split('<link rel="stylesheet" href="/assets/app.css')[0]
 body = index[index.index('<body>') + 6:index.index('</body>')]
 stamp = datetime.datetime.now().strftime('%d %b %Y %H:%M')
 banner = f"""<div class="test-ribbon">TEST COPY · built {stamp} · data is saved only in this browser ·
