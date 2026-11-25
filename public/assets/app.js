@@ -3254,6 +3254,12 @@ function searchable(title,name,rows,selected=''){
      placeholder="${esc(hint)}" autocomplete="off" value="${esc(rows.find(r=>r[0]===selected)?.[1]||'')}"><input type="hidden" name="${name}" value="${esc(selected)}">
      <div class="erp-options"></div><template>${choiceOptions(rows)}</template></div>`);
 }
+/* Stock items in search pickers show their photo. Values are an item id or a JSON [type,id] pair. */
+function pickRecord(value){
+  let id=value;
+  if(String(value).startsWith('['))try{id=JSON.parse(value)[1];}catch{}
+  return state&&item(state,id)||null;
+}
 function wirePicks(root){
   root.querySelectorAll('.erp-pick:not([data-wired])').forEach(box=>{
     box.dataset.wired='1';
@@ -3266,7 +3272,10 @@ function wirePicks(root){
       const matches=choices.filter(o=>{const t=o.textContent.toLowerCase();return words.every(w=>t.includes(w));});
       // Large lists (thousands of items) only draw the first matches; typing narrows them down.
       menu.replaceChildren(...matches.slice(0,60).map(o=>{
-        const b=document.createElement('button'); b.type='button'; b.textContent=o.textContent;
+        const b=document.createElement('button'); b.type='button';
+        const rec=pickRecord(o.value);
+        if(rec){b.className='pick-row';b.innerHTML=recordPicture(rec,'thumb-pick')+`<span>${esc(o.textContent)}</span>`;}
+        else b.textContent=o.textContent;
         b.onclick=()=>choose(o); return b;
       }));
       if(matches.length>60){const more=document.createElement('div');more.className='erp-options-more';
@@ -4492,8 +4501,9 @@ function createBOM(){
   const back=infoModal('Create BOM',`<div class="erp-error" role="alert"></div>`+searchable('Part or finished product','bomOwner',rows)+
     `<p class="sub" style="margin:6px 0 0">Type a few letters of the name or code, e.g. <b>net 4.5</b> or <b>PT-0</b>, then pick it from the list.</p>`,
     button('Continue','openBOMOwner(this)','btn-primary'));
+  $('.modal',back).classList.add('bom-create');
   wirePicks(back);
-  const text=$('[name="bomOwnerSearch"]',back);text.focus();
+  const text=$('[name="bomOwnerSearch"]',back);text.focus();text.onfocus?.();
   $('[name="bomOwner"]',back).addEventListener('change',e=>{if(e.target.value)openBOMOwner(text);});
 }
 function openBOMOwner(button){
