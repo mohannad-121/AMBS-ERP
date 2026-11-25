@@ -5581,7 +5581,7 @@ function packingListPDF(kind,id){
   const where=[site?.name,site?.address,site?.city].filter(Boolean).join(', ')||trip?.location||'';
   const meta=[['Date',fmtDate(trip?.date||todayISO())],['Customer',customer?.name||trip?.customerName||''],
     ['Reference',[job?job.no+' · '+job.name:'',sale?sale.no+(sale.reference?' · PO '+sale.reference:''):''].filter(Boolean).join(' ')],['Ship from',from],
-    ['Driver',driver?driver.name+(driver.phone?' · '+driver.phone:''):'Not assigned yet'],['Vehicle',trip?.vehicle||driver?.vehiclePlate||''],
+    ['Driver',driver?driver.name+(driver.phone?' · '+driver.phone:''):'Not assigned yet'],['Vehicle',trip?.vehicle||driver?.vehicleType||''],
     ['Deliver to',where],['Map',trip?.mapUrl||(site?mapsLink(site):'')||'']];
   let y=106;doc.setFontSize(9);
   const colW=(W-80)/2;
@@ -6142,7 +6142,7 @@ const DRIVER_KINDS=['AMBS driver','Outside driver','Client pickup'];
 const TRIP_STATUS=['Next','On the way','Delivered','Cancelled'];
 const TRIP_SYSTEMS=['Safety Net','Edge Protection','Vertical Net','Fabrication','Hand Rail','Hoist Gate','Shaft Gate'];
 const PAPER_STATUS=['Pending','Signed & returned','Missing'];
-const DRIVER_PAPERS=[['licenseExpiry','Driving licence','licenseNo'],['idExpiry','Emirates ID','emiratesId'],['vehicleExpiry','Vehicle registration (Mulkiya)','vehiclePlate']];
+const DRIVER_PAPERS=[['licenseExpiry','Driving licence','licenseNo'],['vehicleExpiry','Vehicle registration (Mulkiya)','']];
 const monthKey=d=>String(d||'').slice(0,7);
 const thisMonth=()=>todayISO().slice(0,7);
 function papersIssues(d,day=todayISO()){
@@ -6180,24 +6180,21 @@ function driverEdit(id){
   const old=get(state,'drivers',id), d=old||{};
   const form=formModal((old?'Edit':'Add')+' driver',`<div class="form-grid">
     ${input('Driver name','name',d.name,{extra:'placeholder="e.g. Shabir Ahmad"'})}
-    ${select('Driver type','kind',same(DRIVER_KINDS),d.kind||DRIVER_KINDS[0],false)}
     ${phoneField('Phone number','phone',d.phone)}
-    ${imageField(d.image,'Driver photo')}
-    ${input('Vehicle plate','vehiclePlate',d.vehiclePlate,{extra:'placeholder="e.g. Dubai F 45231"'})}
+    ${select('Driver type','kind',same(DRIVER_KINDS),d.kind||DRIVER_KINDS[0],false)}
     ${suggestedInput('Vehicle type','vehicleType',d.vehicleType||'',['Pickup','3-ton truck','7-ton truck','Flatbed trailer','Van','Crane truck'])}
+    ${imageField(d.image,'Driver photo')}
     </div><h4 class="erp-sub-head">${ic('idcard')} Official papers <small class="sub">— no deliveries until they are on file and not expired</small></h4>
     <div class="form-grid">
     ${input('Driving licence number','licenseNo',d.licenseNo,{extra:'placeholder="e.g. 1234567"'})}
     ${input('Driving licence expiry','licenseExpiry',d.licenseExpiry,{type:'date'})}
-    ${input('Emirates ID number','emiratesId',d.emiratesId,{extra:'placeholder="e.g. 784-1990-1234567-1"'})}
-    ${input('Emirates ID expiry','idExpiry',d.idExpiry,{type:'date'})}
     ${input('Vehicle registration (Mulkiya) expiry','vehicleExpiry',d.vehicleExpiry,{type:'date'})}
     <div class="field papers-confirm"><label><input name="hasPapers" type="checkbox" ${d.hasPapers?'checked':''}>
-      <span><b>Official papers checked and on file</b><small>Licence, Emirates ID and Mulkiya seen; copies kept.</small></span></label></div>
+      <span><b>Official papers checked and on file</b><small>Licence and Mulkiya seen; copies kept.</small></span></label></div>
     ${input('Notes','notes',d.notes,{full:true,extra:'placeholder="Optional"'})}</div>`,async f=>{
     const data={...old,id:id||key(),name:valOf(f,'name'),phone:readPhone(f,'phone'),kind:valOf(f,'kind')||DRIVER_KINDS[0],
-      vehiclePlate:valOf(f,'vehiclePlate'),vehicleType:valOf(f,'vehicleType'),vehicleExpiry:valOf(f,'vehicleExpiry'),
-      licenseNo:valOf(f,'licenseNo'),licenseExpiry:valOf(f,'licenseExpiry'),emiratesId:valOf(f,'emiratesId'),idExpiry:valOf(f,'idExpiry'),
+      vehicleType:valOf(f,'vehicleType'),vehicleExpiry:valOf(f,'vehicleExpiry'),
+      licenseNo:valOf(f,'licenseNo'),licenseExpiry:valOf(f,'licenseExpiry'),
       hasPapers:checked(f,'hasPapers'),notes:valOf(f,'notes'),active:old?.active!==false};
     need(data.name,'Enter the driver’s name.');
     data.image=await imageValue(f,old?.image);
@@ -6231,7 +6228,7 @@ function tripEdit(id,preset={}){
   const drivers=state.drivers.filter(d=>d.active!==false||d.id===t.driverId);
   const jobs=state.jobs.filter(j=>['Open','Partially delivered'].includes(j.status)||j.id===t.jobId);
   const form=formModal(old?'Edit trip '+old.no:'New delivery trip',`<div class="trip-papers" data-papers></div><div class="form-grid">
-    ${select('Driver','driverId',drivers.map(d=>[d.id,d.name+(d.vehiclePlate?' · '+d.vehiclePlate:'')+(papersOk(d)?'':'  ⚠ papers missing')]),t.driverId||'',false,'Choose a driver…')}
+    ${select('Driver','driverId',drivers.map(d=>[d.id,d.name+(d.vehicleType?' · '+d.vehicleType:'')+(papersOk(d)?'':'  ⚠ papers missing')]),t.driverId||'',false,'Choose a driver…')}
     ${input('Vehicle','vehicle',t.vehicle,{extra:'placeholder="Filled from the driver, e.g. Dubai F 45231"'})}
     ${searchable('Customer','customer',pair(current(state,'customers').concat(t.customerId&&!current(state,'customers').some(c=>c.id===t.customerId)?[get(state,'customers',t.customerId)].filter(Boolean):[]),c=>c.name+(c.code?' · '+c.code:'')),t.customerId||'')}
     ${input('Project','project',t.project,{extra:'placeholder="e.g. Skyflame 2"'})}
@@ -6277,7 +6274,7 @@ function tripEdit(id,preset={}){
     box.innerHTML=issues.length?note('⛔ '+d.name+' cannot deliver: '+issues.join(' · ')+'. Nothing will be delivered with this driver until the papers are complete.','bad'):
       note('✓ '+d.name+' has official papers on file'+(papersSoon(d).length?' — '+papersSoon(d).join(', '):'')+'.','ok');
     const vehicle=form.elements.vehicle;
-    if(!vehicle.value||vehicle.dataset.auto)vehicle.value=[d.vehiclePlate,d.vehicleType].filter(Boolean).join(' · '),vehicle.dataset.auto='1';
+    if(!vehicle.value||vehicle.dataset.auto)vehicle.value=d.vehicleType||'',vehicle.dataset.auto='1';
   };
   form.elements.driverId.addEventListener('change',showPapers);showPapers();
   form.elements.vehicle.addEventListener('input',e=>delete e.target.dataset.auto);
@@ -6359,11 +6356,11 @@ function tripExportRows(trips){
     t.date||'',t.status,t.priority||'',t.system||'',t.description||'',d?.name||'',d?.phone||'',t.vehicle||'',t.from||'',t.location||'',t.mapUrl||'',
     Number(t.km)||0,t.deliveredAt||'',t.paperStatus||'',d?(papersIssues(d).join('; ')||'OK'):''];});
 }
-const DRIVER_EXPORT_COLUMNS=['Driver','Type','Phone','Vehicle plate','Vehicle type','Licence no.','Licence expiry','Emirates ID','ID expiry',
+const DRIVER_EXPORT_COLUMNS=['Driver','Type','Phone','Vehicle type','Licence no.','Licence expiry',
   'Vehicle reg. expiry','Papers on file','Papers status','Trips','Delivered','Total km','Current status'];
 function driverExportRows(drivers){
-  return drivers.map(d=>{const trips=driverTrips(d.id);return [d.name,d.kind||'',d.phone||'',d.vehiclePlate||'',d.vehicleType||'',d.licenseNo||'',
-    d.licenseExpiry||'',d.emiratesId||'',d.idExpiry||'',d.vehicleExpiry||'',d.hasPapers?'Yes':'No',papersIssues(d).join('; ')||'OK',
+  return drivers.map(d=>{const trips=driverTrips(d.id);return [d.name,d.kind||'',d.phone||'',d.vehicleType||'',d.licenseNo||'',
+    d.licenseExpiry||'',d.vehicleExpiry||'',d.hasPapers?'Yes':'No',papersIssues(d).join('; ')||'OK',
     trips.length,trips.filter(t=>t.status==='Delivered').length,Number(tripKm(trips).toFixed(1)),driverWhere(d).text];});
 }
 function exportDeliveries(kind,driverId=''){
@@ -6392,7 +6389,7 @@ function driverView(id){
       ['Papers checked & on file','—','—',d.hasPapers?statusChip('ok','Yes'):statusChip('bad','No')],
       ...DRIVER_PAPERS.map(([field,name,num])=>[esc(name),esc(d[num]||'—'),esc(d[field]?fmtDate(d[field]):'—'),
         !d[field]?statusChip('neutral','No date'):d[field]<todayISO()?statusChip('bad','Expired'):papersSoon({[field]:d[field]}).length?statusChip('warn','Expires soon'):statusChip('ok','Valid')])]))+
-    panel('Vehicle',kv([['Plate',d.vehiclePlate],['Type',d.vehicleType],['Registration expiry',d.vehicleExpiry?fmtDate(d.vehicleExpiry):'']]))+
+    panel('Vehicle',kv([['Type',d.vehicleType],['Registration expiry',d.vehicleExpiry?fmtDate(d.vehicleExpiry):'']]))+
     panel('Trips · '+trips.length,table(['Packing no.','Date','Customer / project','Route','Km','Status','Papers'],trips.map(t=>[
       `<button type="button" class="link-btn" onclick="closeModal();tripView(${escapeArg(t.id)})">${esc(t.no)}</button>`,esc(fmtDate(t.date)),
       cell(t.customerName||'—',t.project),esc((t.from||'—')+' → '+(t.location||'—')),esc(t.km?nfmt(t.km,1):'—'),tripChip(t),esc(t.paperStatus||'—')]),
@@ -6433,16 +6430,16 @@ function driversPage(){
     (blocked.length?note('⛔ No delivery can go out with: '+blocked.map(d=>d.name+' ('+papersIssues(d)[0]+')').join(' · '),'bad'):'')+
     kanban(drivers.map(d=>{
       const trips=driverTrips(d.id), where=driverWhere(d);
-      return {open:`driverView(${escapeArg(d.id)})`,search:[d.name,d.phone,d.kind,d.vehiclePlate,d.vehicleType].filter(Boolean).join(' '),
+      return {open:`driverView(${escapeArg(d.id)})`,search:[d.name,d.phone,d.kind,d.vehicleType].filter(Boolean).join(' '),
         html:`${companyAvatar(d,'co-avatar-md')}<div class="o-card-main"><div class="o-card-title">${esc(d.name)}</div>
-          <div class="o-card-line">${esc([d.vehiclePlate,d.vehicleType].filter(Boolean).join(' · ')||d.kind||'')}</div>
+          <div class="o-card-line">${esc(d.vehicleType||d.kind||'')}</div>
           ${d.phone?`<div class="o-card-line">${ic('phone')}${esc(d.phone)}</div>`:''}
           <div class="o-card-tags">${papersChip(d)}<span class="o-tag">${trips.length} trip${trips.length===1?'':'s'} · ${esc(nfmt(tripKm(trips),0))} km</span></div>
           <div class="o-card-line o-muted">${esc(where.text)}</div></div>`};
     }),{placeholder:'Search drivers by name, phone or vehicle…',noun:'drivers',empty:'Add your drivers: name, phone, vehicle and official papers.',
       list:{columns:['Driver','Type','Phone','Vehicle','Official papers','Trips','Distance','Where now'],
         rows:drivers.map(d=>{const trips=driverTrips(d.id);return [`<div class="record-media co-media">${companyAvatar(d)}<div>${cell(d.name)}</div></div>`+openBtn(`driverView(${escapeArg(d.id)})`),
-          esc(d.kind||'—'),esc(d.phone||'—'),cell(d.vehiclePlate||'—',d.vehicleType),papersChip(d),esc(trips.length),esc(nfmt(tripKm(trips),1)+' km'),esc(driverWhere(d).text)];})}});
+          esc(d.kind||'—'),esc(d.phone||'—'),esc(d.vehicleType||'—'),papersChip(d),esc(trips.length),esc(nfmt(tripKm(trips),1)+' km'),esc(driverWhere(d).text)];})}});
 }
 /* ---------------- Deliveries (operations): created from confirmed sales orders and dispatch jobs ----------------
    The employee only assigns a driver and the km; customer, site, map and items come from the order.
@@ -6480,7 +6477,7 @@ function assignDelivery(kind,docId,tripId=''){
       <div><span>Items</span><b>${esc(info.description||'—')}</b></div>
       ${kind==='job'?`<div><span>From</span><b>${esc(locName(state,doc.location))}</b></div>`:''}</div>
     <div class="trip-papers" data-papers></div><div class="form-grid">
-    ${select('Driver','driverId',drivers.map(d=>[d.id,d.name+(d.vehiclePlate?' · '+d.vehiclePlate:'')+(papersOk(d)?'':'  ⚠ papers missing')]),old?.driverId||'',false,'Choose a driver…')}
+    ${select('Driver','driverId',drivers.map(d=>[d.id,d.name+(d.vehicleType?' · '+d.vehicleType:'')+(papersOk(d)?'':'  ⚠ papers missing')]),old?.driverId||'',false,'Choose a driver…')}
     ${input('Vehicle','vehicle',old?.vehicle||'',{extra:'placeholder="Filled from the driver"'})}
     ${input('Distance (km)','km',old?.km||'',{type:'number',extra:'min="0" step="0.1" placeholder="e.g. 38"'})}
     ${input('Trip date','date',old?.date||todayISO(),{type:'date'})}
@@ -6511,7 +6508,7 @@ function assignDelivery(kind,docId,tripId=''){
     if(!d){box.innerHTML='';return;}
     const issues=papersIssues(d);
     box.innerHTML=issues.length?note('⛔ '+d.name+' cannot deliver: '+issues.join(' · ')+'.','bad'):'';
-    const v=form.elements.vehicle;if(!v.value||v.dataset.auto){v.value=[d.vehiclePlate,d.vehicleType].filter(Boolean).join(' · ');v.dataset.auto='1';}
+    const v=form.elements.vehicle;if(!v.value||v.dataset.auto){v.value=d.vehicleType||'';v.dataset.auto='1';}
   };
   form.elements.driverId.addEventListener('change',showPapers);showPapers();
   form.elements.vehicle.addEventListener('input',e=>delete e.target.dataset.auto);
@@ -6872,7 +6869,7 @@ function searchIndex(){
     ['processors','Processing Companies',r=>[r.name,r.code]]
   ].flatMap(([type,title,keys])=>state[type].map(r=>({kind:'record',path:[title,r.name],extra:keys(r).filter(Boolean).join(' '),
     go:()=>{App.go(type);masterView(type,r.id);}})));
-  for(const d of state.drivers)records.push({kind:'record',path:['Drivers',d.name],extra:[d.phone,d.vehiclePlate].join(' '),go:()=>{App.go('drivers');driverView(d.id);}});
+  for(const d of state.drivers)records.push({kind:'record',path:['Drivers',d.name],extra:d.phone||'',go:()=>{App.go('drivers');driverView(d.id);}});
   for(const t of state.trips)records.push({kind:'record',path:['Trips',t.no+(t.customerName?' · '+t.customerName:'')],extra:[t.project,t.location].join(' '),go:()=>{App.go('deliveries');tripView(t.id);}});
   return {menus,records};
 }
