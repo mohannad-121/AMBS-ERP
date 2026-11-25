@@ -91,7 +91,9 @@ function statusChip(k,label){ const map={ok:'ok',warn:'warn',bad:'bad',info:'inf
   return `<span class="chip ${map[k]||'neutral'}"><span class="dot" aria-hidden="true"></span>${esc(label)}</span>`; }
 function download(filename,content,type){ const blob=new Blob([content],{type:type||'application/json'});
   const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=filename;
-  document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),1500); }
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),1500);
+  // Browsers cannot show Excel / CSV files themselves, so say clearly where the file went.
+  setTimeout(()=>toast('Downloaded '+filename+' — open it from your Downloads (Ctrl+J). Excel may ask you to click "Enable Editing".','ok'),50); }
 function emptyState(icon,title,msg,btnHtml){ return `<div class="empty"><div class="ei">${ic(icon)}</div>
   <h4>${esc(title)}</h4><p>${esc(msg)}</p>${btnHtml||''}</div>`; }
 let _clockTimer=null;
@@ -434,7 +436,13 @@ function drawPDFTable(doc,options){
 const PDFR={
   _ok(){ if(!window.jspdf||!window.jspdf.jsPDF){ toast('PDF export is unavailable','warn'); return false; }
     return true; },
-  _doc(orientation){ const {jsPDF}=window.jspdf; const doc=new jsPDF({unit:'pt',format:'a4',orientation:orientation||'portrait'}); doc.autoTable=options=>drawPDFTable(doc,options); return doc; },
+  _doc(orientation){ const {jsPDF}=window.jspdf; const doc=new jsPDF({unit:'pt',format:'a4',orientation:orientation||'portrait'}); doc.autoTable=options=>drawPDFTable(doc,options);
+    // Every PDF is saved to Downloads under its proper name AND opened in a new tab so it can be seen straight away.
+    const saveFile=doc.save.bind(doc);
+    doc.save=name=>{ saveFile(name); let opened=null;
+      try{ opened=window.open(URL.createObjectURL(doc.output('blob')),'_blank'); }catch(e){}
+      toast(opened?'PDF opened in a new tab and saved to Downloads.':'PDF saved to Downloads: '+name+' (Ctrl+J to open it).','ok'); return doc; };
+    return doc; },
   _hf(doc,docTitle){ return ()=>{ const W=doc.internal.pageSize.getWidth(),H=doc.internal.pageSize.getHeight();
     doc.setFillColor(204,6,5); doc.rect(0,0,W,56,'F'); doc.setFillColor(255,173,0); doc.rect(0,56,W,3.5,'F');
     let x=40; if(SET.logo){ try{ doc.addImage(SET.logo,imgFmt(SET.logo),40,11,34,34); x=84; }catch(e){} }
@@ -481,7 +489,7 @@ const PDFR={
     if(d.notes){ doc.setFont('helvetica','italic');doc.setFontSize(8.5);doc.setTextColor(90); const W=doc.internal.pageSize.getWidth();
       doc.text(doc.splitTextToSize('Notes: '+d.notes,W-80),40,y+16); y+=16+ (Math.ceil(d.notes.length/110)*11); }
     this._sig(doc,y+4,['Prepared by','Checked by','Approved by']);
-    doc.save(d.no+'_Product_Weight.pdf'); toast('PDF downloaded','ok'); },
+    doc.save(d.no+'_Product_Weight.pdf'); },
   nest(){ if(!this._ok())return; const R=Nest._res; if(!R){toast('Run nesting first','warn');return;} const doc=this._doc();
     this._hf(doc,'Cutting Plan & Material Requirement')();
     const totalBars=R.groups.reduce((s,o)=>s+o.res.newBarCount,0);
@@ -507,7 +515,7 @@ const PDFR={
       doc.text('PLATES & SHEETS (BY AREA)',40,y+16);
       y=this._table(doc,['Item','Qty','Unit kg','Total kg'],R.plates.map(p=>[p.desc,intfmt(p.qty),twcW(p.unitKg),nfmt(p.kg,1)]),y+22); }
     this._sig(doc,y,['Prepared by','Checked by','Approved by']);
-    doc.save((R.doc?.no||'NEST')+'_Cutting_Plan.pdf'); toast('PDF downloaded','ok'); }
+    doc.save((R.doc?.no||'NEST')+'_Cutting_Plan.pdf'); }
 };
 
 const SECT_GEO = {
