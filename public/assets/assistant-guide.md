@@ -323,15 +323,14 @@ Keywords: search, filter, find record, picker, dropdown, typo, بحث
 Keywords: add customer, new supplier, processor, vendor, client, company, contact, TRN, VAT, tags, payment terms, credit limit, logo, عميل, مورد, شركة, زبون
 
 1. Open **Customers** (`#/customers`), **Suppliers** (`#/suppliers`) or **Processing Companies** (`#/processors`) from the sidebar group **Overview**.
-2. Click **New** (top right). Customers and vendors use a short form (see "What changed in November 2026"); processing companies use the full form with tabs:
-   - **General**: **Code** and **Name** (required; codes must be unique per company type), **TRN / VAT number (optional)**, **Tags (comma separated)** such as "VIP, Contractor", **Email**, **Phone**, **Website**, **Business / Supply details** (processing companies: **Services (comma separated)**), **Address**, **City / emirate**, **Country** and a **Logo**.
-   - **Contacts**: click **Add Contact** for each person (**Name**, **Job title**, **Phone**, **Email**). The first contact is shown as the main contact person in lists.
-   - **Locations**: click **Add Location** to add sites (see "Add company locations (sites)").
-   - **Sales & payment** (customers), **Purchasing & payment** (suppliers) or **Terms** (processing companies): **Payment terms** (e.g. 30 days), **Credit limit (AED, optional)** for customers or **Typical lead time (days, optional)** for suppliers and processors, and an **Account manager / salesperson** or **Buyer / account manager**.
-   - **Notes**.
-3. Click **Save**. If a required field on another tab is empty, the form jumps to that tab.
+2. Click **New** (top right). Every company type uses one short form:
+   - **Customers**: Name, Code, Phone, Position, Delivery address, Google Maps link, Logo.
+   - **Vendors**: Name, Code, Phone, Address, Address 2, Google Maps link, Logo, and the materials they supply.
+   - **Processing companies**: Name, Code, Phone, Email, Address, Google Maps link. Saving creates their **Processing site**, which holds AMBS stock, so parts can be transferred there (see "Send parts to a processing company and back").
 
-The list shows the logo (or initials), name, tags, main contact person, phone, number of locations and how many open orders the company has.
+3. Click **Save**.
+
+The list shows cards with the logo (or initials), name, phone, address and open orders (processing companies: items held there and open production). Use the Kanban / List switch for a table.
 
 ## Customer, supplier and processor page (smart buttons)
 Keywords: customer page, customer profile, customer details, smart buttons, customer history, supplier page, open orders of customer, credit limit warning, صفحة العميل, ملف العميل
@@ -415,6 +414,22 @@ The site now appears in custody dropdowns as "Customer name / Site name". You ca
 - Tick **Keep delivered stock tracked at customer site** on a dispatch job.
 
 You can't untick custody on a site that still has a balance or open operations: "This location is used by stock or an open operation." Move or reconcile the stock first.
+
+## Send parts to a processing company and back (galvanizing, painting) 🏭
+Keywords: processing company, processor, send to galvanizing, galvanize, painting, powder coating, shift parts, send parts out, subcontractor, outside processing, transfer to processor, return from processor, ارسال للجلفنة, شركة معالجة, دهان
+
+**Once per company**: **Overview → Processing Companies → New** — Name, Code, Phone, Email, Address, Google Maps link → **Save**. AMBS creates its **Processing site** automatically; it holds AMBS stock.
+
+**Send the parts:**
+1. **Operations → Inventory & Stock Movements → Transfer Stock**.
+2. **Item / SKU**: the part. **From location**: your store (e.g. Main Store · DIP). **To location**: *Company / Processing site*.
+3. **Quantity to transfer**, and the delivery note in **Reference / notes** (e.g. *DN-2001 for galvanizing*) → save.
+
+The store goes down, the processor's site goes up (total stock is unchanged). **Live Tracking** shows *Main Store → Processing company*, and the company's page and card show what is sitting there (**Stock at this company's sites**, "N items here").
+
+**When they come back:** **Transfer Stock** again from *Company / Processing site* to your store, with their delivery note.
+
+To record the truck as well, add a trip with **Deliveries → Other trip** (it does not move stock).
 
 ## Edit, archive, restore or delete a location
 Keywords: edit location, archive location, delete location, rename warehouse, remove site, حذف موقع
