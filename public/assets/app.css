@@ -902,3 +902,10 @@ body[data-page="tracking"]{--pc:#06b6d4} body[data-page="drivers"]{--pc:#f97316}
   pointer-events:none;box-shadow:0 10px 24px -8px rgba(0,0,0,.4)}
 @media(max-width:1200px){.kpis-live{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:620px){.line-compact{grid-template-columns:1fr}.trip-filters .sel,.trk-filters .sel{min-width:0;flex:1 1 140px}.viz-hrow{grid-template-columns:minmax(70px,38%) 1fr auto}}
+/* Google Maps links (customers, vendors, trips) */
+.btn.btn-map{gap:5px;color:#1a73e8;border-color:#cfe0fc;background:#f2f7ff;white-space:nowrap}
+.btn.btn-map svg{width:13px;height:13px}
+.btn.btn-map:hover{background:#e3eeff;border-color:#a9c7f7}
+.addr-cell{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.map-help{display:flex;align-items:center;gap:6px;margin:-6px 0 4px;font-size:12px;color:var(--muted)}
+.map-help svg{width:14px;height:14px;color:#1a73e8;flex:0 0 auto}
