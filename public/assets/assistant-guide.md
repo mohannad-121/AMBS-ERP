@@ -16,6 +16,16 @@ Keywords: vendor, supplier renamed, driver, delivery, trip, papers, tracking, li
 - **Live Tracking** (`#/tracking`): every movement reads **From → To** (vendor → store, store → store, store → production, store → customer site with a **Map** button) with the **trip and driver** that carried it; a **Waiting to be delivered** panel lists open dispatch jobs and sales orders per item with from → to and the assigned trip (or an **Assign driver** button). Also: where every item is now, every movement with the balance left at that location, filters for item type, location, movement type and dates, a **Track** timeline per item, and an Excel export. Dashboard, Live Tracking and Drivers refresh themselves every 30 seconds.
 - **Dashboard**: live KPI cards, stock movements over 14 days, deliveries by status and per driver, where stock is held, most moved items, the live movement feed and deliveries to watch.
 
+## Master data vs operations (Nov 2026)
+Keywords: master data, data entry, operations, deliveries, assign driver, to deliver, delivered, trip
+
+- **Master Data** (typed once, changed rarely): Customers, Vendors, Products, Bills of Materials, Raw Materials, Parts, **Drivers**, Processing Companies. Store locations are in Settings & Data.
+- **Operations** (daily work, almost no typing): Sales Orders, Purchasing, Production, Inventory & Stock Movements, Packing & Dispatch, **Deliveries**.
+- **Deliveries are not typed in.** When a sales order is **confirmed** or a dispatch job is saved, it appears in **Operations → Deliveries → To deliver** with the customer, delivery address, map and items already filled.
+- Click **Assign driver**: choose the driver (blocked if papers are missing), the km, and for sales orders the store it ships from. That creates the trip.
+- On the trip click **Start**, then **Delivered** — Delivered also takes the goods out of stock and closes the order. No separate "record delivery" step is needed.
+- **Other trip** is only for trips that are not linked to an order.
+
 ## Odoo-style layout (Nov 2026)
 Keywords: menu, top bar, open record, click row, breadcrumb, new button, search
 

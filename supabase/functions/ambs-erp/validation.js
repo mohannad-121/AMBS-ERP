@@ -146,7 +146,7 @@ function validateState(s){
     ['Open','Partially delivered','Delivered','Cancelled'].includes(j.status),'Invalid dispatch job.');
   for(const d of s.drivers)need(typeof d.name==='string'&&d.name.trim()&&typeof d.hasPapers==='boolean'&&(!d.image||validImage(d.image)),'Invalid driver.');
   for(const t of s.trips)need(typeof t.no==='string'&&get(s,'drivers',t.driverId)&&(!t.customerId||get(s,'customers',t.customerId))&&
-    (!t.jobId||get(s,'jobs',t.jobId))&&Number.isFinite(t.km)&&t.km>=0&&
+    (!t.jobId||get(s,'jobs',t.jobId))&&(!t.salesId||get(s,'sales',t.salesId))&&Number.isFinite(t.km)&&t.km>=0&&
     ['Next','On the way','Delivered','Cancelled'].includes(t.status),'Invalid delivery trip.');
   for(const o of s.sales)need(typeof o.no==='string'&&get(s,'customers',o.customerId)&&linkedSite('customers',o.customerId,o.siteId)&&
     Array.isArray(o.lines)&&o.lines.length&&new Set(o.lines.map(l=>l.sku)).size===o.lines.length&&
