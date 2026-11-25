@@ -6536,6 +6536,74 @@ function dashboard(){
       ${panel('Raw material stock by category',materialSummary())}</div>`;
 }
 
+/* ---------------- Odoo-style global search: menus as "AMBS / Group / Page", then matching records ---------------- */
+const TOOL_PAGES=[['steel','Tools'],['market','Tools'],['prodcalc','Tools'],['nesting','Tools']];
+function searchIndex(){
+  const menus=GROUPS.flatMap(([group,rows])=>rows.map(([r])=>({kind:'menu',path:['AMBS',group,TITLES[r]],go:()=>App.go(r)})));
+  for(const [r,parent] of TOOL_PAGES)menus.push({kind:'menu',path:['AMBS','System',parent,TITLES[r]],go:()=>App.go(r)});
+  const records=[
+    ['customers','Customers',r=>[r.name,r.code,r.phone,r.position]],
+    ['suppliers','Vendors',r=>[r.name,r.code,r.phone]],
+    ['materials','Raw Materials',r=>[r.name,r.code,r.category]],
+    ['parts','Parts',r=>[r.name,r.code,r.category]],
+    ['products','Products',r=>[r.name,r.code,r.category]],
+    ['processors','Processing Companies',r=>[r.name,r.code]]
+  ].flatMap(([type,title,keys])=>state[type].map(r=>({kind:'record',path:[title,r.name],extra:keys(r).filter(Boolean).join(' '),
+    go:()=>{App.go(type);masterView(type,r.id);}})));
+  for(const d of state.drivers)records.push({kind:'record',path:['Drivers',d.name],extra:[d.phone,d.vehiclePlate].join(' '),go:()=>{App.go('drivers');driverView(d.id);}});
+  for(const t of state.trips)records.push({kind:'record',path:['Trips',t.no+(t.customerName?' · '+t.customerName:'')],extra:[t.project,t.location].join(' '),go:()=>{App.go('drivers');tripView(t.id);}});
+  return {menus,records};
+}
+function searchMatch(entry,words){
+  const text=searchKey(entry.path.join(' ')+' '+(entry.extra||''));
+  return words.every(w=>text.includes(w));
+}
+function markWords(text,words){
+  let html=esc(text);
+  for(const w of words.filter(w=>w.length>0).sort((x,y)=>y.length-x.length)){
+    html=html.replace(new RegExp('('+w.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','ig'),'<b>$1</b>');
+  }
+  return html;
+}
+function wireGlobalSearch(){
+  const input=$('#o-gsearch-input'), box=$('#o-gs-results');
+  if(!input)return;
+  let items=[], active=0;
+  const close=()=>{box.hidden=true;box.replaceChildren();items=[];};
+  const draw=()=>{
+    const words=searchKey(input.value).split(' ').filter(Boolean);
+    if(!words.length){close();return;}
+    const {menus,records}=searchIndex();
+    const m=menus.filter(e=>searchMatch(e,words)), r=records.filter(e=>searchMatch(e,words)).slice(0,8);
+    items=[...m,...r];active=0;
+    if(!items.length){box.innerHTML='<div class="o-gs-empty">No menu or record matches “'+esc(input.value)+'”</div>';box.hidden=false;return;}
+    const row=(e,i)=>`<div class="o-gs-item${i===active?' on':''}" role="option" data-i="${i}">${e.kind==='menu'?ic('grid'):ic('search')}
+      <span>${e.path.map((p,j)=>j===e.path.length-1?`<span class="o-gs-last">${markWords(p,words)}</span>`:markWords(p,words)).join('<span class="o-gs-sep"> / </span>')}</span></div>`;
+    box.innerHTML=(m.length?'<div class="o-gs-head">Menus</div>'+m.map((e,i)=>row(e,i)).join(''):'')+
+      (r.length?'<div class="o-gs-head">Records</div>'+r.map((e,i)=>row(e,i+m.length)).join(''):'');
+    box.hidden=false;
+  };
+  const choose=i=>{const e=items[i];if(!e)return;input.value='';close();input.blur();e.go();};
+  const mark=()=>box.querySelectorAll('.o-gs-item').forEach(el=>{const on=+el.dataset.i===active;el.classList.toggle('on',on);if(on)el.scrollIntoView({block:'nearest'});});
+  input.addEventListener('input',draw);
+  input.addEventListener('focus',draw);
+  input.addEventListener('keydown',e=>{
+    if(e.key==='ArrowDown'&&items.length){e.preventDefault();active=(active+1)%items.length;mark();}
+    else if(e.key==='ArrowUp'&&items.length){e.preventDefault();active=(active-1+items.length)%items.length;mark();}
+    else if(e.key==='Enter'){e.preventDefault();choose(active);}
+    else if(e.key==='Escape'){e.stopPropagation();input.value='';close();input.blur();}
+  });
+  box.addEventListener('mousedown',e=>{const el=e.target.closest('.o-gs-item');if(el){e.preventDefault();choose(+el.dataset.i);}});
+  input.addEventListener('blur',()=>setTimeout(close,120));
+}
+// "/" or Ctrl+K jumps to the search box from anywhere (unless typing in a field)
+window.addEventListener('keydown',e=>{
+  const typing=e.target.closest?.('input,textarea,select,[contenteditable]');
+  if(((e.key==='/'&&!typing)||((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'))&&!_modalStack){
+    const input=$('#o-gsearch-input');if(input){e.preventDefault();input.focus();input.select();}
+  }
+});
+
 const App={
   route:'dashboard',record:null,
   go(r){
@@ -6560,6 +6628,9 @@ const App={
       <div class="o-menus">${GROUPS.map(([group,rows])=>`<div class="o-menu${rows.some(([r])=>r===selected)?' on':''}">
         <button type="button" class="o-menu-btn">${esc(group)}</button><div class="o-dd">${rows.map(([r])=>
           `<a href="#/${r}" class="${selected===r?'active':''}" onclick="event.preventDefault();App.go('${r}')">${esc(TITLES[r])}</a>`).join('')}</div></div>`).join('')}</div>
+      <div class="o-gsearch" role="search">${ic('search')}<input id="o-gsearch-input" type="search" autocomplete="off" spellcheck="false"
+        placeholder="Search menus and records…" aria-label="Search menus and records" aria-controls="o-gs-results"><kbd>/</kbd>
+        <div class="o-gs-results" id="o-gs-results" role="listbox" hidden></div></div>
       <div class="o-nav-right">
         <button class="o-nav-btn" onclick="App.go('purchase-new')">Purchase</button>
         <button class="o-nav-btn" onclick="refreshCloudWorkspace(true)" title="Refresh">${ic('refresh')}</button>
@@ -6571,7 +6642,7 @@ const App={
   back(){this.record=null;this.render();window.scrollTo(0,0);},
   render(){
     $('#sidebar').innerHTML=this.nav();
-    $('#topbar').innerHTML=this.top();
+    $('#topbar').innerHTML=this.top();wireGlobalSearch();
     const screens={dashboard,tracking:trackingPage,drivers:driversPage,sales:salesPage,production:productionPage,purchase:purchasingPage,movement:inventoryPage,
       dispatch:dispatchPage,reports:reportPage,settings:settingsPage,bom:recipePage,tools:toolsPage};
     const utilities={steel:Tools,market:Market,prodcalc:PWC,nesting:Nest};
