@@ -6180,22 +6180,21 @@ function driverEdit(id){
   const old=get(state,'drivers',id), d=old||{};
   const form=formModal((old?'Edit':'Add')+' driver',`<div class="form-grid">
     ${input('Driver name','name',d.name,{extra:'placeholder="e.g. Shabir Ahmad"'})}
-    ${phoneField('Phone number','phone',d.phone)}
     ${select('Driver type','kind',same(DRIVER_KINDS),d.kind||DRIVER_KINDS[0],false)}
+    ${phoneField('Phone number','phone',d.phone)}
+    ${imageField(d.image,'Driver photo')}
     ${input('Vehicle plate','vehiclePlate',d.vehiclePlate,{extra:'placeholder="e.g. Dubai F 45231"'})}
     ${suggestedInput('Vehicle type','vehicleType',d.vehicleType||'',['Pickup','3-ton truck','7-ton truck','Flatbed trailer','Van','Crane truck'])}
-    ${input('Vehicle registration (Mulkiya) expiry','vehicleExpiry',d.vehicleExpiry,{type:'date'})}
-    </div><h4 class="erp-sub-head">${ic('idcard')} Official papers</h4>
-    ${note('Nothing can be delivered with a driver until the official papers are on file and none of them has expired.','warn')}
+    </div><h4 class="erp-sub-head">${ic('idcard')} Official papers <small class="sub">— no deliveries until they are on file and not expired</small></h4>
     <div class="form-grid">
     ${input('Driving licence number','licenseNo',d.licenseNo,{extra:'placeholder="e.g. 1234567"'})}
     ${input('Driving licence expiry','licenseExpiry',d.licenseExpiry,{type:'date'})}
     ${input('Emirates ID number','emiratesId',d.emiratesId,{extra:'placeholder="e.g. 784-1990-1234567-1"'})}
     ${input('Emirates ID expiry','idExpiry',d.idExpiry,{type:'date'})}
-    <div class="field full papers-confirm"><label><input name="hasPapers" type="checkbox" ${d.hasPapers?'checked':''}>
-      <span><b>Official papers checked and on file</b><small>Licence, Emirates ID and vehicle registration were seen and copies are kept.</small></span></label></div>
-    ${area('Notes','notes',d.notes)}
-    ${imageField(d.image,'Driver photo')}</div>`,async f=>{
+    ${input('Vehicle registration (Mulkiya) expiry','vehicleExpiry',d.vehicleExpiry,{type:'date'})}
+    <div class="field papers-confirm"><label><input name="hasPapers" type="checkbox" ${d.hasPapers?'checked':''}>
+      <span><b>Official papers checked and on file</b><small>Licence, Emirates ID and Mulkiya seen; copies kept.</small></span></label></div>
+    ${input('Notes','notes',d.notes,{full:true,extra:'placeholder="Optional"'})}</div>`,async f=>{
     const data={...old,id:id||key(),name:valOf(f,'name'),phone:readPhone(f,'phone'),kind:valOf(f,'kind')||DRIVER_KINDS[0],
       vehiclePlate:valOf(f,'vehiclePlate'),vehicleType:valOf(f,'vehicleType'),vehicleExpiry:valOf(f,'vehicleExpiry'),
       licenseNo:valOf(f,'licenseNo'),licenseExpiry:valOf(f,'licenseExpiry'),emiratesId:valOf(f,'emiratesId'),idExpiry:valOf(f,'idExpiry'),
