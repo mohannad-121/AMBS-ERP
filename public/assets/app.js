@@ -4442,11 +4442,23 @@ function masterView(type,id){
       return kv([['On hand',qfmt(on,r.unit)],['On order',ord>EPS?qfmt(ord,r.unit):''],['Opening stock',qfmt(materialOpening(state,r.id),r.unit)],
         ['Bundle',r.bundle?qfmt(r.bundle,r.unit)+' per bundle':''],['Stock length',r.stockLen?nfmt(r.stockLen,2)+' m':''],
         ['Rate per kg',r.rateKg?nfmt(r.rateKg,2)+' AED':''],['Rate per piece',r.ratePc?nfmt(r.ratePc,2)+' AED':''],['Code',r.code]]);})():'')+
+    (['parts','products'].includes(type)?kv([['On hand',qfmt(physical(state,r.id)+(type==='parts'?state.variants.filter(v=>v.partId===r.id).reduce((n,v)=>n+physical(state,v.id),0):0),r.unit)],
+      ['Code',r.code],['Variants',type==='parts'?state.variants.filter(v=>v.partId===r.id).length||'':'']]):'')+
     kv([['Status',r.active===false?'Archived':'Active'],['Category',r.category],['Specifications',r.dimensions],
     ['Type',type==='products'?packingCategory(r.category)?.type:''],['Default order quantity',r.orderQty],['Size',type==='products'?'':r.size],['Color',type==='products'?'':r.color],['Unit',r.unit],['Source',r.source],['Contact person',r.contact],['Email',r.email],['Phone',r.phone],['Services / supply',r.details],['Notes',r.notes]])+
     (locations.length?panel('Linked locations',table(['Name','Address','City','Notes','Status','Map'],
       locations.map(l=>[esc(l.name),esc(l.address),esc(l.city),esc(l.notes),chip(l.active===false?'Archived':'Active'),mapAction(l)]))):'')+
     (packing?packingParts(packing.rows,packing.quantities,false,r.orderQty??1):'')+
+    (['parts','products'].includes(type)?(()=>{const rec=get(state,'recipes',r.id);
+      return panel('Bill of Materials',rec?(type==='parts'?table(['Raw material','Formula','Per part','Wastage','On hand'],rec.lines.map(l=>{
+          const m=get(state,'materials',l.sku), ev=evalFormula(l.formula), per=ev.ok?ev.value:0;
+          return [`<div class="record-media">${recordPicture(m||{})}<div>${cell(m?.name||'—',m?.code||'')}</div></div>`+(m?openBtn(`masterView('materials',${escapeArg(m.id)})`):''),
+            `<code>${esc(l.formula)}</code>`,esc(qfmt(per,l.unit)),esc((Number(l.wastage)||0)+'%'),esc(m?qfmt(physical(state,m.id),m.unit):'—')];})):
+        table(['Part','Qty per product','On hand'],rec.lines.map(l=>{const pt=get(state,'parts',l.partId);
+          return [`<div class="record-media">${recordPicture(pt||{})}<div>${cell(pt?.name||'—',pt?.code||'')}</div></div>`+(pt?openBtn(`masterView('parts',${escapeArg(pt.id)})`):''),
+            esc(qfmt(l.count,pt?.unit)),esc(qfmt(physical(state,l.variantId||l.partId),pt?.unit))];})))+
+        `<div class="card-body">${small('Edit BOM',`recipeEdit(${escapeArg(type)},${escapeArg(r.id)})`)}</div>`:
+        `<div class="card-body"><p class="sub">No BOM yet.</p>${small('Create BOM',`recipeEdit(${escapeArg(type)},${escapeArg(r.id)})`)}</div>`);})():'')+
     (type==='materials'?panel('Vendors',table(['Vendor','Bundles','Units','Phone','Address'],state.suppliers.flatMap(v=>vendorSupplies(v).filter(x=>x.sku===r.id).map(x=>[
       `<div class="record-media co-media">${companyAvatar(v)}<div>${cell(v.name)}</div></div>`+openBtn(`masterView('suppliers',${escapeArg(v.id)})`),
       esc(nfmt(x.bundles,2)),esc(r.bundle?qfmt(r.bundle*x.bundles,r.unit):'—'),esc(v.phone||'—'),esc(v.address||'—')])),'No vendor lists this material yet.')):'')+
@@ -4592,23 +4604,35 @@ function companyPage(type){
 function masterPage(type){
   if(type==='materials')return materialPage();
   if(COMPANIES.includes(type))return companyPage(type);
-  const company=COMPANIES.includes(type), title=ENTITY[type], rows=state[type], isParts=type==='parts';
+  const title=ENTITY[type], rows=state[type].slice().sort((x,y)=>x.name.localeCompare(y.name)), isParts=type==='parts';
   const balances=new Map(aggregate(stockRows(state)).map(({sku,qty})=>[sku,qty]));
   for(const variant of isParts?state.variants:[]){
     balances.set(variant.partId,(balances.get(variant.partId)??0)+(balances.get(variant.id)??0));
   }
-  return head(company?'Overview':'Master Data',TITLES[type],button('New',`masterEdit(${escapeArg(type)})`,'btn-primary'))+
-    searchableTable(company?['Code','Company','Contact person','Locations','Status']:['Code','Item','Category','Stock unit','Quantity on hand','Status'],
-      rows.map(r=>{
-        const args=`${escapeArg(type)},${escapeArg(r.id)}`;
-        return [esc(r.code),company?cell(r.name,[r.size,r.color,r.dimensions||r.details].filter(Boolean).join(' · ')):
-          `<div class="record-media">${photoUploader(type,r)}<div>${cell(r.name,[r.size,r.color,r.dimensions||r.details].filter(Boolean).join(' · '))}</div></div>`,
-          esc(company?r.contact:r.category),
-          company?String(companyLocations(state,type,r.id).length):esc(r.unit),
-          ...(company?[]:[esc(qfmt(balances.get(r.id)??0,r.unit))]),
-          chip(r.active===false?'Archived':'Active')+openBtn(`masterView(${args})`)];
-      }),'Add your first '+title.toLowerCase()+'.',
-      isParts?rows.map(r=>[r.code,r.name,r.packingName,r.category,r.unit,r.size,r.color,r.dimensions].filter(Boolean).join(' ')):[]);
+  const info=rows.map(r=>{
+    const recipe=get(state,'recipes',r.id), variants=isParts?state.variants.filter(v=>v.partId===r.id&&v.active!==false).length:0;
+    const usedIn=isParts?state.recipes.filter(x=>x.kind==='product'&&x.lines.some(l=>l.partId===r.id)).length:0;
+    return {r,onHand:balances.get(r.id)??0,recipe,variants,usedIn,open:`masterView(${escapeArg(type)},${escapeArg(r.id)})`,
+      sub:[r.size,r.color,r.dimensions].filter(Boolean).join(' · ')};
+  });
+  return head('Master Data',TITLES[type],button('New',`masterEdit(${escapeArg(type)})`,'btn-primary'))+
+    kanban(info.map(({r,onHand,recipe,variants,usedIn,open,sub})=>({open,
+      search:[r.code,r.name,r.packingName,r.category,r.unit,r.size,r.color,r.dimensions,r.source].filter(Boolean).join(' '),
+      html:`<span class="o-card-photo">${recordPicture(r,'thumb-kanban')}</span><div class="o-card-main"><div class="o-card-title">${esc(r.name)}</div>
+        <div class="o-card-line o-muted">${esc([r.code,r.category].filter(Boolean).join(' · '))}</div>
+        <div class="o-card-qty"><b>${esc(qfmt(onHand))}</b> ${esc(r.unit)} <span class="o-muted">on hand</span></div>
+        <div class="o-card-tags">${isParts&&r.source?`<span class="o-tag">${esc(r.source)}</span>`:''}
+          ${recipe?statusChip(recipe.approved?'ok':'warn',isParts?'BOM · '+recipe.lines.length+' material'+(recipe.lines.length===1?'':'s'):'BOM · '+recipe.lines.length+' part'+(recipe.lines.length===1?'':'s')):
+            isParts&&r.source!=='Manufactured'?'':statusChip('neutral','No BOM')}
+          ${variants?`<span class="o-tag">${variants} variant${variants===1?'':'s'}</span>`:''}${usedIn?`<span class="o-tag">in ${usedIn} product${usedIn===1?'':'s'}</span>`:''}
+          ${r.active===false?'<span class="o-tag">Archived</span>':''}</div></div>`})),
+    {placeholder:isParts?'Search parts by name, code, size, colour or category…':'Search products by name, code or category…',
+      noun:isParts?'parts':'products',empty:'Add your first '+title.toLowerCase()+'.',
+      list:{columns:['Code','Item','Category',...(isParts?['Source']:[]),'Stock unit','On hand','BOM','Status'],
+        rows:info.map(({r,onHand,recipe,open,sub})=>[esc(r.code)+openBtn(open),
+          `<div class="record-media">${photoUploader(type,r)}<div>${cell(r.name,sub)}</div></div>`,esc(r.category||'—'),
+          ...(isParts?[esc(r.source||'—')]:[]),esc(r.unit),`<strong class="num">${esc(qfmt(onHand))}</strong>`,
+          recipe?chip(recipe.approved?'Approved':'Review required'):'—',chip(r.active===false?'Archived':'Active')])}});
 }
 function variantsView(id){
   const rows=state.variants.filter(v=>v.partId===id);
