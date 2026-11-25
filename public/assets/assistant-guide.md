@@ -19,7 +19,8 @@ Keywords: vendor, supplier renamed, driver, delivery, trip, papers, tracking, li
 ## Master data vs operations (Nov 2026)
 Keywords: master data, data entry, operations, deliveries, assign driver, to deliver, delivered, trip
 
-- **Master Data** (typed once, changed rarely): Customers, Vendors, Products, Bills of Materials, Raw Materials, Parts, **Drivers**, Processing Companies. Store locations are in Settings & Data.
+- **Overview**: Dashboard, Live Tracking, Customers, Vendors, Drivers, Processing Companies.
+- **Master Data** (typed once, changed rarely): Raw Materials, Parts, Products, Bills of Materials. Store locations are in Settings & Data.
 - **Operations** (daily work, almost no typing): Sales Orders, Purchasing, Production, Inventory & Stock Movements, Packing & Dispatch, **Deliveries**.
 - **Deliveries are not typed in.** When a sales order is **confirmed** or a dispatch job is saved, it appears in **Operations → Deliveries → To deliver** with the customer, delivery address, map and items already filled.
 - Click **Assign driver**: choose the driver (blocked if papers are missing), the km, and for sales orders the store it ships from. That creates the trip.
