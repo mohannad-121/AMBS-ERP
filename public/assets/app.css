@@ -826,9 +826,9 @@ body[data-page="tracking"]{--pc:#06b6d4} body[data-page="drivers"]{--pc:#f97316}
 .erp-sub-head{display:flex;align-items:center;gap:8px;margin:18px 0 8px;font-size:14px}
 .erp-sub-head svg{width:18px;height:18px;color:var(--pc,var(--red))}
 .line-compact{grid-template-columns:minmax(0,2fr) minmax(0,1fr)}
-.erp-auto-lines .erp-line:last-child{border-style:dashed;background:#fcfdff}
-.erp-auto-lines .erp-line:last-child legend::after{content:" · new line";color:var(--muted-2);font-weight:500}
-.erp-auto-lines .erp-line:last-child .erp-remove{display:none}
+.erp-auto-lines .erp-line:last-child:not(:first-child){border-style:dashed;background:#fcfdff}
+.erp-auto-lines .erp-line:last-child:not(:first-child) legend::after{content:" · new line";color:var(--muted-2);font-weight:500}
+.erp-auto-lines .erp-line:last-child:not(:first-child) .erp-remove{display:none}
 .erp-options-more{padding:8px 11px;font-size:12px;color:var(--muted)}
 .btn.btn-view{color:#fff;border-color:transparent;background:color-mix(in srgb,var(--pc,#2563c9) 72%,#000)}
 .btn.btn-view svg{width:14px;height:14px}
@@ -939,3 +939,4 @@ body[data-page="tracking"]{--pc:#06b6d4} body[data-page="drivers"]{--pc:#f97316}
 .modal.bom-create .erp-options button.pick-row{min-height:60px;font-size:14.5px}
 .modal.bom-create .thumb-pick{width:52px;height:52px;flex-basis:52px}
 .modal.bom-create .erp-pick input.inp{min-height:52px;font-size:16px}
+.erp-auto-lines .erp-line:only-child .erp-remove{display:none}
