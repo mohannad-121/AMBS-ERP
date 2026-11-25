@@ -68,7 +68,7 @@ If a button is not in the menu either, the record's status does not allow it (fo
 ## Owner area (super admin): see every employee's work 👑
 Keywords: owner, super admin, manager view, boss, team activity, who did what, employee work, audit, items and stock, owner overview, المالك, المدير, شغل الموظفين
 
-The owner (role **owner**, super admin) signs in and lands on **Owner overview**. His menu has a **Super admin** section on top and the full admin menu below it (Overview, Master Data, Operations, System), so he can open every page:
+The owner (role **owner**, super admin) always lands on **Owner overview** — after signing in and after every refresh. His menu has a **Super admin** section on top and the full admin menu below it (Overview, Master Data, Operations, System), so he can open every page:
 - **Owner overview**, in plain words: 4 big numbers (things done today, deliveries this month, orders waiting for a driver, items in stock), **Needs your attention** (orders waiting for a driver, deliveries on the road, purchases not received, drivers with bad papers, stock warnings), **Who worked today** and **What happened last** written as sentences. Click anything to open it.
 - **Team activity**: every action by every employee — records created or updated and every stock movement — filtered by **person** and **period** (today, 7 days, 30 days, all time) with a search box.
 - **Items & stock**: every raw material, part and product with the quantity on hand, where it is (per store / site) and the last movement with who made it. Click an item to see its full tracking timeline.

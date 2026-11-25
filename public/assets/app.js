@@ -3095,7 +3095,8 @@ function authShell(inner){
 function renderConnectedApp(){
   $('#app').classList.remove('cloud-login-mode');
   const route=location.hash.slice(2);
-  if(isOwner()&&(!route||route==='dashboard'))return App.go('owner');
+  // The owner always starts on his overview — after signing in and after every refresh.
+  if(isOwner())return App.go('owner');
   if(TITLES[route])App.go(route);else App.render();
 }
 
