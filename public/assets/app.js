@@ -3335,8 +3335,9 @@ function approval(title,description,work,text='Confirm'){
     return text.startsWith('Delete')?'Deleted.':undefined;
   },{text,danger:text.startsWith('Delete')});
 }
-/* Repeating line editor. With `auto` there is no "Add line" button: the list always keeps one empty
-   line at the bottom (at least auto.min lines), and a new one appears as soon as the last line is filled. */
+/* Repeating line editor. With `auto` there is no "Add line" button: the list starts with auto.min lines and a
+   new empty line appears only once the last line is complete (auto.complete, or auto.filled when not given).
+   auto.filled decides which lines are saved. */
 function repeat(form,container,draw,rows,addLabel,auto=null){
   const box=form.querySelector(container), list=document.createElement('div');
   box.append(list);
@@ -3358,7 +3359,7 @@ function repeat(form,container,draw,rows,addLabel,auto=null){
     const grow=()=>{
       while(list.children.length<(auto.min||1))create();
       const last=list.lastElementChild;
-      if(auto.filled(last))create();
+      if((auto.complete||auto.filled)(last))create();
     };
     grow();
     box.addEventListener('change',grow);box.addEventListener('input',grow);
@@ -3956,7 +3957,7 @@ function simpleCompanyEdit(type,id){
   const supplyLines=vendor?repeat(form,'[data-supplies]',(x,n)=>`<div class="form-grid line-compact">
     ${searchable('Raw material',n+'_sku',pair(state.materials.filter(m=>m.active!==false||m.id===x.sku)),x.sku)}
     ${input('Bundles',n+'_bundles',x.bundles??'',{type:'number',extra:'min="0" step="any" placeholder="e.g. 10"'})}</div>`,
-    vendorSupplies(row),'Add material',{min:1,filled:line=>!!fieldValue(line,'sku')}):null;
+    vendorSupplies(row),'Add material',{min:1,filled:line=>!!fieldValue(line,'sku'),complete:line=>!!fieldValue(line,'sku')&&Number(fieldValue(line,'bundles'))>0}):null;
 }
 function companyEdit(type,id){
   if(type!=='processors')return simpleCompanyEdit(type,id);
@@ -4567,7 +4568,7 @@ function recipeEdit(type,id){
   const form=formModal((old?'Edit ':'Create ')+(isPart?'Part BOM':'Product BOM')+' · '+label(row),
     (old?.approved===false?note('Legacy recipe. Verify every formula and wastage value before approving it.','warn'):'')+
     note((isPart?'Enter raw material consumption per one part. The line unit follows the material stock unit.':'Enter the part quantities for one complete product.')+
-      ' A new empty line appears by itself once you fill the last one — empty lines are ignored.')+
+      ' Complete this line and the next one appears by itself — empty lines are ignored.')+
     '<div data-recipe></div><div style="margin-top:12px">'+tick('Approve for operational use','approve',old?.approved??!old)+'</div>',async f=>{
     const raw=lines().map(l=>isPart?{sku:fieldValue(l,'sku'),unit:unit(fieldValue(l,'unit')),formula:fieldValue(l,'formula'),
       wastage:fieldValue(l,'wastage')||0,notes:fieldValue(l,'notes')}:{partId:fieldValue(l,'part'),variantId:fieldValue(l,'variant'),count:fieldValue(l,'count')});
@@ -4596,7 +4597,9 @@ function recipeEdit(type,id){
     ${searchable('Part',n+'_part',pair(state.parts.filter(x=>x.active!==false||x.id===l.partId)),l.partId)}
     ${number('Quantity per product',n+'_count',l.count,0.000001)}
     ${field('Size / color SKU',`<select class="sel" name="${n}_variant" data-bom-variant>${bomVariantOptions(l.partId,l.variantId)}</select>`,true)}
-    </div>`,old?.lines||[],'Add Line',{min:2,filled:line=>!!fieldValue(line,isPart?'sku':'part')});
+    </div>`,old?.lines||[],'Add Line',{min:1,filled:line=>!!fieldValue(line,isPart?'sku':'part'),
+      // the next line appears only after this one is complete: material + formula, or part + quantity
+      complete:line=>!!fieldValue(line,isPart?'sku':'part')&&(isPart?evalFormula(fieldValue(line,'formula')).ok:Number(fieldValue(line,'count'))>0)});
   if(!isPart)form.addEventListener('change',e=>{
     if(e.target.name?.endsWith('_part')){
       const picker=$('[data-bom-variant]',e.target.closest('fieldset'));
