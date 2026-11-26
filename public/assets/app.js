@@ -3244,7 +3244,7 @@ const TITLES={owner:'Owner overview',team:'Team activity',items:'Items & stock',
   'plan-new':'Production','purchase-new':'Purchasing'};
 /* Owner (super admin) gets his own menu: the team's work, items and tracking. Admins see the same pages under "Owner view". */
 /* Build version: stamped by scripts/bump-version.py together with the ?v= links in index.html. */
-const AMBS_VERSION='2026.11.26-1858';
+const AMBS_VERSION='2026.11.26-1900';
 const isOwner=()=>typeof CLOUD!=='undefined'&&CLOUD.role==='owner';
 const canSeeOwner=()=>typeof CLOUD!=='undefined'&&['owner','admin'].includes(CLOUD.role);
 const OWNER_GROUPS=[
@@ -3340,7 +3340,7 @@ function recordHistory(rec){
   if(r){push(r.at,['sales','purchases','jobs','orders','plans','trips'].includes(ref.table)?'Created':'Last saved',r.by);
     push(r.updated,'Updated',r.by);push(r.departedAt,'Trip started — driver on the way',r.by);push(r.completedAt,'Production completed',r.by);
     if(r.deliveredAt&&ref.table==='trips')push(r.deliveredTime||(String(r.updated||'').slice(0,10)===r.deliveredAt?r.updated:r.deliveredAt),'Delivered',r.by);
-    if(r.papersAt&&ref.table==='trips')push(r.papersAt,'Delivery papers: '+r.paperStatus,r.papersBy||r.by);}
+    if(r.papersAt&&ref.table==='trips')push(r.papersAt,'Signed delivery note: '+r.paperStatus,r.papersBy||r.by);}
   for(const e of state.events)if(e.partyId===id||e.salesId===id||e.purchaseId===id||e.jobId===id||e.orderId===id||e.id==='production:'+id||
     e.lines.some(l=>l.sku===id))push(e.at,evType(e.type)+(e.note?' · '+e.note:''),e.by);
   for(const t of state.trips)if(t.driverId===id||t.salesId===id||t.jobId===id||t.customerId===id){
@@ -6591,7 +6591,7 @@ function tripEdit(id,preset={}){
     ${input('Short description','description',t.description,{extra:'placeholder="e.g. Full safety net system, 13 sets"'})}
     ${select('Status','status',same(TRIP_STATUS),t.status||'Next',false)}
     ${input('Delivery date','deliveredAt',t.deliveredAt,{type:'date'})}
-    ${select('Delivery paper status','paperStatus',same(PAPER_STATUS),t.paperStatus||'Pending',false)}
+    ${select('Signed delivery note','paperStatus',same(PAPER_STATUS),t.paperStatus||'Pending',false)}
     ${jobs.length?select('Dispatch job (optional)','jobId',jobs.map(j=>[j.id,j.no+' · '+(get(state,'customers',j.customerId)?.name||'')]),t.jobId||'',false,'Not linked'):''}
     ${area('Notes','notes',t.notes)}</div>`,async f=>{
     const customerId=valOf(f,'customer'), driverId=valOf(f,'driverId'), status=valOf(f,'status')||'Next';
@@ -6680,7 +6680,7 @@ async function tripPapers(id,status){
       if(t.status==='Delivered'&&!t.deliveredTime)t.deliveredTime=String(t.updated||'').slice(0,10)===t.deliveredAt?t.updated:t.deliveredAt;
       t.paperStatus=status;t.papersAt=now();t.papersBy=whoami();t.updated=now();});
     App.render();
-    toast(status==='Signed & returned'?'Delivery papers marked as signed and returned.':status==='Missing'?'Delivery papers marked as missing.':'Delivery papers set back to pending.','ok');
+    toast(status==='Signed & returned'?'Signed delivery note marked as signed and returned.':status==='Missing'?'Signed delivery note marked as missing.':'Signed delivery note set back to pending.','ok');
   }catch(e){toast(e.message,'bad');}
 }
 function deleteTrip(id){
@@ -6696,9 +6696,9 @@ function tripView(id){
       t.status==='On the way'?button('Delivered',`tripStatus(${args},'Delivered')`,'btn-sm btn-primary'):'',
       ['Next','On the way'].includes(t.status)?small('Edit',`tripEdit(${args})`):'',
       // the signed delivery note comes back after the delivery: record it here
-      t.status==='Delivered'&&t.paperStatus!=='Signed & returned'?button('Mark papers signed',`tripPapers(${args},'Signed & returned')`,'btn-sm btn-primary','ok'):'',
-      t.status==='Delivered'&&t.paperStatus!=='Missing'?small('Mark papers missing',`tripPapers(${args},'Missing')`):'',
-      t.status==='Delivered'&&t.paperStatus&&t.paperStatus!=='Pending'?small('Mark papers pending',`tripPapers(${args},'Pending')`):'',
+      t.status==='Delivered'&&t.paperStatus!=='Signed & returned'?button('Mark note signed',`tripPapers(${args},'Signed & returned')`,'btn-sm btn-primary','ok'):'',
+      t.status==='Delivered'&&t.paperStatus!=='Missing'?small('Mark note missing',`tripPapers(${args},'Missing')`):'',
+      t.status==='Delivered'&&t.paperStatus&&t.paperStatus!=='Pending'?small('Mark note pending',`tripPapers(${args},'Pending')`):'',
       t.salesId||t.jobId?button('Print packing list',`packingListPDF('trip',${args})`,'btn-sm','pdf'):'',
       t.salesId?small('Sales order',`salesView(${escapeArg(t.salesId)})`):'',t.jobId?small('Dispatch job',`dispatchView(${escapeArg(t.jobId)})`):''],
       ['Next','On the way','Delivered'],t.status)+`<div class="co-details">${[
@@ -6707,14 +6707,14 @@ function tripView(id){
     ['Customer',esc(t.customerName||get(state,'customers',t.customerId)?.name||'—')],['Project',esc(t.project||'—')],
     ['Route',esc((t.from||'—')+' → '+(t.location||'—'))],['Delivery location on map',mapBtn(t.mapUrl,'Open in Google Maps')||'—'],['Distance',esc(t.km?nfmt(t.km,1)+' km':'—')],
     ['Trip date',esc(fmtDate(t.date))],['Delivery date',esc(t.deliveredAt?fmtDate(t.deliveredAt):'—')],
-    ['System',esc(t.system||'—')],['Short description',esc(t.description||'—')],['Delivery papers (signed delivery note)',t.paperStatus==='Signed & returned'?statusChip('ok','Signed & returned'):t.paperStatus==='Missing'?statusChip('bad','Missing'):statusChip('warn',t.paperStatus||'Pending')],
+    ['System',esc(t.system||'—')],['Short description',esc(t.description||'—')],['Signed delivery note',t.paperStatus==='Signed & returned'?statusChip('ok','Signed & returned'):t.paperStatus==='Missing'?statusChip('bad','Missing'):statusChip('warn',t.paperStatus||'Pending')],
     ['Dispatch job',esc(get(state,'jobs',t.jobId)?.no||'—')],['Recorded by',esc(t.by||'—')]
   ].map(([k,v])=>`<div><span>${esc(k)}</span><div>${v}</div></div>`).join('')}</div>`+(t.notes?note(t.notes):''),
   actionGroup(d?small('Driver',`closeModal();driverView(${escapeArg(d.id)})`):'',
     dangerSmall('Delete trip',`closeModal();deleteTrip(${escapeArg(id)})`)));
 }
 const TRIP_EXPORT_COLUMNS=['Customer','Project','Packing No.','Date','Status','Priority','System','Short description','Driver name','Driver phone',
-  'Vehicle','From','Delivery location','Google Maps link','Distance (km)','Delivery date','Paper status','Driver papers'];
+  'Vehicle','From','Delivery location','Google Maps link','Distance (km)','Delivery date','Signed delivery note','Driver papers'];
 function tripExportRows(trips){
   return trips.map(t=>{const d=get(state,'drivers',t.driverId);return [t.customerName||get(state,'customers',t.customerId)?.name||'',t.project||'',t.no,
     t.date||'',t.status,t.priority||'',t.system||'',t.description||'',d?.name||'',d?.phone||'',t.vehicle||'',t.from||'',t.location||'',t.mapUrl||'',
@@ -6740,7 +6740,7 @@ function exportDeliveries(kind,driverId=''){
   const name=driverId?'Driver_'+drivers[0].name:'Deliveries_'+todayISO();
   if(kind==='xlsx')return XLSX.save('AMBS_'+name,[{name:'Deliveries',columns:TRIP_EXPORT_COLUMNS,rows:tripExportRows(trips)},
     {name:'Drivers',columns:DRIVER_EXPORT_COLUMNS,rows:driverExportRows(drivers)}]);
-  const cols=['Packing No.','Date','Customer','Project','System','Status','Driver','Vehicle','Delivery location','Km','Delivered','Papers'];
+  const cols=['Packing No.','Date','Customer','Project','System','Status','Driver','Vehicle','Delivery location','Km','Delivered','Signed note'];
   pdf((driverId?'Driver trips · '+drivers[0].name+' · '+(papersOk(drivers[0])?'Papers OK':'PAPERS MISSING'):'Delivery tracking')+' · '+fmtDate(todayISO()),cols,
     trips.map(t=>[t.no,fmtDate(t.date),t.customerName||'',t.project||'',t.system||'',t.status+(t.priority==='Urgent'?' · URGENT':''),
       get(state,'drivers',t.driverId)?.name||'',t.vehicle||'',t.location||'',t.km?nfmt(t.km,1):'',t.deliveredAt?fmtDate(t.deliveredAt):'',t.paperStatus||'']),
@@ -6758,7 +6758,7 @@ function driverView(id){
     `<div class="co-smart-row">${tiles.map(([icon,l,v,sub])=>`<div class="co-smart">${ic(icon)}<span><b>${esc(v)}</b><small>${esc(l)}</small><em>${esc(sub)}</em></span></div>`).join('')}</div>`+
     panel('Driver details',kv([['Code',d.code],['Vehicle type',d.vehicleType],['Vehicle plate number',d.plateNo],
       ['Official papers on file',d.hasPapers?'Yes':'No']]))+
-    panel('Trips · '+trips.length,table(['Packing no.','Date','Customer / project','Route','Km','Status','Papers'],trips.map(t=>[
+    panel('Trips · '+trips.length,table(['Packing no.','Date','Customer / project','Route','Km','Status','Signed note'],trips.map(t=>[
       `<button type="button" class="link-btn" onclick="closeModal();tripView(${escapeArg(t.id)})">${esc(t.no)}</button>`,esc(fmtDate(t.date)),
       cell(t.customerName||'—',t.project),esc((t.from||'—')+' → '+(t.location||'—')),esc(t.km?nfmt(t.km,1):'—'),tripChip(t),esc(t.paperStatus||'—')]),
       'No trips yet.'))+(d.notes?note(d.notes):''),
@@ -6781,7 +6781,7 @@ const Drv={
   results(){
     const rows=this.filtered();
     return `<div class="pill-legend" style="margin:0 0 8px">${rows.length} trips · ${esc(nfmt(tripKm(rows),1))} km</div>`+
-      table(['Packing no.','Customer / project','System','Driver / vehicle','Delivery location','Km','Status','Delivery papers'],rows.map(t=>{
+      table(['Packing no.','Customer / project','System','Driver / vehicle','Delivery location','Km','Status','Signed delivery note'],rows.map(t=>{
         const d=get(state,'drivers',t.driverId), args=escapeArg(t.id);
         return [cell(t.no,fmtDate(t.date)),cell(t.customerName||'—',t.project),cell(t.system||'—',t.description),
           d?`<button type="button" class="link-btn" onclick="driverView(${escapeArg(d.id)})">${esc(d.name)}</button>${papersOk(d)?'':' '+statusChip('bad','Papers')}<div class="sub">${esc(t.vehicle||'')}</div>`:'—',
@@ -6851,7 +6851,7 @@ function assignDelivery(kind,docId,tripId=''){
     ${input('Trip date','date',old?.date||todayISO(),{type:'date'})}
     ${kind==='sale'?select('Ship from','fromLocation',locOptions(),old?.fromLocation||bestSource(info.items),false,'Choose the store'):''}
     ${select('Priority','priority',same(['Normal','Urgent']),old?.priority||'Normal',false)}
-    ${old?select('Delivery papers','paperStatus',same(PAPER_STATUS),old.paperStatus||'Pending',false):''}
+    ${old?select('Signed delivery note','paperStatus',same(PAPER_STATUS),old.paperStatus||'Pending',false):''}
     </div>`,async f=>{
     const driverId=valOf(f,'driverId'), kmRaw=valOf(f,'km');
     need(driverId,'Choose the driver.');
