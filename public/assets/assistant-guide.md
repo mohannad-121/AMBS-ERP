@@ -5,14 +5,17 @@ The AMBS Production System is the production planning and stock control web app 
 ## What changed in November 2026 (owner requests) 🆕
 Keywords: vendor, supplier renamed, driver, delivery, trip, papers, tracking, live, excel, phone +971, required
 
-- **Nothing is marked "Required"** any more. Empty codes are filled in automatically (C-001 customers, V-001 vendors, RM-0001 raw materials, PT-001 parts, PR-001 products). A save only stops when something truly cannot work, for example a record without a name.
-- **Customers** need only: **Name**, **Code**, **Phone number**, **Email**, **Position** and **Delivery address**. The phone box already shows **+971**; type the rest, e.g. `50 123 4567`. The delivery address is also kept as the customer's "Delivery address" site for dispatch.
+- **Automatic codes**: every New form shows the next code as a grey hint in the small **Code** box next to the name — **C-001** customers, **V-001** vendors, **D-001** drivers, **PCM-001** processing companies, **RM-001** raw materials, **Part-001** parts, **PDT-001** products (the number is one after the highest in use). Press **Tab** in the Code box to fill it in, or just leave it empty — it is given automatically when you save. You can always type your own code or change it later; it must be unique.
+- **Nothing you type is lost (drafts)**: every New / Add / Edit form is saved in this browser while you type. If you click another menu, the breadcrumb, or refresh the page, nothing is lost — after a refresh the form comes back by itself with a yellow "Your unsaved draft is back" bar, and the list page shows **Unsaved draft — Continue / Discard**. Only **Save** or **Discard** (which asks first) clears a draft. A chosen photo file cannot be kept in a draft — pick it again before saving. Drafts are kept per browser/computer.
+- **Nothing is marked "Required"** any more. A save only stops when something truly cannot work, for example a record without a name.
+- **Customers**: **Name** (long) with a small **Code** box next to it, then **Company phone number** and **Email**. Under **Contact people**: **Position 1** + **Contact number 1** — press the small **+** to add Position 2, 3 … (the **−** removes a line). Under **Delivery addresses**: **Delivery address 1** + its **Google Maps link** — press **+** for more addresses. Every delivery address becomes a customer site that sales orders and dispatch can choose. Phone boxes already show **+971**; type the rest, e.g. `50 123 4567`.
 - **Google Maps location**: customers, vendors and delivery trips have a **Google Maps link** box. In Google Maps open the place → **Share → Copy link** and paste it (coordinates like `25.2048, 55.2708` also work). A small 📍 **pin** next to the address then opens the location — on the customer page, the trip list, the driver's "Where now" and Live Tracking. A new trip takes the customer's map link automatically, and the link is included in the Excel export.
 - **Logo / photo** for customers and vendors: choose it in the **Logo / photo** box of the form, or simply click the round avatar (with the small **+**) in the list or on its page to upload or replace it straight away. PNG, JPEG, WebP or GIF up to 10 MB; it is optimized automatically. Drivers work the same way: a **Driver photo** box in the driver form, or click the driver's avatar in the Drivers list or on the driver's page.
-- **Suppliers are now called Vendors**. Short form (name, code, phone, email, address, **Address 2** for a second branch or store — no position) plus **Materials this vendor supplies**: pick a raw material and the number of **bundles**. Open a vendor (click its card) to see its materials, bundles, units per bundle and stock on hand.
+- **Suppliers are now called Vendors**. Form: **Name** with the small **Code** box, phone, email, **Company address** + its Google Maps link (half and half), then **Factory address 1** + Google Maps link with a **+** to add more factories. (The old "Materials this vendor supplies" section was removed from the form.)
+- **Processing companies** have a **Their work** field (e.g. Powder coating, Galvanizing — pick a suggestion or type it).
 - **Raw materials**: the form starts with **Material name**, followed by code, category and a **Material photo** box. You can also click the material's picture (small **+**) in the list or on its page to upload or replace the photo straight away. **Parts** and **Products** work the same way: a **Part photo** / **Product photo** box in the form, and a clickable picture in the list and on the record page. Safety / minimum stock and the Archive button were removed.
 - **Bills of Materials**: **Create BOM** opens a large window with a search box and the full list, each item shown with its photo — type part of a name or code to narrow it down. Item search boxes elsewhere (BOM lines, sales, stock) also show photos. Click a BOM row to see what is inside. In the BOM form there is no "Add line" button: it opens with one line, and the next line appears by itself only after the current one is complete (raw material + formula, or part + quantity); empty lines are ignored.
-- **Drivers & Deliveries** (`#/drivers`): add drivers with phone, vehicle type, licence, vehicle registration (Mulkiya) and the **Official papers checked and on file** box. **A trip cannot be created, started or delivered with a driver whose papers are missing or expired.** Each trip has a packing number (PL2026-11-001), customer, project, system, short description, from / delivery location, distance in km, priority, status (Next → On the way → Delivered), delivery date and delivery paper status. Export everything with **PDF** or **Excel** (Excel has a Deliveries sheet and a Drivers sheet); each driver's page has its own PDF / Excel under **⚙ Actions**.
+- **Drivers & Deliveries** (`#/drivers`): add drivers with code (D-001 …), phone, driver type, vehicle type, licence number and — at the bottom of the form — the **Official papers checked and on file** box. (Licence and Mulkiya expiry dates were removed.) **A trip cannot be created, started or delivered with a driver whose papers box is not ticked.** Each trip has a packing number (PL2026-11-001), customer, project, system, short description, from / delivery location, distance in km, priority, status (Next → On the way → Delivered), delivery date and delivery paper status. Export everything with **PDF** or **Excel** (Excel has a Deliveries sheet and a Drivers sheet); each driver's page has its own PDF / Excel under **⚙ Actions**.
 - **Live Tracking** (`#/tracking`): every movement reads **From → To** (vendor → store, store → store, store → production, store → customer site with a 📍 map pin) with the **trip and driver** that carried it; a **Waiting to be delivered** panel lists open dispatch jobs and sales orders per item with from → to and the assigned trip (or an **Assign driver** button). Also: where every item is now, every movement with the balance left at that location, filters for item type, location, movement type and dates, a **Track** timeline per item, and an Excel export. Dashboard, Live Tracking and Drivers refresh themselves every 30 seconds.
 - **Dashboard**: live KPI cards, stock movements over 14 days, deliveries by status and per driver, where stock is held, most moved items, the live movement feed and deliveries to watch.
 
@@ -35,7 +38,7 @@ Keywords: edit, save, discard, status bar, tabs, history, sort, filter, group by
 - **Start trip** is one click. **Delivered** asks once, because it takes the goods out of stock.
 - Record pages show fields in two columns, sections as **tabs**, and a **History** log on the right (created, updated, stock movements, trips).
 - In lists: click a column header to **sort** (click again to reverse), use the status buttons (**All / Draft / Confirmed …**) to filter, **Group by…** to group rows, and the ‹ › pager when there are more than 80 rows.
-- Rarely used raw-material fields (section profile, stock length, rates, specifications) are under **More details** in the form.
+- The raw-material form is split into clear sections: **Material** (name + code, category, unit, dimensions, photo), **Stock** (bundle quantity, opening stock), **Section & rates** (section profile, stock length, AED per kg / per piece) and **Notes & status**. Parts and products use the same sectioned layout.
 - On a phone, list rows show as stacked cards.
 
 ## Odoo-style layout (Nov 2026)
@@ -98,7 +101,7 @@ Keywords: job 1, first job, test job, buy, purchase walkthrough, receive goods, 
 
 Goal: the store has the raw materials, received from a vendor.
 1. **Add the raw materials**: **Master Data → Raw Materials → New** (`#/materials`). Example: `MS SHS 50×50×2.5 mm` (unit TUBE, bundle 10) and `Galvanized bolt M12×100` (unit PCS, bundle 100). Opening stock 0 → **Save**.
-2. **Add the vendor**: **Overview → Vendors → New** (`#/suppliers`). Name, phone, address, Google Maps link. Under **Materials this vendor supplies** pick the SHS tube and enter bundles; a second line appears by itself for the bolts → **Save**.
+2. **Add the vendor**: **Overview → Vendors → New** (`#/suppliers`). Name, phone, address, Google Maps link. Add the **Company address** and any **Factory addresses** (press **+** for more) → **Save**.
 3. **Create the purchase**: **Operations → Purchasing → New** (`#/purchase`). Vendor, receiving location **Main Store · DIP**, lines SHS 50 and bolts 500 → **Save** (status Draft).
 4. **Order it**: open the purchase → **Mark ordered**.
 5. **Receive it**: click **Receive** → delivery note (e.g. `DN-1001`) → quantities → **Confirm Receipt**.
@@ -121,7 +124,7 @@ Keywords: job 3, third job, sell and deliver, dispatch walkthrough, delivery wal
 
 Goal: a product is packed, delivered to a customer by a driver with valid papers, and the reports are exported.
 1. **Customer**: **Overview → Customers → New** (`#/customers`) — name, phone (+971 is already there), position, delivery address, Google Maps link → **Save**.
-2. **Drivers**: **Overview → Drivers → New** (`#/drivers`) — one driver with licence and Mulkiya expiry dates in the future and **Official papers checked and on file** ticked; one without (to test the block).
+2. **Drivers**: **Overview → Drivers → New** (`#/drivers`) — one driver with **Official papers checked and on file** ticked; one without (to test the block).
 3. **Dispatch job**: **Operations → Packing & Dispatch → New** (`#/dispatch`) — reference, source store, customer, delivery site, product, quantity 5, fulfilment **Pack from parts** → **Save Job**.
 4. **Assign a driver**: **Operations → Deliveries** (`#/deliveries`) → the job is under **To deliver** → **Assign driver**. The driver without papers is **blocked** (correct). Choose the good driver, km → **Assign driver**. The trip gets a number like **PL2026-11-001**.
 5. **Packing list**: open the trip (click its row) → **Print packing list**. Tick each line while loading; get the signatures.
@@ -135,9 +138,9 @@ Keywords: add driver, new driver, driver form, truck driver, vehicle, licence, l
 
 1. **Overview → Drivers** (`#/drivers`) → **New**.
 2. Fill **Driver name**, **Phone number** (+971 is already there), **Driver type** (AMBS driver, Outside driver, Client pickup), **Vehicle type** (Pickup, 3-ton truck …).
-3. Papers: **Driving licence number** and expiry, **Vehicle registration (Mulkiya) expiry**.
-4. Tick **Official papers checked and on file** only after you have seen the papers.
-5. Optional **Driver photo** → **Save driver**.
+3. **Code** (press Tab for the next D-00x), **Driving licence number**, optional **Driver photo** and **Notes**.
+4. At the bottom, tick **Official papers checked and on file** only after you have seen the licence and Mulkiya.
+5. **Save driver**.
 
 The driver card shows the photo, vehicle, papers status (✓ OK or the problem) and where the driver is now (*At base* or *On the way → customer*). Click the card for the driver's page: trips, km, papers and **⚙ Actions → PDF / Excel / Delete**. **New trip** is on the page when papers are OK.
 
@@ -145,8 +148,7 @@ The driver card shows the photo, vehicle, papers status (✓ OK or the problem) 
 Keywords: blocked driver, papers missing, expired licence, cannot assign driver, driver not allowed, papers expired, no papers, cannot start trip, السائق ممنوع, اوراق ناقصة
 
 A driver can only be given a trip when **all** of these are true:
-- **Official papers checked and on file** is ticked,
-- the driving licence and vehicle registration (Mulkiya) expiry dates are not in the past.
+- **Official papers checked and on file** is ticked (expiry dates are no longer entered).
 
 Otherwise **Assign driver**, **Start trip** and **Delivered** are refused with a message naming the problem (e.g. "papers not on file", "licence expired"). Fix it: open the driver → **Edit** → update the dates / tick the box → **Save**. The Dashboard card **Driver papers** counts drivers with problems.
 
@@ -333,9 +335,9 @@ Keywords: add customer, new supplier, processor, vendor, client, company, contac
 
 1. Open **Customers** (`#/customers`), **Suppliers** (`#/suppliers`) or **Processing Companies** (`#/processors`) from the sidebar group **Overview**.
 2. Click **New** (top right). Every company type uses one short form:
-   - **Customers**: Name | Code, Phone | Email, Position | Delivery address, Google Maps link | Logo.
-   - **Vendors**: Name | Code, Phone | Email, Address | Address 2, Google Maps link | Logo, then the materials they supply.
-   - **Processing companies**: Name | Code, Phone | Email, Address | Google Maps link. Saving creates their **Processing site**, which holds AMBS stock, so parts can be transferred there (see "Send parts to a processing company and back").
+   - **Customers**: Name | small Code, Company phone | Email, Position 1 | Contact number 1 | **+**, Delivery address 1 | Google Maps link 1 | **+**, Logo.
+   - **Vendors**: Name | small Code, Phone | Email, Company address | Google Maps link, Factory address 1 | Google Maps link 1 | **+**, Logo.
+   - **Processing companies**: Name | small Code, Phone | Email, Their work, Address | Google Maps link. Saving creates their **Processing site**, which holds AMBS stock, so parts can be transferred there (see "Send parts to a processing company and back").
 
 3. Click **Save**.
 
@@ -456,7 +458,7 @@ Keywords: add raw material, new material, steel, tube, sheet, aluminium, stock i
 
 1. Open **Raw Materials** (`#/materials`) in **Master Data**.
 2. Click **Add raw material** (top right).
-3. **Code** is pre-filled with the next free code (RM-0001, RM-0002 …). You can change it, but it must be unique across materials, parts, products and variants.
+3. **Code** shows the next free code as a hint (RM-001, RM-002 …) — press Tab to use it or leave it empty. You can change it, but it must be unique across materials, parts, products and variants.
 4. Fill **Material name *** and optionally **Category** (suggestions: Tubes, Steel sections, Sheets, Accessories).
 5. Choose **Unit**, for example PCS, M, KG or TUBE.
 6. Optionally fill **Bundle quantity (units per bundle)**, **Safety / minimum stock**, **Opening / initial stock** (see the next section), **Section profile (links to calculators)**, **Stock length (m)**, **Rate (AED per kg)**, **Rate (AED per piece)**, **Dimensions / specifications**, **Image** and **Notes**.
@@ -552,9 +554,9 @@ Keywords: add product, finished product, safety net system, product setup, new p
 1. Open **Products** (`#/products`) in **Master Data** and click **Add Product**.
 2. Fill **Code** and **Name** (required, unique).
 3. Choose or type **Category / packing formula template**. Picking a template such as **4.0 STD-Y** fills in the part quantities automatically (see the next section).
-4. Set **Stock unit** (usually PCS) and **Default order quantity**, a whole number used as the default quantity on new dispatch jobs.
+4. Set **Stock unit** (usually PCS) and **Quantity**, a whole number used as the default quantity on new dispatch jobs.
 5. Optionally add an **Image** and **Notes**.
-6. In **Product parts**, search parts by name or code and enter **Quantity per product**. **Order total** shows quantity × default order quantity. **Workbook accessory cost estimate** (expandable) shows workbook costs where available.
+6. In **Product parts**, search parts by name or code and click **+ Add** next to the one you want, then type how many go **in one product**. Added parts stay listed (✕ removes one); the badge shows how many parts are added. **Total for quantity** shows in-one-product × Quantity. Choosing a packing template in Category fills the parts for you. **Accessory cost estimate** (expandable) shows workbook costs where available.
 7. Click **Save**.
 
 Saving with part quantities creates or updates the product's **Product BOM**, which is approved by default. A product needs a Product BOM before you can plan or dispatch it.
@@ -683,7 +685,7 @@ Error messages:
 Keywords: product BOM, parts list, product recipe, components per product, kit, مكونات المنتج
 
 There are two ways to set it up:
-- **Through the product form**: enter **Quantity per product** in **Product parts** and save. See "Add a finished product".
+- **Through the product form**: in **Product parts** click **+ Add** on a part, enter how many go **in one product**, and save. See "Add a finished product".
 - **Through the BOM page**: on **Bill of Materials** (`#/bom`), click **Create BOM** or **Edit BOM** on the product.
 
 In the BOM form, each **Part line** has:
@@ -967,7 +969,7 @@ Keywords: dispatch, delivery, packing, ship, send to customer, DSP, job, شحن,
 3. Choose the **Customer** and the **Customer delivery site**. The customer must have at least one active location in its record.
 4. Choose the **Fulfilment**: **Pack from parts** or **Finished stock** (see the next section).
 5. Optionally tick **Keep delivered stock tracked at customer site**.
-6. In **Complete product**, choose the **Product**. **Requested product quantity** fills with the product's Default order quantity. Adjust the per-part quantities and variants if needed.
+6. In **Complete product**, choose the **Product**. **Requested product quantity** fills with the product's Quantity. Adjust the per-part quantities and variants if needed.
 7. Review the panel: destination with its 📍 map link, plus **Packing requirements** or **Finished stock** availability.
 8. Click **Save Job**. The job is **Open**, with a number starting **DSP-**, and appears in **Deliveries → To deliver**.
 9. Open it → **Print packing list** for the store team, then **Assign driver**.
@@ -1265,7 +1267,7 @@ Keywords: duplicate code, code in use, SKU exists, code and name required, كو�
 - **"This code or SKU is already in use."** Codes must be unique (case-insensitive) across all raw materials, parts, products and variants together. Companies are checked within their own type (customers among customers, and so on). Choose another code, or find the existing record with the list search.
 - **"Code and name are required."** Fill both **Code** and **Name**.
 - **"Enter a stock unit using letters, numbers, spaces, / or -."** See "Units of measure".
-- **"Default order quantity must be a whole number."** / **"… must be greater than zero."** Product default order quantity must be at least 1.
+- **"Quantity must be a whole number."** / **"… must be greater than zero."** A product's Quantity must be at least 1.
 - **"safety must be zero or greater."** (also bundle, stockLen, rateKg, ratePc). The message uses the internal field name. **Safety / minimum stock**, **Bundle quantity**, **Stock length (m)** and the **Rate** fields can't be negative or empty.
 
 ## Error: "This record changed. Reopen it before saving." (conflicts)
