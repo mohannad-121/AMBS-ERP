@@ -3244,7 +3244,7 @@ const TITLES={owner:'Owner overview',team:'Team activity',items:'Items & stock',
   'plan-new':'Production','purchase-new':'Purchasing'};
 /* Owner (super admin) gets his own menu: the team's work, items and tracking. Admins see the same pages under "Owner view". */
 /* Build version: stamped by scripts/bump-version.py together with the ?v= links in index.html. */
-const AMBS_VERSION='2026.11.26-1848';
+const AMBS_VERSION='2026.11.26-1850';
 const isOwner=()=>typeof CLOUD!=='undefined'&&CLOUD.role==='owner';
 const canSeeOwner=()=>typeof CLOUD!=='undefined'&&['owner','admin'].includes(CLOUD.role);
 const OWNER_GROUPS=[
