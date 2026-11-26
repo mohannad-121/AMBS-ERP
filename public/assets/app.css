@@ -1704,21 +1704,41 @@ tr.o-group td{background:#f8f9fa!important;font-weight:600;cursor:pointer;color:
   .code-field .code-hint{position:static;margin-top:6px;white-space:normal}
 }
 
-/* ===== Floating titles (Uiverse "wave" input) — letters jump up one by one; hint shows once the title is up ===== */
-.field.fl-on{padding-top:19px;--fl-up:-31px}
+/* ===== Floating titles on form text boxes =====
+   Default: Uiverse "notch" input — the title sits inside the empty box, then slides up onto the top border, shrinks and
+   cuts into the border on a white background; blue focus ring. The example hint shows once the title is up.
+   Older Uiverse "wave" style (letters jump one by one) is kept: add class "fl-wave" to <body> to use it instead. */
 .field.fl-on>label{font-size:0!important;line-height:0!important;margin:0!important;color:transparent!important}
 .fl-box{position:relative;display:block}
 .phone-in .fl-box{flex:1;min-width:0}
-.fl-text{position:absolute;left:13px;right:10px;top:50%;transform:translateY(-50%);pointer-events:none;white-space:nowrap;line-height:1;z-index:2}
-.fl-text span{display:inline-block;min-width:3px;font-size:13.5px;font-weight:500;color:#8a94a3;
-  transition:transform .3s cubic-bezier(.68,-.55,.265,1.55),color .3s,font-size .3s}
-.fl-box:focus-within>.fl-text span,
-.fl-box>input:not(:placeholder-shown)~.fl-text span,
-.fl-box>input:-webkit-autofill~.fl-text span{transform:translate(var(--fl-dx,-13px),var(--fl-up));font-size:12.5px;font-weight:600;color:var(--o-text-2,#374151)}
-.fl-box:focus-within>.fl-text span{color:var(--o-accent,#9b1c1c)}
-/* the example hint appears when the title has moved up */
-.fl-box>input::placeholder{color:transparent!important;transition:color .2s}
+.fl-text{position:absolute;left:13px;top:50%;transform:translateY(-50%);pointer-events:none;white-space:nowrap;line-height:1;z-index:2}
+.fl-text span{display:inline-block;min-width:3px}
+.fl-box>input::placeholder{color:transparent!important}
 .fl-box>input:focus::placeholder{color:#9aa4b2!important}
-.auth-card .field.fl-on{padding-top:22px;--fl-up:-34px}
-@media(max-width:760px){.field.fl-on{--fl-up:-34px}.fl-text span{font-size:15px}}
-@media(prefers-reduced-motion:reduce){.fl-text span{transition:none}}
+
+/* --- notch style (default) --- */
+body:not(.fl-wave) .field.fl-on{padding-top:9px}
+body:not(.fl-wave) .fl-box>input.inp{border-radius:10px!important;border-color:#bbbbbb!important;transition:box-shadow .2s ease,border-color .2s ease}
+body:not(.fl-wave) .phone-in .fl-box>input.inp{border-radius:0 10px 10px 0!important}
+body:not(.fl-wave) .phone-in .phone-cc{border-radius:10px 0 0 10px!important;border-color:#bbbbbb!important}
+body:not(.fl-wave) .fl-box>input.inp:focus{border-color:#bbbbbb!important;box-shadow:0 0 0 1px #e8e8e8,0 0 0 3px rgb(92,127,202)!important}
+body:not(.fl-wave) .fl-text{font-size:13.5px;font-weight:500;color:#2c2c54;transform:translateY(-50%) scale(.95);transform-origin:left center;
+  padding:0;border-radius:3px;transition:all .1s ease-in-out}
+body:not(.fl-wave) .fl-box:focus-within>.fl-text,
+body:not(.fl-wave) .fl-box>input:not(:placeholder-shown)~.fl-text,
+body:not(.fl-wave) .fl-box>input:-webkit-autofill~.fl-text{top:0;left:8px!important;transform:translateY(-50%) scale(.8);background:#fff;color:#000;padding:0 6px;font-weight:600}
+body:not(.fl-wave) .fl-box:focus-within>.fl-text{color:rgb(52,82,150)}
+@media(max-width:760px){body:not(.fl-wave) .fl-text{font-size:15px}}
+
+/* --- wave style (body.fl-wave) --- */
+body.fl-wave .field.fl-on{padding-top:19px;--fl-up:-31px}
+body.fl-wave .fl-text{right:10px}
+body.fl-wave .fl-text span{font-size:13.5px;font-weight:500;color:#8a94a3;
+  transition:transform .3s cubic-bezier(.68,-.55,.265,1.55),color .3s,font-size .3s}
+body.fl-wave .fl-box:focus-within>.fl-text span,
+body.fl-wave .fl-box>input:not(:placeholder-shown)~.fl-text span,
+body.fl-wave .fl-box>input:-webkit-autofill~.fl-text span{transform:translate(var(--fl-dx,-13px),var(--fl-up));font-size:12.5px;font-weight:600;color:var(--o-text-2,#374151)}
+body.fl-wave .fl-box:focus-within>.fl-text span{color:var(--o-accent,#9b1c1c)}
+body.fl-wave .auth-card .field.fl-on{padding-top:22px;--fl-up:-34px}
+@media(max-width:760px){body.fl-wave .field.fl-on{--fl-up:-34px}body.fl-wave .fl-text span{font-size:15px}}
+@media(prefers-reduced-motion:reduce){.fl-text,.fl-text span{transition:none!important}}

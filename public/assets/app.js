@@ -3244,7 +3244,7 @@ const TITLES={owner:'Owner overview',team:'Team activity',items:'Items & stock',
   'plan-new':'Production','purchase-new':'Purchasing'};
 /* Owner (super admin) gets his own menu: the team's work, items and tracking. Admins see the same pages under "Owner view". */
 /* Build version: stamped by scripts/bump-version.py together with the ?v= links in index.html. */
-const AMBS_VERSION='2026.11.26-1843';
+const AMBS_VERSION='2026.11.26-1848';
 const isOwner=()=>typeof CLOUD!=='undefined'&&CLOUD.role==='owner';
 const canSeeOwner=()=>typeof CLOUD!=='undefined'&&['owner','admin'].includes(CLOUD.role);
 const OWNER_GROUPS=[
@@ -7861,7 +7861,7 @@ function floatLabels(root){
     if(!text){text=document.createElement('span');text.className='fl-text';text.setAttribute('aria-hidden','true');box.append(text);}
     text.dataset.title=title;
     const step=Math.min(50,600/Math.max(1,title.length));
-    text.innerHTML=[...title].map((ch,i)=>`<span style="transition-delay:${Math.round(i*step)}ms">${ch===' '?'&nbsp;':esc(ch)}</span>`).join('');
+    text.innerHTML=[...title].map((ch,i)=>`<span style="transition-delay:${document.body.classList.contains('fl-wave')?Math.round(i*step):0}ms">${ch===' '?'&nbsp;':esc(ch)}</span>`).join('');
     if(!input.getAttribute('placeholder'))input.setAttribute('placeholder',' ');
     field.classList.add('fl-on');
     floatPlace(input);
