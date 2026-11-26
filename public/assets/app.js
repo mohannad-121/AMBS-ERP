@@ -3244,7 +3244,7 @@ const TITLES={owner:'Owner overview',team:'Team activity',items:'Items & stock',
   'plan-new':'Production','purchase-new':'Purchasing'};
 /* Owner (super admin) gets his own menu: the team's work, items and tracking. Admins see the same pages under "Owner view". */
 /* Build version: stamped by scripts/bump-version.py together with the ?v= links in index.html. */
-const AMBS_VERSION='2026.11.26-1837';
+const AMBS_VERSION='2026.11.26-1843';
 const isOwner=()=>typeof CLOUD!=='undefined'&&CLOUD.role==='owner';
 const canSeeOwner=()=>typeof CLOUD!=='undefined'&&['owner','admin'].includes(CLOUD.role);
 const OWNER_GROUPS=[
@@ -3712,6 +3712,7 @@ function plusRows(form,container,draw,rows,{addLabel='Add another',filled=line=>
     b.classList.toggle('plus-remove',i>0);b.textContent=i?'−':'+';
     b.title=i?'Remove this line':addLabel;b.setAttribute('aria-label',b.title);
   });
+  if(typeof floatLabels==='function')floatLabels(box);
   const create=(value={})=>{
     const line=document.createElement('div');line.className='plus-row';
     const n='r'+key().replace(/[^a-z0-9]/gi,'');
@@ -7832,7 +7833,54 @@ function enhanceTables(root){
     if(rows.length>listState(card).size)applyList(card);
   }
 }
-new MutationObserver(list=>{for(const m of list)for(const n of m.addedNodes)if(n.nodeType===1){enhanceRows(n);enhanceTables(n);}})
+/* Floating titles (Uiverse "wave" input): in forms, a text box's own title sits inside the empty box and its letters jump up
+   one by one when you click in or type. The example hint (placeholder) shows as soon as the title is up. Titles, names
+   and values are unchanged — the field's label stays in the page (hidden visually) and the moving letters are a copy. */
+const FLOAT_SKIP=/^(checkbox|radio|file|hidden|date|datetime-local|month|week|time|color|range|search|submit|button|reset|image)$/;
+function floatTitle(field){
+  const label=field.querySelector(':scope > label');
+  if(!label)return '';
+  const copy=label.cloneNode(true);
+  copy.querySelectorAll('input,select,textarea,div,datalist,button,.fl-text').forEach(x=>x.remove());
+  return copy.textContent.replace(/\s+/g,' ').trim();
+}
+function floatLabels(root){
+  if(!root?.querySelectorAll)return;
+  const inputs=root.matches?.('input.inp')?[root]:root.querySelectorAll('.field input.inp');
+  for(const input of inputs){
+    if(FLOAT_SKIP.test(input.type))continue;
+    const field=input.closest('.field');
+    if(!field||!input.closest('.erp-modal-body,.auth-card')||input.closest('.search,.o-gsearch,.o-search-hero,.pp-search,.tbl'))continue;
+    if(field.querySelectorAll('input.inp:not([type=hidden]),select,textarea').length>1)continue;
+    const title=floatTitle(field);
+    if(!title)continue;
+    let box=input.parentElement?.classList.contains('fl-box')?input.parentElement:null;
+    if(!box){box=document.createElement('span');box.className='fl-box';input.before(box);box.append(input);}
+    let text=box.querySelector(':scope > .fl-text');
+    if(text?.dataset.title===title)continue;
+    if(!text){text=document.createElement('span');text.className='fl-text';text.setAttribute('aria-hidden','true');box.append(text);}
+    text.dataset.title=title;
+    const step=Math.min(50,600/Math.max(1,title.length));
+    text.innerHTML=[...title].map((ch,i)=>`<span style="transition-delay:${Math.round(i*step)}ms">${ch===' '?'&nbsp;':esc(ch)}</span>`).join('');
+    if(!input.getAttribute('placeholder'))input.setAttribute('placeholder',' ');
+    field.classList.add('fl-on');
+    floatPlace(input);
+  }
+}
+/* measure where the title starts inside the box and how far it moves to line up with the field's left edge
+   (search boxes have an icon, phone boxes have +971 in front) */
+function floatPlace(input){
+  const box=input.parentElement, text=box?.querySelector(':scope > .fl-text'), field=input.closest('.field');
+  if(!text||!field)return;
+  const cs=getComputedStyle(input), pad=(parseFloat(cs.paddingLeft)||12)+(parseFloat(cs.borderLeftWidth)||1);
+  text.style.left=pad+'px';
+  const b=box.getBoundingClientRect(), f=field.getBoundingClientRect();
+  if(b.width)text.style.setProperty('--fl-dx',-(b.left-f.left+pad)+'px');
+}
+// re-measure when a hidden tab or a resized window shows fields
+document.addEventListener('focusin',e=>{if(e.target?.parentElement?.classList?.contains('fl-box'))floatPlace(e.target);});
+window.addEventListener('resize',()=>document.querySelectorAll('.fl-box>input').forEach(floatPlace));
+new MutationObserver(list=>{for(const m of list)for(const n of m.addedNodes)if(n.nodeType===1){enhanceRows(n);enhanceTables(n);floatLabels(n);}})
   .observe(document.documentElement,{childList:true,subtree:true});
 // small screens: tapping outside the open sidebar closes it
 document.addEventListener('click',e=>{
