@@ -3244,7 +3244,7 @@ const TITLES={owner:'Owner overview',team:'Team activity',items:'Items & stock',
   'plan-new':'Production','purchase-new':'Purchasing'};
 /* Owner (super admin) gets his own menu: the team's work, items and tracking. Admins see the same pages under "Owner view". */
 /* Build version: stamped by scripts/bump-version.py together with the ?v= links in index.html. */
-const AMBS_VERSION='2026.11.26-1850';
+const AMBS_VERSION='2026.11.26-1854';
 const isOwner=()=>typeof CLOUD!=='undefined'&&CLOUD.role==='owner';
 const canSeeOwner=()=>typeof CLOUD!=='undefined'&&['owner','admin'].includes(CLOUD.role);
 const OWNER_GROUPS=[
@@ -3706,13 +3706,16 @@ const nameCodeRow=(nameHtml,codeHtml)=>`<div class="full name-code">${nameHtml}$
 function plusRows(form,container,draw,rows,{addLabel='Add another',filled=line=>[...line.querySelectorAll('input:not([type=hidden]),select,textarea')].some(x=>x.value.trim())}={}){
   const box=form.querySelector(container);
   box.classList.add('plus-rows');box.dataset.repeatBox='';
-  const renumber=()=>[...box.children].forEach((line,i)=>{
-    line.querySelectorAll('[data-num]').forEach(el=>{el.textContent=el.dataset.num.replace('#',i+1);});
-    const b=line.querySelector('.plus-btn');
-    b.classList.toggle('plus-remove',i>0);b.textContent=i?'−':'+';
-    b.title=i?'Remove this line':addLabel;b.setAttribute('aria-label',b.title);
-  });
-  if(typeof floatLabels==='function')floatLabels(box);
+  // after every add / remove the lines are numbered 1, 2, 3 … again in order, titles included
+  const renumber=()=>{
+    [...box.children].forEach((line,i)=>{
+      line.querySelectorAll('[data-num]').forEach(el=>{el.textContent=el.dataset.num.replace('#',i+1);});
+      const b=line.querySelector('.plus-btn');
+      b.classList.toggle('plus-remove',i>0);b.textContent=i?'−':'+';
+      b.title=i?'Remove this line':addLabel;b.setAttribute('aria-label',b.title);
+    });
+    if(typeof floatLabels==='function')floatLabels(box);
+  };
   const create=(value={})=>{
     const line=document.createElement('div');line.className='plus-row';
     const n='r'+key().replace(/[^a-z0-9]/gi,'');
