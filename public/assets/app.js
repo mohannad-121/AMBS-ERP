@@ -3244,7 +3244,7 @@ const TITLES={owner:'Owner overview',team:'Team activity',items:'Items & stock',
   'plan-new':'Production','purchase-new':'Purchasing'};
 /* Owner (super admin) gets his own menu: the team's work, items and tracking. Admins see the same pages under "Owner view". */
 /* Build version: stamped by scripts/bump-version.py together with the ?v= links in index.html. */
-const AMBS_VERSION='2026.11.26-1828';
+const AMBS_VERSION='2026.11.26-1837';
 const isOwner=()=>typeof CLOUD!=='undefined'&&CLOUD.role==='owner';
 const canSeeOwner=()=>typeof CLOUD!=='undefined'&&['owner','admin'].includes(CLOUD.role);
 const OWNER_GROUPS=[
@@ -5860,7 +5860,7 @@ async function packingListPDF(kind,id){
   const where=[site?.name,site?.address,site?.city].filter(uniqText).join(', ')||trip?.location||'';
   const meta=[['Date',fmtDate(trip?.date||todayISO())],['Customer',customer?.name||trip?.customerName||''],
     ['Reference',[job?job.no+' · '+job.name:'',sale?sale.no+(sale.reference?' · PO '+sale.reference:''):''].filter(Boolean).join(' ')],['Ship from',from],
-    ['Driver',driver?driver.name+(driver.phone?' · '+driver.phone:''):'Not assigned yet'],['Vehicle',trip?.vehicle||driver?.vehicleType||''],
+    ['Driver',driver?driver.name+(driver.phone?' · '+driver.phone:''):'Not assigned yet'],['Vehicle',trip?.vehicle||vehicleLabel(driver)],
     ['Deliver to',where],['Map',trip?.mapUrl||(site?mapsLink(site):'')||'']];
   let y=106;doc.setFontSize(9);
   const colW=(W-80)/2;
@@ -6481,6 +6481,9 @@ const XLSX={
 /* ---------------- Drivers & deliveries ----------------
    A delivery trip can only go out with a driver whose official papers are on file and not expired. */
 const DRIVER_KINDS=['AMBS driver','Outside driver','Client pickup'];
+const VEHICLE_TYPES=['1-ton truck','3-ton truck','5-ton truck','7-ton truck','10-ton truck','Flatbed trailer'];
+/* "7-ton truck · Dubai A 12345" — shown on trips, packing lists and driver pickers */
+const vehicleLabel=d=>d?[d.vehicleType,d.plateNo].filter(Boolean).join(' · '):'';
 const TRIP_STATUS=['Next','On the way','Delivered','Cancelled'];
 const TRIP_SYSTEMS=['Safety Net','Edge Protection','Vertical Net','Fabrication','Hand Rail','Hoist Gate','Shaft Gate'];
 const PAPER_STATUS=['Pending','Signed & returned','Missing'];
@@ -6524,15 +6527,15 @@ function driverEdit(id){
     ${nameCodeRow(input('Driver name','name',d.name,{extra:'placeholder="e.g. Shabir Ahmad"'}),codeField('drivers',old))}
     ${phoneField('Phone number','phone',d.phone)}
     ${select('Driver type','kind',same(DRIVER_KINDS),d.kind||DRIVER_KINDS[0],false)}
-    ${suggestedInput('Vehicle type','vehicleType',d.vehicleType||'',['Pickup','3-ton truck','7-ton truck','Flatbed trailer','Van','Crane truck'])}
-    ${input('Driving licence number','licenseNo',d.licenseNo,{extra:'placeholder="e.g. 1234567"'})}
+    ${suggestedInput('Vehicle type','vehicleType',d.vehicleType||'',VEHICLE_TYPES)}
+    ${input('Vehicle plate number','plateNo',d.plateNo,{extra:'placeholder="e.g. Dubai A 12345"'})}
     ${imageField(d.image,'Driver photo')}
     ${input('Notes','notes',d.notes,{full:true,extra:'placeholder="Optional"'})}
     <div class="field full papers-confirm"><label><input name="hasPapers" type="checkbox" ${d.hasPapers?'checked':''}>
       <span><b>${ic('idcard')} Official papers checked and on file</b><small>Licence and Mulkiya seen; copies kept. No deliveries until this is ticked.</small></span></label></div>
     </div>`,async f=>{
     const data={...old,id:id||key(),code:valOf(f,'code'),name:valOf(f,'name'),phone:readPhone(f,'phone'),kind:valOf(f,'kind')||DRIVER_KINDS[0],
-      vehicleType:valOf(f,'vehicleType'),licenseNo:valOf(f,'licenseNo'),
+      vehicleType:valOf(f,'vehicleType'),plateNo:valOf(f,'plateNo'),
       hasPapers:checked(f,'hasPapers'),notes:valOf(f,'notes'),active:old?.active!==false};
     delete data.licenseExpiry;delete data.vehicleExpiry;
     need(data.name,'Enter the driver’s name.');
@@ -6568,7 +6571,7 @@ function tripEdit(id,preset={}){
   const drivers=state.drivers.filter(d=>d.active!==false||d.id===t.driverId);
   const jobs=state.jobs.filter(j=>['Open','Partially delivered'].includes(j.status)||j.id===t.jobId);
   const form=formModal(old?'Edit trip '+old.no:'New delivery trip',`<div class="trip-papers" data-papers></div><div class="form-grid">
-    ${select('Driver','driverId',drivers.map(d=>[d.id,d.name+(d.vehicleType?' · '+d.vehicleType:'')+(papersOk(d)?'':'  ⚠ papers missing')]),t.driverId||'',false,'Choose a driver…')}
+    ${select('Driver','driverId',drivers.map(d=>[d.id,d.name+(vehicleLabel(d)?' · '+vehicleLabel(d):'')+(papersOk(d)?'':'  ⚠ papers missing')]),t.driverId||'',false,'Choose a driver…')}
     ${input('Vehicle','vehicle',t.vehicle,{extra:'placeholder="Filled from the driver, e.g. Dubai F 45231"'})}
     ${searchable('Customer','customer',pair(current(state,'customers').concat(t.customerId&&!current(state,'customers').some(c=>c.id===t.customerId)?[get(state,'customers',t.customerId)].filter(Boolean):[]),c=>c.name+(c.code?' · '+c.code:'')),t.customerId||'')}
     ${input('Project','project',t.project,{extra:'placeholder="e.g. Skyflame 2"'})}
@@ -6614,7 +6617,7 @@ function tripEdit(id,preset={}){
     box.innerHTML=issues.length?note('⛔ '+d.name+' cannot deliver: '+issues.join(' · ')+'. Nothing will be delivered with this driver until the papers are complete.','bad'):
       note('✓ '+d.name+' has official papers on file'+(papersSoon(d).length?' — '+papersSoon(d).join(', '):'')+'.','ok');
     const vehicle=form.elements.vehicle;
-    if(!vehicle.value||vehicle.dataset.auto)vehicle.value=d.vehicleType||'',vehicle.dataset.auto='1';
+    if(!vehicle.value||vehicle.dataset.auto)vehicle.value=vehicleLabel(d),vehicle.dataset.auto='1';
   };
   form.elements.driverId.addEventListener('change',showPapers);showPapers();
   form.elements.vehicle.addEventListener('input',e=>delete e.target.dataset.auto);
@@ -6696,9 +6699,9 @@ function tripExportRows(trips){
     t.date||'',t.status,t.priority||'',t.system||'',t.description||'',d?.name||'',d?.phone||'',t.vehicle||'',t.from||'',t.location||'',t.mapUrl||'',
     Number(t.km)||0,t.deliveredAt||'',t.paperStatus||'',d?(papersIssues(d).join('; ')||'OK'):''];});
 }
-const DRIVER_EXPORT_COLUMNS=['Code','Driver','Type','Phone','Vehicle type','Licence no.','Papers on file','Papers status','Trips','Delivered','Total km','Current status'];
+const DRIVER_EXPORT_COLUMNS=['Code','Driver','Type','Phone','Vehicle type','Plate no.','Papers on file','Papers status','Trips','Delivered','Total km','Current status'];
 function driverExportRows(drivers){
-  return drivers.map(d=>{const trips=driverTrips(d.id);return [d.code||'',d.name,d.kind||'',d.phone||'',d.vehicleType||'',d.licenseNo||'',
+  return drivers.map(d=>{const trips=driverTrips(d.id);return [d.code||'',d.name,d.kind||'',d.phone||'',d.vehicleType||'',d.plateNo||'',
     d.hasPapers?'Yes':'No',papersIssues(d).join('; ')||'OK',
     trips.length,trips.filter(t=>t.status==='Delivered').length,Number(tripKm(trips).toFixed(1)),driverWhere(d).text];});
 }
@@ -6732,7 +6735,7 @@ function driverView(id){
       <div class="co-hero-name">${esc(d.name)}</div><div class="co-hero-sub">${d.code?esc(d.code)+' · ':''}${esc(d.kind||'Driver')} · ${esc(d.phone||'no phone')} ${papersChip(d)}</div></div></div>`+
     (issues.length?note('⛔ Nothing can be delivered with this driver: '+issues.join(' · ')+'.','bad'):'')+
     `<div class="co-smart-row">${tiles.map(([icon,l,v,sub])=>`<div class="co-smart">${ic(icon)}<span><b>${esc(v)}</b><small>${esc(l)}</small><em>${esc(sub)}</em></span></div>`).join('')}</div>`+
-    panel('Driver details',kv([['Code',d.code],['Vehicle type',d.vehicleType],['Driving licence number',d.licenseNo],
+    panel('Driver details',kv([['Code',d.code],['Vehicle type',d.vehicleType],['Vehicle plate number',d.plateNo],
       ['Official papers on file',d.hasPapers?'Yes':'No']]))+
     panel('Trips · '+trips.length,table(['Packing no.','Date','Customer / project','Route','Km','Status','Papers'],trips.map(t=>[
       `<button type="button" class="link-btn" onclick="closeModal();tripView(${escapeArg(t.id)})">${esc(t.no)}</button>`,esc(fmtDate(t.date)),
@@ -6774,16 +6777,16 @@ function driversPage(){
     (blocked.length?note('⛔ No delivery can go out with: '+blocked.map(d=>d.name+' ('+papersIssues(d)[0]+')').join(' · '),'bad'):'')+
     kanban(drivers.map(d=>{
       const trips=driverTrips(d.id), where=driverWhere(d);
-      return {open:`driverView(${escapeArg(d.id)})`,search:[d.code,d.name,d.phone,d.kind,d.vehicleType].filter(Boolean).join(' '),
+      return {open:`driverView(${escapeArg(d.id)})`,search:[d.code,d.name,d.phone,d.kind,d.vehicleType,d.plateNo].filter(Boolean).join(' '),
         html:`${companyAvatar(d,'co-avatar-md')}<div class="o-card-main"><div class="o-card-title">${esc(d.name)}</div>
-          <div class="o-card-line">${esc(d.vehicleType||d.kind||'')}</div>
+          <div class="o-card-line">${esc(vehicleLabel(d)||d.kind||'')}</div>
           ${d.phone?`<div class="o-card-line">${ic('phone')}${esc(d.phone)}</div>`:''}
           <div class="o-card-tags">${papersChip(d)}<span class="o-tag">${trips.length} trip${trips.length===1?'':'s'} · ${esc(nfmt(tripKm(trips),0))} km</span></div>
           <div class="o-card-line o-muted">${esc(where.text)}</div></div>`};
     }),{placeholder:'Search drivers by name, phone or vehicle…',noun:'drivers',empty:'Add your drivers: name, phone, vehicle and official papers.',
       list:{columns:['Driver','Type','Phone','Vehicle','Official papers','Trips','Distance','Where now'],
         rows:drivers.map(d=>{const trips=driverTrips(d.id);return [`<div class="record-media co-media">${companyAvatar(d)}<div>${cell(d.name,d.code||'')}</div></div>`+openBtn(`driverView(${escapeArg(d.id)})`),
-          esc(d.kind||'—'),esc(d.phone||'—'),esc(d.vehicleType||'—'),papersChip(d),esc(trips.length),esc(nfmt(tripKm(trips),1)+' km'),esc(driverWhere(d).text)];})}});
+          esc(d.kind||'—'),esc(d.phone||'—'),esc(vehicleLabel(d)||'—'),papersChip(d),esc(trips.length),esc(nfmt(tripKm(trips),1)+' km'),esc(driverWhere(d).text)];})}});
 }
 /* ---------------- Deliveries (operations): created from confirmed sales orders and dispatch jobs ----------------
    The employee only assigns a driver and the km; customer, site, map and items come from the order.
@@ -6821,7 +6824,7 @@ function assignDelivery(kind,docId,tripId=''){
       <div><span>Items</span><b>${esc(info.description||'—')}</b></div>
       ${kind==='job'?`<div><span>From</span><b>${esc(locName(state,doc.location))}</b></div>`:''}</div>
     <div class="trip-papers" data-papers></div><div class="form-grid">
-    ${select('Driver','driverId',drivers.map(d=>[d.id,d.name+(d.vehicleType?' · '+d.vehicleType:'')+(papersOk(d)?'':'  ⚠ papers missing')]),old?.driverId||'',false,'Choose a driver…')}
+    ${select('Driver','driverId',drivers.map(d=>[d.id,d.name+(vehicleLabel(d)?' · '+vehicleLabel(d):'')+(papersOk(d)?'':'  ⚠ papers missing')]),old?.driverId||'',false,'Choose a driver…')}
     ${input('Vehicle','vehicle',old?.vehicle||'',{extra:'placeholder="Filled from the driver"'})}
     ${input('Distance (km)','km',old?.km||'',{type:'number',extra:'min="0" step="0.1" placeholder="e.g. 38"'})}
     ${input('Trip date','date',old?.date||todayISO(),{type:'date'})}
@@ -6852,7 +6855,7 @@ function assignDelivery(kind,docId,tripId=''){
     if(!d){box.innerHTML='';return;}
     const issues=papersIssues(d);
     box.innerHTML=issues.length?note('⛔ '+d.name+' cannot deliver: '+issues.join(' · ')+'.','bad'):'';
-    const v=form.elements.vehicle;if(!v.value||v.dataset.auto){v.value=d.vehicleType||'';v.dataset.auto='1';}
+    const v=form.elements.vehicle;if(!v.value||v.dataset.auto){v.value=vehicleLabel(d);v.dataset.auto='1';}
   };
   form.elements.driverId.addEventListener('change',showPapers);showPapers();
   form.elements.vehicle.addEventListener('input',e=>delete e.target.dataset.auto);
