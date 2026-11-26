@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 const publicDir = fileURLToPath(new URL('./public/', import.meta.url));
 const root = resolve(publicDir);
-const types = { '.html':'text/html; charset=utf-8', '.js':'text/javascript; charset=utf-8', '.css':'text/css; charset=utf-8', '.md':'text/markdown; charset=utf-8' };
+const types = { '.html':'text/html; charset=utf-8', '.js':'text/javascript; charset=utf-8', '.css':'text/css; charset=utf-8', '.md':'text/markdown; charset=utf-8', '.webmanifest':'application/manifest+json', '.png':'image/png' };
 
 createServer(async (req, res) => {
   if (!['GET','HEAD'].includes(req.method)) {

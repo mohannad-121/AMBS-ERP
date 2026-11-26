@@ -2,6 +2,17 @@
 
 The AMBS Production System is the production planning and stock control web app of AM Building Solutions DWC LLC. It keeps the master data (customers, suppliers, processing companies, raw materials, parts, products and their Bills of Materials). It also runs the daily operations: production plans and orders, purchasing and supplier receipts, stock transfers, adjustments and counts, and packing and dispatch to customer sites. Stock is held per **custody location**, and every stock change is a permanent entry in the movement ledger. The app also includes engineering tools: a steel weight calculator, a market sections catalogue, a product take-off calculator and bar/plate nesting. This guide explains every page, form, status and common error message.
 
+## Using AMBS on your phone 📱
+Keywords: phone, mobile, iphone, android, app, install, home screen, tab bar, bottom menu, more menu, back button, موبايل, تطبيق, جوال
+
+On a phone AMBS works like a phone app:
+- **Red header** at the top shows the page name. On a form or record a **← back arrow** appears; the phone's own back button also closes the form or record. The **🔍 search** icon searches every menu and record.
+- **Tab bar at the bottom**: **Home** (dashboard), **Deliveries**, **Sales**, **Stock** (Live Tracking) and **More**. **More** opens every page as big tiles, plus *Ask AMBS*, *Refresh data* and *Sign out*.
+- The page's main button (for example **+ New**) floats at the bottom right.
+- In forms, **Save** and **Discard** stay fixed at the bottom of the screen. For codes, tap **"Tap to use C-00x"** under the Code box.
+- Small windows (confirmations, receipts) slide up from the bottom.
+- **Install it like an app**: on iPhone open the site in Safari → **Share** → **Add to Home Screen**. On Android open it in Chrome → **⋮** → **Add to Home screen** / **Install app**. It then opens full screen with the red AM icon, like any other app.
+
 ## What changed in November 2026 (owner requests) 🆕
 Keywords: vendor, supplier renamed, driver, delivery, trip, papers, tracking, live, excel, phone +971, required
 

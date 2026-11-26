@@ -20,7 +20,7 @@ const IP = {
   gear:'M12 8a4 4 0 100 8 4 4 0 000-8zm8.4 4a6.5 6.5 0 00-.1-1.2l2-1.6-2-3.4-2.4 1a6.6 6.6 0 00-2-1.2l-.4-2.6H9.5l-.4 2.6a6.6 6.6 0 00-2 1.2l-2.4-1-2 3.4 2 1.6a6.6 6.6 0 000 2.4l-2 1.6 2 3.4 2.4-1a6.6 6.6 0 002 1.2l.4 2.6h4.9l.4-2.6a6.6 6.6 0 002-1.2l2.4 1 2-3.4-2-1.6c.1-.4.1-.8.1-1.2z',
   help:'M12 2a10 10 0 100 20 10 10 0 000-20zm0 15h.01M9.5 9a2.5 2.5 0 114 2c-1 .7-1.5 1.2-1.5 2.5',
   search:'M11 4a7 7 0 105 12l4 4M11 4a7 7 0 010 14',
-  plus:'M12 5v14M5 12h14',edit:'M4 20h4L20 8l-4-4L4 16v4zM14 6l4 4',
+  plus:'M12 5v14M5 12h14',back:'M15 18l-6-6 6-6',edit:'M4 20h4L20 8l-4-4L4 16v4zM14 6l4 4',
   trash:'M4 7h16M9 7V4h6v3m-8 0v13h10V7',download:'M12 3v12m0 0l-4-4m4 4l4-4M4 21h16',
   pdf:'M6 2h9l5 5v13a2 2 0 01-2 2H6a2 2 0 01-2-2V4a2 2 0 012-2zm8 0v6h6',
   x:'M6 6l12 12M18 6L6 18',warn:'M12 3l10 18H2L12 3zm0 7v5m0 3h.01',
@@ -3176,7 +3176,7 @@ const TITLES={owner:'Owner overview',team:'Team activity',items:'Items & stock',
   'plan-new':'Production','purchase-new':'Purchasing'};
 /* Owner (super admin) gets his own menu: the team's work, items and tracking. Admins see the same pages under "Owner view". */
 /* Build version: stamped by scripts/bump-version.py together with the ?v= links in index.html. */
-const AMBS_VERSION='2026.11.26-1514';
+const AMBS_VERSION='2026.11.26-1552';
 const isOwner=()=>typeof CLOUD!=='undefined'&&CLOUD.role==='owner';
 const canSeeOwner=()=>typeof CLOUD!=='undefined'&&['owner','admin'].includes(CLOUD.role);
 const OWNER_GROUPS=[
@@ -3422,6 +3422,7 @@ function formModal(title,body,save,{text='Save',intro='',danger=false,page}={}){
     App.editing=true;document.body.classList.add('o-record');window.scrollTo(0,0);
     form=$('form.o-form-page',view);
     Drafts.lastForm=form;
+    Mobile.sync();
   }else{
     back=openModal(`<form><div class="modal-head"><div><h3>${esc(title)}</h3>${intro?`<div class="msub">${esc(intro)}</div>`:''}</div>
       <button type="button" class="x" aria-label="Close" onclick="closeModal()">${ic('x')}</button></div>
@@ -3615,7 +3616,13 @@ function codeCheck(s,table,row){
 function codeField(table,row,title='Code'){
   const next=row?.code?'':nextCode(state,table);
   return `<div class="field code-field"><label>${esc(title)}<input class="inp" name="code" value="${esc(row?.code||'')}" autocomplete="off" spellcheck="false"
-    placeholder="${esc(next||'Code')}"${next?` data-auto-code="${esc(next)}"`:''}></label>${next?`<span class="code-hint">Press <kbd>Tab</kbd> to use ${esc(next)}</span>`:''}</div>`;
+    placeholder="${esc(next||'Code')}"${next?` data-auto-code="${esc(next)}"`:''}></label>${next?`<button type="button" class="code-hint" tabindex="-1" onclick="useAutoCode(this)">
+    <span class="k-desk">Press <kbd>Tab</kbd> to use ${esc(next)}</span><span class="k-touch">Tap to use ${esc(next)}</span></button>`:''}</div>`;
+}
+function useAutoCode(btn){
+  const el=btn.closest('.code-field').querySelector('input[data-auto-code]');
+  if(!el||el.value.trim())return;
+  el.value=el.dataset.autoCode;el.dispatchEvent(new Event('input',{bubbles:true}));
 }
 document.addEventListener('keydown',e=>{
   const el=e.target;
@@ -7156,7 +7163,7 @@ function wireGlobalSearch(){
       (r.length?'<div class="o-gs-head">Records</div>'+r.map((e,i)=>row(e,i+m.length)).join(''):'');
     box.hidden=false;
   };
-  const choose=i=>{const e=items[i];if(!e)return;input.value='';close();input.blur();e.go();};
+  const choose=i=>{const e=items[i];if(!e)return;input.value='';close();input.blur();document.body.classList.remove('m-searching');e.go();};
   const mark=()=>box.querySelectorAll('.o-gs-item').forEach(el=>{const on=+el.dataset.i===active;el.classList.toggle('on',on);if(on)el.scrollIntoView({block:'nearest'});});
   input.addEventListener('input',draw);
   input.addEventListener('focus',draw);
@@ -7180,6 +7187,7 @@ window.addEventListener('keydown',e=>{
 const App={
   route:'dashboard',record:null,
   go(r){
+    Mobile.closeMore();document.body.classList.remove('m-searching');
     const previous=this.route;this.record=null;this.editing=false;
     this.route=r==='purchase-new'?'purchase':r==='plan-new'?'production':r;
     location.hash='#/'+this.route;
@@ -7206,11 +7214,16 @@ const App={
   top(){
     const selected=['market','steel','prodcalc','prodcalc-new','nesting'].includes(this.route)?'tools':this.route;
     return `<nav class="o-navbar" aria-label="Top bar">
+      <button type="button" class="m-back" aria-label="Back" onclick="Mobile.back()">${ic('back')}</button>
+      <button type="button" class="m-logo" aria-label="Home" onclick="Mobile.go('${isOwner()?'owner':'dashboard'}')">AM</button>
+      <div class="m-title" id="m-title" aria-live="polite">${esc(TITLES[this.route]||'AMBS')}</div>
+      <button type="button" class="m-icon m-search-btn" aria-label="Search" onclick="Mobile.search(true)">${ic('search')}</button>
       <button type="button" id="nav-toggle" class="o-nav-toggle" aria-label="Open menu" aria-controls="sidebar" aria-expanded="false"
         onclick="App.toggleNavigation(!document.body.classList.contains('nav-open'))">${ic('list')}</button>
       <div class="o-gsearch" role="search">${ic('search')}<input id="o-gsearch-input" type="search" autocomplete="off" spellcheck="false"
         placeholder="Search menus and records…" aria-label="Search menus and records" aria-controls="o-gs-results"><kbd>/</kbd>
         <div class="o-gs-results" id="o-gs-results" role="listbox" hidden></div></div>
+      <button type="button" class="m-search-x" onclick="Mobile.search(false)">Cancel</button>
       <div class="o-nav-right">
         <button class="o-nav-btn" onclick="refreshCloudWorkspace(true)" title="Refresh">${ic('refresh')}</button>
         ${CLOUD.demo?'':'<button class="o-nav-btn" onclick="CLOUD.signOut()">Sign out</button>'}
@@ -7255,12 +7268,106 @@ const App={
     }
     stripWrites($('#view'));
     startClock();
+    Mobile.sync();
     if(!Drafts.booted&&state){Drafts.booted=true;Drafts.pull().then(changed=>{
       Drafts.resume();
       if(changed&&!this.editing&&!_modalStack&&!Drafts.current)this.render();
     });}
   }
 };
+/* ---------------- Phone app: on small screens AMBS looks and works like a phone application ----------------
+   Red app header (back arrow, page title, search), bottom tab bar, a "More" menu of tiles, a floating "+ New" button,
+   Save / Discard fixed at the bottom of forms, and the phone's back button closes a form or record. Desktop is unchanged. */
+const Mobile={
+  query:matchMedia('(max-width:760px)'),
+  on(){return this.query.matches;},
+  tabs(){
+    return isOwner()?[['owner','grid','Overview'],['team','users','Team'],['items','box','Items'],['tracking','route','Tracking']]:
+      [['dashboard','dashboard','Home'],['deliveries','truck','Deliveries'],['sales','invoice','Sales'],['tracking','route','Stock']];
+  },
+  tabbar(){
+    let bar=$('#m-tabbar');
+    if(!bar){bar=document.createElement('nav');bar.id='m-tabbar';bar.setAttribute('aria-label','App tabs');document.body.append(bar);}
+    const tabs=this.tabs(), inTabs=tabs.some(([r])=>r===App.route);
+    bar.innerHTML=tabs.map(([r,i,l])=>`<button type="button" class="m-tab${App.route===r?' on':''}" onclick="Mobile.go('${r}')"${App.route===r?' aria-current="page"':''}>${ic(i)}<span>${esc(l)}</span></button>`).join('')+
+      `<button type="button" class="m-tab${inTabs?'':' on'}" onclick="Mobile.more()">${ic('grid')}<span>More</span></button>`;
+  },
+  go(route){
+    this.closeMore();
+    if(App.route===route&&!App.record&&!App.editing){window.scrollTo({top:0,behavior:'smooth'});return;}
+    App.go(route);
+  },
+  title(){
+    const form=$('#view form.o-form-page');
+    if(form)return $('.o-bc-cur',form)?.textContent||'Form';
+    if(App.record&&App.recordTitle)return App.recordTitle;
+    return TITLES[App.route]||'AMBS';
+  },
+  sync(){
+    const form=!!$('#view form.o-form-page'), record=!form&&!!App.record;
+    document.body.classList.toggle('m-form',form);
+    document.body.classList.toggle('m-rec',record);
+    const title=$('#m-title');if(title)title.textContent=this.title();
+    document.body.classList.toggle('m-sub',form||record);
+    this.tabbar();
+    // the page's main "New" button floats above the tab bar
+    if(!form&&!record){
+      const main=$('#view > .view-head .head-actions .btn-primary');
+      if(main){main.classList.add('m-fab');if(!main.querySelector('svg'))main.insertAdjacentHTML('afterbegin',ic('plus'));}
+    }
+    // phone back button closes the open form / record (one history step per open page)
+    if(this.on()&&(form||record)&&!history.state?.mPage)history.pushState({mPage:1},'',location.href);
+  },
+  back(){
+    if(history.state?.mPage)return history.back();
+    this.leave();
+  },
+  leave(){
+    if($('#view form.o-form-page'))App.leaveForm();
+    else if(App.record)App.back();
+  },
+  search(open){
+    document.body.classList.toggle('m-searching',open);
+    const input=$('#o-gsearch-input');
+    if(open){input.value='';input.focus();}else{input.blur();}
+  },
+  more(){
+    if($('.m-more'))return this.closeMore();
+    const groups=isOwner()?OWNER_GROUPS:canSeeOwner()?[...GROUPS,['Owner view',OWNER_GROUPS[0][1]]]:GROUPS;
+    const tools=isOwner()?[]:[['tools','calc']];
+    const sheet=document.createElement('div');sheet.className='m-more';sheet.setAttribute('role','dialog');sheet.setAttribute('aria-label','Menu');
+    sheet.innerHTML=`<div class="m-more-head"><span class="o-brand-mark">AM</span><div><b>AMBS</b><small>${esc(SET.company)}</small></div>
+        <button type="button" class="m-more-x" aria-label="Close menu" onclick="Mobile.closeMore()">${ic('x')}</button></div>
+      <div class="m-more-body">${groups.map(([group,rows])=>`<section><h3>${esc(group)}</h3><div class="m-tiles">${rows.concat(group==='System'?tools.filter(([r])=>!rows.some(x=>x[0]===r)):[]).map(([r,i])=>
+        `<button type="button" class="m-tile${App.route===r?' on':''}" onclick="Mobile.go('${r}')"><span>${ic(i)}</span><em>${esc(TITLES[r])}</em></button>`).join('')}</div></section>`).join('')}
+        <section class="m-more-list">
+          ${$('.as-fab')?`<button type="button" onclick="Mobile.closeMore();document.querySelector('.as-fab').click()">💬<span>Ask AMBS — help with any page</span></button>`:''}
+          <button type="button" onclick="Mobile.closeMore();refreshCloudWorkspace(true)">${ic('refresh')}<span>Refresh data</span></button>
+          ${CLOUD.demo?'':`<button type="button" onclick="CLOUD.signOut()">${ic('x')}<span>Sign out${CLOUD.email?' · '+esc(CLOUD.email):''}</span></button>`}
+        </section>
+        <p class="m-more-ver">Version ${esc(AMBS_VERSION)}</p></div>`;
+    document.body.append(sheet);document.body.classList.add('m-more-open');
+    requestAnimationFrame(()=>sheet.classList.add('in'));
+    this.tabbar();
+  },
+  closeMore(){
+    const sheet=$('.m-more');if(!sheet)return;
+    sheet.remove();document.body.classList.remove('m-more-open');
+  }
+};
+window.addEventListener('popstate',()=>{
+  if(!Mobile.on())return;
+  const page=!!($('#view form.o-form-page')||App.record);
+  if($('.m-more')||_modalStack){
+    // back closes the menu / dialog first and keeps the page that is open under it
+    Mobile.closeMore();if(_modalStack)closeModal();
+    if(page&&!history.state?.mPage)history.pushState({mPage:1},'',location.href);
+    return;
+  }
+  if(!history.state?.mPage&&page)Mobile.leave();
+});
+Mobile.query.addEventListener?.('change',()=>{if(typeof state!=='undefined'&&state)App.render();});
+
 /* ---------------- Drafts: nothing typed into a form is ever lost ----------------
    Every New / Add / Edit form page is saved in this browser while you type. Clicking another menu, the breadcrumb,
    or refreshing the page keeps it: after a refresh the form comes back by itself, and the list page shows
