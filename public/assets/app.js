@@ -3244,7 +3244,7 @@ const TITLES={owner:'Owner overview',team:'Team activity',items:'Items & stock',
   'plan-new':'Production','purchase-new':'Purchasing'};
 /* Owner (super admin) gets his own menu: the team's work, items and tracking. Admins see the same pages under "Owner view". */
 /* Build version: stamped by scripts/bump-version.py together with the ?v= links in index.html. */
-const AMBS_VERSION='2026.11.26-1747';
+const AMBS_VERSION='2026.11.26-1828';
 const isOwner=()=>typeof CLOUD!=='undefined'&&CLOUD.role==='owner';
 const canSeeOwner=()=>typeof CLOUD!=='undefined'&&['owner','admin'].includes(CLOUD.role);
 const OWNER_GROUPS=[
@@ -5896,7 +5896,68 @@ async function packingListPDF(kind,id){
   PDFR._sig(doc,end,['Packed by','Driver','Received by (customer)']);
   doc.save('AMBS_Packing_List_'+String(no||'').replace(/[^a-z0-9_-]+/gi,'_')+'.pdf');
 }
+/* Sales order PDF: customer details at the top, then every line with a large picture, prices and delivery progress,
+   the order total, and each delivery made so far with pictures of what went out. */
+async function salesOrderPDF(id){
+  if(!PDFR._ok())return;
+  await PDFR._prepare();
+  const o=get(state,'sales',id);if(!o)return;
+  const customer=get(state,'customers',o.customerId), site=get(state,'locations',o.siteId);
+  const deliveries=state.events.filter(e=>e.salesId===id).sort((a,b)=>String(a.at).localeCompare(String(b.at)));
+  const pics=await Promise.all(o.lines.map(l=>pdfPicture(itemPicture(state,l.sku),200)));
+  const delPics=await Promise.all(deliveries.map(e=>Promise.all(e.lines.filter(l=>l.delta<0).map(l=>pdfPicture(itemPicture(state,l.sku),120)))));
+  const doc=PDFR._doc(), header=PDFR._hf(doc,'Sales order');
+  header();
+  const W=doc.internal.pageSize.getWidth();
+  doc.setTextColor(30,35,43);doc.setFont('helvetica','bold');doc.setFontSize(16);doc.text('SALES ORDER',40,84);
+  doc.setFontSize(12);doc.text(String(o.no||''),W-40,84,{align:'right'});
+  const meta=[['Customer',customer?customer.name+(customer.code?' · '+customer.code:''):''],['Status',o.status],
+    ['Phone',customer?.phone||''],['Order date',fmtDate(o.date)],
+    ['Deliver to',[site?.name,site?.address,site?.city].filter(uniqText).join(', ')],['Requested delivery',o.due?fmtDate(o.due):''],
+    ['Customer PO',o.reference||''],['Map',site?mapsLink(site):'']];
+  let y=106;doc.setFontSize(9);
+  const colW=(W-80)/2;
+  for(let i=0;i<meta.length;i+=2){
+    let h=0;
+    for(const j of [0,1]){const m=meta[i+j];if(!m)continue;const x=40+j*colW;
+      doc.setFont('helvetica','bold');doc.setTextColor(100);doc.text(m[0],x,y);
+      doc.setFont('helvetica','normal');
+      if(m[0]==='Map'){if(m[1]){doc.setTextColor(26,115,232);doc.textWithLink('Open in Google Maps',x+92,y,{url:m[1]});}else{doc.setTextColor(20);doc.text('—',x+92,y);}h=Math.max(h,1);continue;}
+      doc.setTextColor(20);const t=doc.splitTextToSize(String(m[1]||'—'),colW-96);doc.text(t,x+92,y);h=Math.max(h,t.length);}
+    y+=Math.max(1,h)*11+5;
+  }
+  y+=4;
+  const money=n=>n?nfmt(n,2):'';
+  const rows=o.lines.map((l,i)=>{const it=item(state,l.sku),u=it?.unit||'';
+    return [String(i+1),{content:'',image:pics[i],imageSize:46},{content:(it?.code||'')+'\n'+(it?.name||labelOf(state,l.sku))},
+      {content:qfmt(l.qty)+' '+u,styles:{halign:'right',fontStyle:'bold'}},{content:qfmt(l.delivered)+' '+u,styles:{halign:'right'}},
+      {content:qfmt(Math.max(0,l.qty-l.delivered))+' '+u,styles:{halign:'right'}},
+      {content:money(l.price),styles:{halign:'right'}},{content:money((l.price||0)*l.qty),styles:{halign:'right',fontStyle:'bold'}}];});
+  const total=salesTotal(o);
+  if(total)rows.push(['','',{content:'ORDER TOTAL (AED)',styles:{fontStyle:'bold'}},'','','','',{content:nfmt(total,2),styles:{halign:'right',fontStyle:'bold',fillColor:[248,240,240],textColor:[155,28,28]}}]);
+  doc.autoTable({head:[['#','Picture','Item','Ordered','Delivered','Outstanding','Unit price (AED)','Line total (AED)']],body:rows,startY:y,
+    widths:[.04,.12,.27,.1,.1,.13,.12,.12],margin:{top:70,bottom:44,left:40,right:40},styles:{fontSize:8.8,cellPadding:5},headStyles:{fillColor:[31,35,43]},
+    didDrawPage(){if(doc.internal.getCurrentPageInfo().pageNumber>1)header();}});
+  y=doc.lastAutoTable.finalY+18;
+  if(deliveries.length){
+    if(y>doc.internal.pageSize.getHeight()-140){doc.addPage();header();y=86;}
+    doc.setFont('helvetica','bold');doc.setFontSize(11);doc.setTextColor(30,35,43);doc.text('Deliveries',40,y);y+=8;
+    const drows=deliveries.map((e,k)=>{const out=e.lines.filter(l=>l.delta<0);
+      const trip=state.trips.find(t=>t.no===e.reference);
+      return [stamp(e.at),e.reference||'',locName(state,out[0]?.location)||'',trip?(get(state,'drivers',trip.driverId)?.name||''):'',
+        {content:'',gallery:out.map((l,m)=>({pic:delPics[k][m],caption:'×'+qfmt(-l.delta),label:item(state,l.sku)?.code||''})),gallerySize:26}];});
+    doc.autoTable({head:[['Date','Reference / trip','Shipped from','Driver','Items delivered']],body:drows,startY:y,widths:[.15,.18,.16,.14,.37],
+      margin:{top:70,bottom:44,left:40,right:40},styles:{fontSize:8.5,cellPadding:5},headStyles:{fillColor:[31,35,43]},
+      didDrawPage(){if(doc.internal.getCurrentPageInfo().pageNumber>1)header();}});
+    y=doc.lastAutoTable.finalY+14;
+  }
+  if(o.notes){doc.setFont('helvetica','italic');doc.setFontSize(8.5);doc.setTextColor(90);
+    const t=doc.splitTextToSize('Notes: '+o.notes,W-80);doc.text(t,40,y+4);y+=t.length*11+4;}
+  PDFR._sig(doc,y,['Prepared by','Approved by','Customer']);
+  doc.save('AMBS_Sales_Order_'+String(o.no||'').replace(/[^a-z0-9_-]+/gi,'_')+'.pdf');
+}
 function recordPDF(type,id){
+  if(type==='sales')return salesOrderPDF(id);
   const row=get(state,type,id);
   const title=(row.no||row.type)+' '+(row.name||'');
   let columns, lines;
