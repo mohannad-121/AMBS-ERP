@@ -86,6 +86,21 @@ Deno.serve(async request => {
     }
     if (!await verifiedEmailRequired()) return answer({message:'Verified-email access is temporarily unavailable.'},503);
     const email = user.email.toLowerCase();
+    // Unsaved form drafts of this employee only (so a half-filled form follows them to another device).
+    if (new URL(request.url).pathname.endsWith('/drafts')) {
+      if (request.method === 'GET') {
+        const drafts = await rpc('drafts_read', { p_email: email });
+        return drafts === null ? answer({ message: 'This account does not have AMBS access.' }, 403) : answer({ drafts });
+      }
+      let body;
+      try { body = await readBody(request); }
+      catch { return answer({ message: 'Invalid drafts or payload is too large.' }, 400); }
+      const drafts = body?.drafts;
+      if (!drafts || typeof drafts !== 'object' || Array.isArray(drafts) || JSON.stringify(drafts).length > 2 * 1024 * 1024 ||
+        Object.keys(drafts).length > 200) return answer({ message: 'Drafts are too large.' }, 413);
+      return await rpc('drafts_write', { p_email: email, p_drafts: drafts }) ? answer({ ok: true }) :
+        answer({ message: 'This account does not have AMBS access.' }, 403);
+    }
     const current = await rpc('read', { p_email: email });
     if (!current) return answer({ message: 'This account does not have AMBS access.' }, 403);
     if (request.method === 'GET') return answer({ ...current, identity: email });

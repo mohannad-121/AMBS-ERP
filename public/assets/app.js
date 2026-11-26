@@ -2817,7 +2817,7 @@ const CLOUD = {
       expires_at: data.expires_at ?? Math.floor(Date.now()/1000)+data.expires_in };
     sessionStorage.setItem(this.sessionKey, JSON.stringify(this.session));
   },
-  async api(method = 'GET', data) {
+  async api(method = 'GET', data, path = '') {
     if (this.demo) {
       if (method === 'GET') return { ...await DEMO_STORE.read(), role: 'admin', identity: 'This browser' };
       if (method === 'PUT') return DEMO_STORE.write(data.revision, data.snapshot);
@@ -2830,7 +2830,7 @@ const CLOUD = {
       }).then(next=>this.saveSession(next)).finally(()=>{this.refreshing=null;});
       await this.refreshing;
     }
-    return this.request('', {method,headers:{Authorization:'Bearer '+this.session.access_token},
+    return this.request(path, {method,headers:{Authorization:'Bearer '+this.session.access_token},
       ...(data?{body:JSON.stringify(data)}:{})}, true);
   },
   async connect() {
@@ -3176,7 +3176,7 @@ const TITLES={owner:'Owner overview',team:'Team activity',items:'Items & stock',
   'plan-new':'Production','purchase-new':'Purchasing'};
 /* Owner (super admin) gets his own menu: the team's work, items and tracking. Admins see the same pages under "Owner view". */
 /* Build version: stamped by scripts/bump-version.py together with the ?v= links in index.html. */
-const AMBS_VERSION='2026.11.26-1501';
+const AMBS_VERSION='2026.11.26-1514';
 const isOwner=()=>typeof CLOUD!=='undefined'&&CLOUD.role==='owner';
 const canSeeOwner=()=>typeof CLOUD!=='undefined'&&['owner','admin'].includes(CLOUD.role);
 const OWNER_GROUPS=[
@@ -7255,7 +7255,10 @@ const App={
     }
     stripWrites($('#view'));
     startClock();
-    if(!Drafts.booted&&state){Drafts.booted=true;setTimeout(()=>Drafts.resume(),0);}
+    if(!Drafts.booted&&state){Drafts.booted=true;Drafts.pull().then(changed=>{
+      Drafts.resume();
+      if(changed&&!this.editing&&!_modalStack&&!Drafts.current)this.render();
+    });}
   }
 };
 /* ---------------- Drafts: nothing typed into a form is ever lost ----------------
@@ -7269,8 +7272,39 @@ const Drafts={
   store(){return 'ambs-drafts:'+((typeof CLOUD!=='undefined'&&CLOUD.email)||'local');},
   all(){try{return JSON.parse(localStorage.getItem(this.store())||'{}')||{};}catch{return {};}},
   put(all){try{localStorage.setItem(this.store(),JSON.stringify(all));}catch{}},
-  get(id){return this.all()[id]||null;},
-  drop(id){const all=this.all();if(all[id]){delete all[id];this.put(all);}},
+  get(id){const d=this.all()[id];return d&&!d.deleted?d:null;},
+  /* a deleted draft leaves a small marker so other devices delete it too when they sync */
+  drop(id){const all=this.all();if(all[id]&&!all[id].deleted){all[id]={deleted:true,at:new Date().toISOString()};this.put(all);this.push();}},
+  live(){return Object.entries(this.all()).filter(([,d])=>!d.deleted);},
+  /* ---- cloud sync: the same drafts on every device this employee signs in on (newest copy of each draft wins) ---- */
+  cloud(){return typeof CLOUD!=='undefined'&&!CLOUD.demo&&!!CLOUD.session&&!isOwner();},
+  push(){
+    if(!this.cloud())return;
+    clearTimeout(this.pushTimer);
+    this.pushTimer=setTimeout(()=>{
+      const all=this.all(), old=Date.now()-30*864e5;
+      for(const [id,d] of Object.entries(all))if(d.deleted&&Date.parse(d.at)<old)delete all[id];
+      this.pushTimer=null;
+      CLOUD.api('PUT',{drafts:all},'/drafts').catch(()=>{});
+    },1200);
+  },
+  async pull(){
+    if(!this.cloud())return false;
+    try{
+      const {drafts:remote}=await Promise.race([CLOUD.api('GET',null,'/drafts'),new Promise((_,no)=>setTimeout(()=>no(Error('timeout')),5000))]);
+      const all=this.all();let changed=false,newer=false;
+      for(const [id,d] of Object.entries(remote||{})){
+        if(!d||typeof d!=='object')continue;
+        const mine=all[id];
+        if(!mine||String(d.at)>String(mine.at)){all[id]=d;changed=true;}
+        else if(String(d.at)<String(mine.at))newer=true;
+      }
+      for(const id of Object.keys(all))if(!(id in (remote||{})))newer=true;
+      if(changed)this.put(all);
+      if(newer)this.push();
+      return changed;
+    }catch{return false;}
+  },
   idOf(fn,args){const a=[...args];while(a.length&&(a[a.length-1]==null||a[a.length-1]===''))a.pop();return fn+':'+JSON.stringify(a);},
   setOpen(id){try{id?sessionStorage.setItem('ambs-open-form',id):sessionStorage.removeItem('ambs-open-form');}catch{}},
   getOpen(){try{return sessionStorage.getItem('ambs-open-form')||'';}catch{return '';}},
@@ -7339,7 +7373,7 @@ const Drafts={
     if(this.sig(snap)===cur.initial){this.drop(cur.id);return;}
     const all=this.all();
     all[cur.id]={fn:cur.fn,args:cur.args,title:cur.title,route:cur.route,at:new Date().toISOString(),snap};
-    this.put(all);
+    this.put(all);this.push();
   },
   dirty(){const c=this.current;return !!(c&&c.form.isConnected&&this.sig(this.snapshot(c.form))!==c.initial);},
   /* Leaving the form page: keep=true keeps the draft (menu click, breadcrumb), keep=false deletes it (Discard, saved). */
@@ -7370,7 +7404,7 @@ const Drafts={
   },
   /* the list page shows its drafts at the top */
   bar(route){
-    const rows=Object.entries(this.all()).filter(([,d])=>d.route===route).sort((a,b)=>String(b[1].at).localeCompare(String(a[1].at)));
+    const rows=this.live().filter(([,d])=>d.route===route).sort((a,b)=>String(b[1].at).localeCompare(String(a[1].at)));
     return rows.map(([id,d])=>`<div class="draft-bar">${ic('save')}<span><b>Unsaved draft:</b> ${esc(d.title)} <small>· saved ${esc(this.when(d.at))}</small></span>
       <button type="button" class="btn btn-sm btn-primary" onclick="Drafts.open(${escapeArg(id)})">Continue</button>
       <button type="button" class="btn btn-sm btn-ghost" onclick="Drafts.forget(${escapeArg(id)})">Discard</button></div>`).join('');
@@ -7394,8 +7428,21 @@ for(const fn of DRAFT_EDITORS){
     return result;
   };
 }
-window.addEventListener('pagehide',()=>Drafts.current?.flush?.());
-window.addEventListener('beforeunload',()=>Drafts.current?.flush?.());
+window.addEventListener('pagehide',()=>{
+  Drafts.current?.flush?.();
+  // send pending drafts right away (keepalive survives the page closing)
+  if(Drafts.pushTimer&&Drafts.cloud()&&CLOUD.session.expires_at>Date.now()/1000){
+    clearTimeout(Drafts.pushTimer);Drafts.pushTimer=null;
+    const body=JSON.stringify({drafts:Drafts.all()});
+    if(body.length<60000)fetch(CLOUD_CONFIG.url.replace(/\/$/,'')+'/functions/v1/ambs-erp/drafts',{method:'PUT',keepalive:true,body,
+      headers:{apikey:CLOUD_CONFIG.key,'Content-Type':'application/json',Authorization:'Bearer '+CLOUD.session.access_token}}).catch(()=>{});
+  }
+});
+// coming back to the app (e.g. after typing on the phone): fetch drafts from other devices
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState!=='visible'||!Drafts.booted)return;
+  Drafts.pull().then(changed=>{if(changed&&!App.editing&&!_modalStack&&!Drafts.current)App.render();});
+});
 
 /* Views opened from a page become full record pages (breadcrumb back to the list); from inside a dialog they stay dialogs. */
 for(const fn of ['masterView','companyView','driverView','tripView','recipeView','trackItem','salesView','purchaseView','dispatchView',
