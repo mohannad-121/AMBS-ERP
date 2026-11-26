@@ -3176,7 +3176,7 @@ const TITLES={owner:'Owner overview',team:'Team activity',items:'Items & stock',
   'plan-new':'Production','purchase-new':'Purchasing'};
 /* Owner (super admin) gets his own menu: the team's work, items and tracking. Admins see the same pages under "Owner view". */
 /* Build version: stamped by scripts/bump-version.py together with the ?v= links in index.html. */
-const AMBS_VERSION='2026.11.25-2241';
+const AMBS_VERSION='2026.11.26-1501';
 const isOwner=()=>typeof CLOUD!=='undefined'&&CLOUD.role==='owner';
 const canSeeOwner=()=>typeof CLOUD!=='undefined'&&['owner','admin'].includes(CLOUD.role);
 const OWNER_GROUPS=[
@@ -3300,8 +3300,8 @@ const HINT_LABELS={
   'Line notes':'e.g. Cut to 6 m lengths','Verification reason / reference':'e.g. Physical count on 24 Nov'
 };
 const HINTS={
-  code:byPage({customers:'e.g. C-001',suppliers:'e.g. S-001',processors:'e.g. P-001',materials:'e.g. RM-SHS-50',
-    parts:'e.g. PT-COUPLER-01',products:'e.g. NET-4Y'},'e.g. ITEM-001'),
+  code:byPage({customers:'e.g. C-001',suppliers:'e.g. V-001',processors:'e.g. PCM-001',drivers:'e.g. D-001',materials:'e.g. RM-001',
+    parts:'e.g. Part-001',products:'e.g. PDT-001'},'e.g. ITEM-001'),
   name:byPage({customers:'e.g. Emaar Construction LLC',suppliers:'e.g. Metal Solution Trading',processors:'e.g. Gulf Galvanizing Factory',
     parts:'e.g. Adjustable coupler',products:'e.g. Safety Net 4.0 m Yellow'},'e.g. Main item name'),
   category:byPage({materials:'e.g. Tubes',parts:'e.g. Fasteners / accessories',products:'e.g. 4.0 STD-Y'},'e.g. Accessories'),
@@ -3311,7 +3311,7 @@ const HINTS={
   creditLimit:'e.g. 50000',leadTime:'e.g. 7',paymentTerms:'e.g. 30 days',reference:'e.g. PO-7781',ref:'e.g. DN-1024',
   company:'e.g. AM Building Solutions DWC LLC',currentUser:'e.g. Store Keeper',dimensions:'e.g. 50 × 50 × 2.5 mm, 6 m length',
   color:'e.g. Yellow',size:'e.g. 4.5 × 3.1 m',unit:'e.g. PCS',opening:'e.g. 120',safety:'e.g. 20',bundle:'e.g. 10',
-  stockLen:'e.g. 6',rateKg:'e.g. 3.25',ratePc:'e.g. 12.50',orderQty:'e.g. 1',qty:'e.g. 10',line:'e.g. 4',
+  work:'e.g. Powder coating',vehicleType:'e.g. 3-ton truck',stockLen:'e.g. 6',rateKg:'e.g. 3.25',ratePc:'e.g. 12.50',orderQty:'e.g. 1',qty:'e.g. 10',line:'e.g. 4',
   reason:'e.g. Physical count on 24 Nov',notes:'e.g. Deliveries only on weekdays before 3 pm',
   _cname:'e.g. Ahmad Saleh',_job:'e.g. Site Engineer',_cphone:'e.g. +971 50 123 4567',_cemail:'e.g. ahmad@company.com',
   _name:'e.g. Main Store',_address:'e.g. Plot 598-123, Dubai Investment Park',_city:'e.g. Dubai',
@@ -3412,8 +3412,8 @@ function formModal(title,body,save,{text='Save',intro='',danger=false,page}={}){
   let back=null, form;
   if(inline){
     const view=$('#view');
-    const crumbs=[`<button type="button" class="o-bc-link" onclick="App.discard()">${esc(TITLES[App.route]||'Back')}</button>`];
-    if(App.record&&App.recordTitle)crumbs.push(`<button type="button" class="o-bc-link" onclick="App.discard()">${esc(App.recordTitle)}</button>`);
+    const crumbs=[`<button type="button" class="o-bc-link" onclick="App.leaveForm()">${esc(TITLES[App.route]||'Back')}</button>`];
+    if(App.record&&App.recordTitle)crumbs.push(`<button type="button" class="o-bc-link" onclick="App.leaveForm()">${esc(App.recordTitle)}</button>`);
     view.innerHTML=`<form class="o-form-page erp-form"><div class="o-cp o-cp-record"><div class="o-bc">${crumbParent()}${crumbs.join('<span class="o-bc-sep">/</span>')}
       <span class="o-bc-sep">/</span><span class="o-bc-cur">${esc(title)}</span></div>
       <div class="o-cp-actions"><button class="btn ${danger?'btn-danger':'btn-primary'}" type="submit">${esc(text)}</button>
@@ -3421,6 +3421,7 @@ function formModal(title,body,save,{text='Save',intro='',danger=false,page}={}){
       <div class="o-sheet o-sheet-edit erp-modal-body">${intro?note(intro):''}<div class="erp-error" role="alert"></div>${body}</div></form>`;
     App.editing=true;document.body.classList.add('o-record');window.scrollTo(0,0);
     form=$('form.o-form-page',view);
+    Drafts.lastForm=form;
   }else{
     back=openModal(`<form><div class="modal-head"><div><h3>${esc(title)}</h3>${intro?`<div class="msub">${esc(intro)}</div>`:''}</div>
       <button type="button" class="x" aria-label="Close" onclick="closeModal()">${ic('x')}</button></div>
@@ -3438,6 +3439,7 @@ function formModal(title,body,save,{text='Save',intro='',danger=false,page}={}){
     error.textContent=''; submit.disabled=true;
     try{
       const message=await save(form);
+      Drafts.finish(form);
       if(back)closeModal(back);else App.editing=false;
       App.render();
       toast(message||'Saved.','ok');
@@ -3510,6 +3512,7 @@ function repeat(form,container,draw,rows,addLabel,auto=null){
     return line;
   };
   rows.forEach(create);
+  box.dataset.repeatBox='';box._add=()=>create();box._lines=()=>[...list.children];
   b.onclick=()=>{create();box.dispatchEvent(new Event('change',{bubbles:true}));};
   if(auto){
     box.classList.add('erp-auto-lines');
@@ -3591,20 +3594,64 @@ function wireImagePreviews(form){
     remove?.addEventListener('change',()=>{if(remove.checked)fileInput.value='';update();});
   });
 }
-const CODE_PREFIX={customers:'C-',suppliers:'V-',processors:'P-',materials:'RM-',parts:'PT-',products:'PR-',variants:'VR-'};
+/* Automatic codes: C-001, V-001, D-001, PCM-001, RM-001, Part-001, PDT-001 — the next number after the highest one in use.
+   The form shows it as a hint; Tab fills it in, and an empty code is given automatically on save. It can always be changed. */
+const CODE_PREFIX={customers:'C-',suppliers:'V-',drivers:'D-',processors:'PCM-',materials:'RM-',parts:'Part-',products:'PDT-',variants:'VR-'};
+const codeGroups=table=>COMPANIES.includes(table)||table==='drivers'?[table]:['materials','parts','products','variants'];
 function nextCode(s,table){
-  const groups=COMPANIES.includes(table)?[table]:['materials','parts','products','variants'];
-  const used=new Set(groups.flatMap(k=>s[k].map(r=>String(r.code||'').toUpperCase())));
-  let n=1,code;
-  do{code=CODE_PREFIX[table]+String(n++).padStart(table==='materials'?4:3,'0');}while(used.has(code));
+  const prefix=CODE_PREFIX[table], used=new Set(codeGroups(table).flatMap(k=>(s[k]||[]).map(r=>String(r.code||'').toUpperCase())));
+  const re=new RegExp('^'+prefix.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'(\\d+)$','i');
+  let n=1+Math.max(0,...(s[table]||[]).map(r=>+(String(r.code||'').match(re)?.[1]||0))),code;
+  do{code=prefix+String(n++).padStart(3,'0');}while(used.has(code.toUpperCase()));
   return code;
 }
 function codeCheck(s,table,row){
   need(row.name?.trim(),'Enter a name.');
   if(!row.code?.trim())row.code=nextCode(s,table);
-  const groups=COMPANIES.includes(table)?[table]:['materials','parts','products','variants'];
-  need(!groups.some(k=>s[k].some(r=>r.id!==row.id&&r.code.toLowerCase()===row.code.toLowerCase())),
+  need(!codeGroups(table).some(k=>(s[k]||[]).some(r=>r.id!==row.id&&String(r.code||'').toLowerCase()===row.code.toLowerCase())),
     'This code or SKU is already in use.');
+}
+/* Code box: empty for a new record with the next code as a hint — press Tab (or leave it empty) to use it. */
+function codeField(table,row,title='Code'){
+  const next=row?.code?'':nextCode(state,table);
+  return `<div class="field code-field"><label>${esc(title)}<input class="inp" name="code" value="${esc(row?.code||'')}" autocomplete="off" spellcheck="false"
+    placeholder="${esc(next||'Code')}"${next?` data-auto-code="${esc(next)}"`:''}></label>${next?`<span class="code-hint">Press <kbd>Tab</kbd> to use ${esc(next)}</span>`:''}</div>`;
+}
+document.addEventListener('keydown',e=>{
+  const el=e.target;
+  if(e.key!=='Tab'||e.shiftKey||!el?.matches?.('input[data-auto-code]')||el.value.trim())return;
+  el.value=el.dataset.autoCode;el.dispatchEvent(new Event('input',{bubbles:true}));
+});
+/* Name (long) with a small Code box next to it, on one line. */
+const nameCodeRow=(nameHtml,codeHtml)=>`<div class="full name-code">${nameHtml}${codeHtml}</div>`;
+/* Rows with a small "+" button: the first row has "+", added rows have "−". Each row is one line of fields.
+   draw(value,n,i) returns the fields for row i (field names start with n_). Returns () => filled rows. */
+function plusRows(form,container,draw,rows,{addLabel='Add another',filled=line=>[...line.querySelectorAll('input:not([type=hidden]),select,textarea')].some(x=>x.value.trim())}={}){
+  const box=form.querySelector(container);
+  box.classList.add('plus-rows');box.dataset.repeatBox='';
+  const renumber=()=>[...box.children].forEach((line,i)=>{
+    line.querySelectorAll('[data-num]').forEach(el=>{el.textContent=el.dataset.num.replace('#',i+1);});
+    const b=line.querySelector('.plus-btn');
+    b.classList.toggle('plus-remove',i>0);b.textContent=i?'−':'+';
+    b.title=i?'Remove this line':addLabel;b.setAttribute('aria-label',b.title);
+  });
+  const create=(value={})=>{
+    const line=document.createElement('div');line.className='plus-row';
+    const n='r'+key().replace(/[^a-z0-9]/gi,'');
+    line.innerHTML=draw(value,n)+'<button type="button" class="plus-btn"></button>';
+    box.append(line);wirePicks(line);
+    line.querySelector('.plus-btn').onclick=()=>{
+      if(line===box.firstElementChild){const added=create();renumber();added.querySelector('input:not([type=hidden]),select')?.focus();}
+      else{line.remove();renumber();}
+      box.dispatchEvent(new Event('change',{bubbles:true}));
+    };
+    return line;
+  };
+  (rows.length?rows:[{}]).forEach(r=>create(r));
+  renumber();
+  box._add=()=>{const l=create();renumber();return l;};
+  box._lines=()=>[...box.children];
+  return ()=>[...box.children].filter(filled);
 }
 function activeCheck(s,table,row,old){
   if(!old)return;
@@ -3765,9 +3812,10 @@ function applyPackingTemplate(form,rows,category,useEnteredNets=false){
   form.elements.namedItem('orderQty').dispatchEvent(new Event('input',{bubbles:true}));
 }
 function packingParts(rows,quantities,editable=false,order=1){
+  if(editable)return packingPartsEditor(rows,quantities,order);
   return panel('Product parts',(editable?note('Search for a part and enter its quantity. Selected parts stay visible. A packing formula template can fill quantities automatically.')+
     `<div class="toolbar erp-packing-search"><div class="search">${ic('search')}<input class="inp" type="search" aria-label="Search product parts" placeholder="Search by part name or code…" oninput="filterPackingParts(this)"></div><span class="pill-legend" aria-live="polite"></span></div>`:'')+
-    table(['Picture','Part description','Unit','Quantity per product','Order total'],rows.flatMap((part,i)=>{
+    table(['Picture','Part description','Unit','Quantity per product','Total for quantity'],rows.flatMap((part,i)=>{
       const count=quantities[i];
       if(!editable&&!count)return [];
       const step=measured(packingUnit(part))?'0.000001':1;
@@ -3782,6 +3830,35 @@ function packingParts(rows,quantities,editable=false,order=1){
           esc(part.name),esc(part.costFormula),`<span data-packing-cost="${i}">${qfmt(packingCost(part,quantities[i]*order))}</span>`
         ]]:[]))}</details>`:''));
 }
+/* Product form: parts are added by searching. Chosen parts stay listed with how many go into one product and the total for the quantity. */
+function packingPartsEditor(rows,quantities,order){
+  const body=rows.map((part,i)=>{
+    const count=quantities[i], step=measured(packingUnit(part))?'0.000001':1, image=part.stockImage||PACKING_IMAGES[part.image];
+    const search=[part.name,part.code,part.unit,part.size,part.color].filter(Boolean).join(' ');
+    return `<tr data-search="${esc(search)}"><td class="pp-pic">${image?thumb(image,part.name,'thumb-part'):`<span class="thumb-ph">${ic('box')}</span>`}</td>
+      <td class="pp-name"><b>${esc(part.name)}</b>${part.code?`<small>${esc(part.code)}</small>`:''}</td>
+      <td><div class="pp-qty"><input class="inp packing-qty" aria-label="${esc('How many '+part.name+' in one product')}" type="number"
+        min="0" step="${step}" name="${packingInput(i)}" value="${esc(count)}" placeholder="0"><span>${esc(part.unit)}</span></div></td>
+      <td class="pp-total"><b data-packing-total="${i}">${qfmt(count*order)}</b> <span>${esc(part.unit)}</span></td>
+      <td class="pp-act-cell"><button type="button" class="pp-act" onclick="packingToggle(this)"></button></td></tr>`;
+  }).join('');
+  const cost=rows.some(part=>part.costFormula)?`<details class="pp-cost"><summary>Accessory cost estimate (from the workbook)</summary>${
+    table(['Part','Workbook formula','Estimated cost'],rows.flatMap((part,i)=>part.costFormula?[[
+      esc(part.name),esc(part.costFormula),`<span data-packing-cost="${i}">${qfmt(packingCost(part,quantities[i]*order))}</span>`]]:[]))}</details>`:'';
+  return `<section class="card pp-card"><div class="pp-head"><div><h4>${ic('layers')} Product parts</h4>
+      <p>Search for a part and click <b>Add</b>, then type how many go into <b>one</b> product. A packing formula template (Category) fills them for you.</p></div>
+      <span class="pill-legend pp-count" aria-live="polite"></span></div>
+    <div class="erp-packing-search pp-search"><div class="search">${ic('search')}<input class="inp" type="search" aria-label="Search product parts"
+      placeholder="Search parts by name or code to add them…" oninput="filterPackingParts(this)" autocomplete="off"></div></div>
+    <div class="tbl-wrap"><table class="tbl pp-table" data-enhanced="1"><thead><tr><th></th><th>Part</th><th>In one product</th><th>Total for quantity</th><th></th></tr></thead>
+      <tbody>${body}</tbody></table><div class="pp-empty">${rows.length?'No parts added yet — search above to add the first one.':'No parts exist yet. Add parts under Master Data → Parts first.'}</div></div>${cost}</section>`;
+}
+function packingToggle(btn){
+  const row=btn.closest('tr'), qty=row.querySelector('.packing-qty'), on=Number(qty.value)>0;
+  qty.value=on?0:1;
+  qty.dispatchEvent(new Event('input',{bubbles:true}));
+  if(!on){qty.focus();qty.select();}
+}
 function filterPackingParts(input){
   const card=input.closest('.card'), query=searchKey(input.value).split(' ').filter(Boolean);
   const lines=card.querySelector('.tbl-wrap tbody');
@@ -3793,11 +3870,15 @@ function filterPackingParts(input){
     const match=query.length>0&&query.every(token=>text.includes(token)||words.some(word=>word.startsWith(token)||
       (token.length>=4&&searchDistance(token,word)<=(token.length>=8?2:1))));
     row.hidden=!chosen&&!match;
+    row.classList.toggle('pp-chosen',chosen);
+    const act=row.querySelector('.pp-act');
+    if(act){act.textContent=chosen?'✕':'+ Add';act.title=chosen?'Remove this part':'Add this part';act.classList.toggle('pp-remove',chosen);}
     if(chosen)selected++;
     if(match&&!chosen)matches++;
   }
-  card.querySelector('.pill-legend').textContent=query.length?`${selected} selected · ${matches} matches`:
-    `${selected} selected · search to add parts`;
+  const empty=card.querySelector('.pp-empty');
+  if(empty)empty.hidden=!!(selected||matches);
+  card.querySelector('.pill-legend').textContent=(selected===1?'1 part':selected+' parts')+' added'+(query.length?' · '+matches+' found':'');
 }
 function packingCost(part,total){
   return packingFormula(part.costFormula,{['G'+part.requiredRow]:part.price,['F'+part.requiredRow]:total});
@@ -3963,32 +4044,32 @@ function materialOpening(s,id){
   return s.events.filter(e=>['Opening stock','Verified legacy opening'].includes(e.type))
     .reduce((total,e)=>total+e.lines.reduce((sum,line)=>sum+(line.sku===id?line.delta:0),0),0);
 }
-function nextMaterialCode(s){
-  const codes=new Set(['materials','parts','products','variants'].flatMap(type=>s[type].map(row=>row.code?.toUpperCase())));
-  let number=1,code;
-  do{code='RM-'+String(number++).padStart(4,'0');}while(codes.has(code));
-  return code;
-}
+/* Item forms are split into small titled sections instead of one long list with a hidden "More details". */
+const formSection=(icon,title,sub,html,cls='')=>`<section class="fsec ${cls}"><div class="fsec-head">${ic(icon)}<div><h4>${esc(title)}</h4>${sub?`<p>${esc(sub)}</p>`:''}</div></div>
+  <div class="form-grid">${html}</div></section>`;
 function materialFields(row,old){
   const opening=old?materialOpening(state,old.id):0;
-  return input('Material name','name',row.name,{full:true,extra:'autofocus'})+
-    input('Code','code',row.code||nextMaterialCode(state))+
-    input('Category','category',row.category,{extra:'list="erp-categories"'})+
-    imageField(row.image,'Material photo')+
-    suggestedInput('Unit','unit',row.unit||'PCS',unitChoices(),true)+
-    number('Bundle quantity (units per bundle)','bundle',row.bundle??0,0,1)+
-    (old?input('Opening / initial stock','opening',qfmt(opening),{extra:'readonly'}):
-      number('Opening / initial stock','opening',0,0,'any'))+
-    (!old?`<div class="full" data-opening-location hidden>${select('Opening stock custody location','openingLocation',locOptions(),'',false,
-      'Choose a custody location')}</div>`:'')+
-    `<details class="o-more full"><summary>More details — section profile, stock length, rates, specifications</summary><div class="form-grid">`+
-    field('Section profile (links to calculators)',`<select class="sel" name="profileKey"><option value="">— not linked —</option>${twcTypeOptions(row.profileKey||'')}</select>`)+
-    number('Stock length (m)','stockLen',row.stockLen??6)+
-    number('Rate (AED per kg)','rateKg',row.rateKg??0)+
-    number('Rate (AED per piece)','ratePc',row.ratePc??0)+
-    input('Dimensions / specifications','dimensions',row.dimensions,{full:true})+`</div></details>`+
-    `<div class="field full material-help">Opening stock is posted once to the selected location. Later changes go through Inventory &amp; Stock Movements. Bundle quantities round purchase suggestions.</div>`+
-    tick('Active (available for planning and movements)','active',row.active!==false);
+  return formSection('box','Material','What it is, how it is counted and what it looks like',
+      nameCodeRow(input('Material name','name',row.name,{extra:'autofocus'}),codeField('materials',old))+
+      input('Category','category',row.category,{extra:'list="erp-categories"'})+
+      suggestedInput('Unit','unit',row.unit||'PCS',unitChoices(),true)+
+      input('Dimensions / specifications','dimensions',row.dimensions)+
+      imageField(row.image,'Material photo'))+
+    formSection('layers','Stock','Bundle size and the balance you start with',
+      number('Bundle quantity (units per bundle)','bundle',row.bundle??0,0,1)+
+      (old?input('Opening / initial stock','opening',qfmt(opening),{extra:'readonly'}):
+        number('Opening / initial stock','opening',0,0,'any'))+
+      (!old?`<div class="full" data-opening-location hidden>${select('Opening stock custody location','openingLocation',locOptions(),'',false,
+        'Choose a custody location')}</div>`:'')+
+      `<div class="field full material-help">Opening stock is posted once to the selected location. Later changes go through Inventory &amp; Stock Movements. Bundle quantities round purchase suggestions.</div>`)+
+    formSection('calc','Section & rates','Links the material to the steel calculators and sets its price',
+      field('Section profile (links to calculators)',`<select class="sel" name="profileKey"><option value="">— not linked —</option>${twcTypeOptions(row.profileKey||'')}</select>`)+
+      number('Stock length (m)','stockLen',row.stockLen??6)+
+      number('Rate (AED per kg)','rateKg',row.rateKg??0)+
+      number('Rate (AED per piece)','ratePc',row.ratePc??0))+
+    formSection('edit','Notes & status','',area('Notes','notes',row.notes)+
+      `<div class="field full fsec-switch"><label><input name="active" type="checkbox" ${row.active!==false?'checked':''}>
+        <span><b>Active</b><small>Available for planning and stock movements</small></span></label></div>`);
 }
 /* Companies (customers, suppliers, processing companies): tabbed profile form and overview page. */
 const PAYMENT_TERMS=['Advance payment','Cash on delivery','Immediate payment','7 days','15 days','30 days','45 days','60 days','90 days'];
@@ -4046,8 +4127,9 @@ function phoneField(title,name,value){
   return field(title,`<div class="phone-in"><span class="phone-cc">+971</span><input class="inp" name="${name}" type="tel" inputmode="tel"
     value="${esc(uaeLocal(value))}" placeholder="50 123 4567" autocomplete="off" aria-label="${esc(title)}"></div>`);
 }
-function readPhone(form,name){
-  const raw=valOf(form,name);
+function readPhone(form,name){return phoneText(valOf(form,name));}
+function phoneText(raw){
+  raw=String(raw||'').trim();
   if(!raw)return '';
   const digits=raw.replace(/\D/g,'').replace(/^(?:00)?971/,'').replace(/^0/,'');
   need(/^\d{8,9}$/.test(digits),'Enter the UAE number after +971, e.g. 50 123 4567.');
@@ -4055,8 +4137,9 @@ function readPhone(form,name){
 }
 const vendorSupplies=r=>(Array.isArray(r?.supplies)?r.supplies:[]).filter(x=>get(state,'materials',x.sku));
 /* Google Maps location of a customer / vendor / trip. Accepts a Google Maps share link or "lat, lng" coordinates. */
-function readMapUrl(form,name){
-  const v=valOf(form,name);
+function readMapUrl(form,name){return mapText(valOf(form,name));}
+function mapText(v){
+  v=String(v||'').trim();
   if(!v)return '';
   const xy=v.match(/^(-?\d{1,3}(?:\.\d+)?)\s*,\s*(-?\d{1,3}(?:\.\d+)?)$/);
   if(xy&&Math.abs(+xy[1])<=90&&Math.abs(+xy[2])<=180)return mapsLink({lat:+xy[1],lng:+xy[2]});
@@ -4076,52 +4159,101 @@ function mapField(title,value,hint,full=true){
     <span class="map-help">${ic('pin')} Google Maps → <b>Share → Copy link</b>, then paste. Coordinates also work.</span></div>`;
 }
 function deliverySite(s,type,id){return s.locations.find(l=>l.ownerType===type&&l.ownerId===id&&l.delivery);}
-/* Customers: name, code, phone, position, delivery address. Vendors: name, code, phone, address, materials supplied.
-   Processing companies: name, code, phone, email, address, map — their site holds AMBS stock so parts can be transferred there. */
+/* Customers: name + code, company phone, positions with contact numbers (+), delivery addresses with Google Maps links (+).
+   Vendors: name + code, phone, company address + map, factory addresses + maps (+).
+   Processing companies: name + code, phone, their work, address + map — their site holds AMBS stock so parts can be transferred there. */
+const PROCESS_WORK=['Powder coating','Galvanizing','Painting','Sandblasting','Laser cutting','Bending','Welding','Anodizing','Machining'];
+const rowLabel=label=>`<span data-num="${esc(label)}">${esc(label.replace('#','1'))}</span>`;
+const rowInput=(label,name,value,extra='')=>`<div class="field"><label>${rowLabel(label)}<input class="inp" name="${name}" value="${esc(value??'')}" autocomplete="off" ${extra}></label></div>`;
+const rowPhone=(label,name,value)=>`<div class="field"><label>${rowLabel(label)}</label><div class="phone-in"><span class="phone-cc">+971</span><input class="inp" name="${name}" type="tel"
+  inputmode="tel" value="${esc(uaeLocal(value))}" placeholder="50 123 4567" autocomplete="off"></div></div>`;
+const mapHelp=()=>`<span class="map-help">${ic('pin')} In Google Maps open the place → <b>Share → Copy link</b>, then paste. Coordinates like <b>25.2048, 55.2708</b> also work.</span>`;
+const companyPositions=r=>Array.isArray(r?.positions)&&r.positions.length?r.positions:(r?.position||r?.contactPhone?[{position:r.position||'',phone:r.contactPhone||''}]:[]);
+/* Delivery addresses (customers) and factory addresses (vendors) are the company's sites, so sales and purchases can pick them. */
+function companySites(type,id,row){
+  const sites=companyLocations(state,type,id).map(l=>({id:l.id,address:l.address||l.name,url:l.url||''}));
+  if(sites.length)return sites;
+  if(type==='customers'&&(row.address||row.mapUrl))return [{address:row.address||'',url:row.mapUrl||''}];
+  if(type==='suppliers'&&row.address2)return [{address:row.address2,url:''}];
+  return [];
+}
+function syncCompanySites(s,type,companyId,sites,{label,delivery}){
+  for(const l of companyLocations(s,type,companyId).filter(p=>!sites.some(x=>x.id===p.id))){
+    need(!locationUsed(s,l.id),'“'+(l.address||l.name)+'” is used by stock or an open operation, so it cannot be removed.');
+    l.active=false;
+  }
+  const names=new Set();
+  sites.forEach((x,i)=>{
+    const prior=get(s,'locations',x.id);
+    need(!prior||prior.ownerType===type&&prior.ownerId===companyId,'Invalid location owner.');
+    let name=(x.address||label+' '+(i+1)).slice(0,90);
+    while(names.has(name.toLowerCase()))name+=' ('+(i+1)+')';
+    names.add(name.toLowerCase());
+    add(s.locations,{city:'',notes:'',lat:null,lng:null,stock:false,...prior,id:x.id,name,address:x.address,url:x.url,
+      active:true,delivery,ownerType:type,ownerId:companyId});
+  });
+}
 function simpleCompanyEdit(type,id){
-  const old=get(state,type,id), row=old||{}, vendor=type==='suppliers', proc=type==='processors', title=ENTITY[type];
+  const old=get(state,type,id), row=old||{}, vendor=type==='suppliers', proc=type==='processors', customer=type==='customers', title=ENTITY[type];
   const address=row.address||deliverySite(state,type,id)?.address||'';
-  const form=formModal((old?'Edit ':'Add ')+title,`<div class="form-grid">
-    ${input('Name','name',row.name,{extra:`placeholder="${proc?'e.g. Gulf Galvanizing Factory':vendor?'e.g. Metal Solution Trading':'e.g. Emaar Construction LLC'}"`})}
-    ${input('Code','code',row.code||nextCode(state,type),{extra:'placeholder="Given automatically"'})}
-    ${phoneField('Phone number','phone',row.phone)}
-    ${input('Email','email',row.email,{type:'email',extra:`placeholder="${proc?'e.g. orders@gulfgalv.ae':vendor?'e.g. sales@vendor.ae':'e.g. pm@emaar.ae'}"`})}
-    ${vendor||proc?'':input('Position','position',row.position,{extra:'placeholder="e.g. Project Manager"'})}
-    ${input(vendor||proc?'Address':'Delivery address','address',address,{extra:`placeholder="${proc?'e.g. Jebel Ali Industrial Area 1':vendor?'e.g. Al Quoz Industrial Area 3':'e.g. Dubai Hills, Building 3, Gate 2'}"`})}
-    ${vendor?input('Address 2','address2',row.address2,{extra:'placeholder="Second branch or store (optional)"'}):''}
-    ${mapField('Google Maps location',companyMap(type,row),'Paste the Google Maps link',false)}
-    ${proc?'':imageField(row.image,'Logo / photo')}
-    </div>`+(vendor?`<h4 class="erp-sub-head">Materials this vendor supplies</h4>
-    <p class="sub" style="margin:-4px 0 10px">Pick a material and how many bundles. A new line appears by itself when you fill the last one.</p>
-    <div data-supplies></div>`:''),async f=>{
+  const ph=x=>`placeholder="${esc(x)}"`;
+  const form=formModal((old?'Edit ':'Add ')+title,`<div class="form-grid company-form">
+    ${nameCodeRow(input('Name','name',row.name,{extra:ph(proc?'e.g. Gulf Galvanizing Factory':vendor?'e.g. Metal Solution Trading':'e.g. Emaar Construction LLC')}),codeField(type,old))}
+    ${phoneField(customer?'Company phone number':'Phone number','phone',row.phone)}
+    ${input('Email','email',row.email,{type:'email',extra:ph(proc?'e.g. orders@gulfgalv.ae':vendor?'e.g. sales@vendor.ae':'e.g. info@emaar.ae')})}
+    ${proc?`<div class="full">${suggestedInput('Their work','work',row.work||row.details||'',PROCESS_WORK)}<span class="field-hint">What they do for AMBS, e.g. Powder coating or Galvanizing. Several? Separate them with commas.</span></div>`:''}
+    </div>
+    ${customer?`<h4 class="erp-sub-head">${ic('users')} Contact people</h4><div data-positions></div>`:''}
+    ${customer?`<h4 class="erp-sub-head">${ic('pin')} Delivery addresses</h4><div data-sites></div>${mapHelp()}`:''}
+    ${vendor||proc?`<h4 class="erp-sub-head">${ic('pin')} ${vendor?'Company address':'Address'}</h4><div class="form-grid">
+      ${input(vendor?'Company address':'Address','address',address,{extra:ph(proc?'e.g. Jebel Ali Industrial Area 1':'e.g. Al Quoz Industrial Area 3')})}
+      <div class="field"><label>Google Maps link<input class="inp" name="mapUrl" value="${esc(companyMap(type,row))}" autocomplete="off" placeholder="e.g. https://maps.app.goo.gl/…"></label></div></div>`:''}
+    ${vendor?`<h4 class="erp-sub-head">${ic('factory')} Factory addresses</h4><div data-sites></div>`:''}
+    ${vendor||proc?mapHelp():''}
+    ${proc?'':`<div class="form-grid company-logo">${imageField(row.image,'Logo / photo')}</div>`}`,async f=>{
     const data={...old,id:id||key(),name:valOf(f,'name'),code:valOf(f,'code'),phone:readPhone(f,'phone'),
-      position:vendor||proc?old?.position||'':valOf(f,'position'),address:valOf(f,'address'),mapUrl:readMapUrl(f,'mapUrl'),active:old?.active!==false};
+      address:valOf(f,'address'),mapUrl:readMapUrl(f,'mapUrl'),active:old?.active!==false};
     data.email=valOf(f,'email');need(!data.email||/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(data.email),'Enter a valid email address.');
-    if(vendor)data.address2=valOf(f,'address2');
-    data.image=proc?old?.image||'':await imageValue(f,old?.image);
-    if(vendor){
-      data.supplies=supplyLines().map(l=>({sku:fieldValue(l,'sku'),bundles:qty(fieldValue(l,'bundles')||0,'Bundles',true)}));
-      need(new Set(data.supplies.map(x=>x.sku)).size===data.supplies.length,'Each material can be listed once per vendor.');
+    if(proc){data.work=valOf(f,'work');data.details=data.work;}
+    const sites=siteRows?siteRows().map((l,i)=>{
+      const x={id:fieldValue(l,'id')||key(),address:fieldValue(l,'address'),url:fieldValue(l,'url')};
+      try{x.url=mapText(x.url);}catch(e){need(false,(vendor?'Factory address ':'Delivery address ')+(i+1)+': '+e.message);}
+      return x;
+    }):[];
+    if(customer){
+      data.positions=positionRows().map((l,i)=>{
+        let phone='';
+        try{phone=phoneText(fieldValue(l,'phone'));}catch(e){need(false,'Contact number '+(i+1)+': '+e.message);}
+        return {position:fieldValue(l,'position'),phone};
+      });
+      data.position=data.positions[0]?.position||'';data.contactPhone=data.positions[0]?.phone||'';
+      data.address=sites[0]?.address||'';data.mapUrl=sites[0]?.url||'';
     }
+    if(vendor)delete data.address2;
+    data.image=proc?old?.image||'':await imageValue(f,old?.image);
     await commit(s=>{
       const existing=get(s,type,data.id);
       need(!old||sameCloudRecord(old,existing),'This record changed. Reopen it before saving.');
       codeCheck(s,type,data);
-      for(const x of data.supplies||[])need(get(s,'materials',x.sku),'Choose a raw material for every line.');
       add(s[type],{...data,at:now()});
-      if(vendor)return;
-      const site=deliverySite(s,type,data.id)||(proc?s.locations.find(l=>l.ownerType===type&&l.ownerId===data.id&&l.active!==false):null);
+      if(customer||vendor)return syncCompanySites(s,type,data.id,sites,{label:customer?'Delivery address':'Factory',delivery:customer});
+      const site=deliverySite(s,type,data.id)||s.locations.find(l=>l.ownerType===type&&l.ownerId===data.id&&l.active!==false);
       // a processing company always gets a site that holds AMBS stock, so parts can be transferred there and back
-      if(proc||data.address||data.mapUrl)add(s.locations,{...(site||{id:key(),name:proc?'Processing site':'Delivery address',city:'',url:'',notes:'',lat:null,lng:null}),
-        address:data.address,url:data.mapUrl,stock:proc?true:site?.stock??false,active:true,delivery:true,ownerType:type,ownerId:data.id});
-      else if(site&&!locationUsed(s,site.id))site.active=false;
+      add(s.locations,{...(site||{id:key(),name:'Processing site',city:'',url:'',notes:'',lat:null,lng:null}),
+        address:data.address,url:data.mapUrl,stock:true,active:true,delivery:true,ownerType:type,ownerId:data.id});
     });
     return old?'Saved.':title+' added.';
   },{text:old?'Save changes':'Save '+title.toLowerCase()});
-  const supplyLines=vendor?repeat(form,'[data-supplies]',(x,n)=>`<div class="form-grid line-compact">
-    ${searchable('Raw material',n+'_sku',pair(state.materials.filter(m=>m.active!==false||m.id===x.sku)),x.sku)}
-    ${input('Bundles',n+'_bundles',x.bundles??'',{type:'number',extra:'min="0" step="any" placeholder="e.g. 10"'})}</div>`,
-    vendorSupplies(row),'Add material',{min:1,filled:line=>!!fieldValue(line,'sku'),complete:line=>!!fieldValue(line,'sku')&&Number(fieldValue(line,'bundles'))>0}):null;
+  const positionRows=customer?plusRows(form,'[data-positions]',(x,n)=>
+    rowInput('Position #',n+'_position',x.position,'placeholder="e.g. Project Manager"')+rowPhone('Contact number #',n+'_phone',x.phone),
+    companyPositions(row),{addLabel:'Add another position'}):null;
+  const siteRows=customer||vendor?plusRows(form,'[data-sites]',(x,n)=>
+    rowInput(customer?'Delivery address #':'Factory address #',n+'_address',x.address,`placeholder="${customer?'e.g. Dubai Hills, Building 3, Gate 2':'e.g. Plot 598-123, Dubai Investment Park'}"`)+
+    rowInput('Google Maps link #',n+'_url',x.url,'placeholder="e.g. https://maps.app.goo.gl/…"')+
+    `<input type="hidden" name="${n}_id" value="${esc(x.id||key())}">`,
+    companySites(type,id,row),{addLabel:customer?'Add another delivery address':'Add another factory address',
+      filled:l=>!!(fieldValue(l,'address')||fieldValue(l,'url'))}):null;
+  return form;
 }
 function companyEdit(type,id){return simpleCompanyEdit(type,id);}
 function companyView(type,id){
@@ -4159,12 +4291,15 @@ function companyView(type,id){
   if(type==='suppliers')smart.unshift(['stack','Materials supplied',supplies.length,nfmt(supplies.reduce((n,x)=>n+x.bundles,0),2)+' bundles in total','co-supplies']);
   const simple=true;
   if(simple)for(let i=smart.length-1;i>=0;i--)if(!smart[i][2]||smart[i][2]==='—')smart.splice(i,1);
-  const details=simple?[['Code',esc(r.code)],...(type==='customers'?[['Position',esc(r.position||'—')]]:[]),
-    ['Phone',r.phone?link('tel:'+r.phone.replace(/[^\d+]/g,''),r.phone):'—'],
-    ['Email',r.email?link('mailto:'+r.email,r.email):'—'],
-    [type==='customers'?'Delivery address':'Address',esc(r.address||deliverySite(state,type,id)?.address||'—')],
-    ...(type==='suppliers'?[['Address 2',esc(r.address2||'—')]]:[]),
-    ['Location on map',companyMap(type,r)?mapBtn(companyMap(type,r),'Open in Google Maps'):'<span class="sub">No Google Maps link yet — click Edit to add it</span>']]:[
+  const tel=p=>p?link('tel:'+p.replace(/[^\d+]/g,''),p):'—';
+  const addrList=list=>list.length?'<div class="co-addr-list">'+list.map(l=>'<div>'+esc(l.address||l.name)+' '+mapBtn(l.url||mapsLink(l)||'','Map')+'</div>').join('')+'</div>':'—';
+  const liveSites=sites.filter(l=>l.active!==false);
+  const details=simple?[['Code',esc(r.code)],['Phone',tel(r.phone)],['Email',r.email?link('mailto:'+r.email,r.email):'—'],
+    ...(type==='customers'?[['Contact people',companyPositions(r).length?'<div class="co-addr-list">'+companyPositions(r).map(c=>'<div><b>'+esc(c.position||'—')+'</b> · '+tel(c.phone)+'</div>').join('')+'</div>':'—'],
+      ['Delivery addresses',addrList(liveSites.length?liveSites:r.address?[{address:r.address,url:r.mapUrl}]:[])]]:[]),
+    ...(type==='processors'?[['Their work',esc(r.work||r.details||'—')]]:[]),
+    ...(type!=='customers'?[[type==='suppliers'?'Company address':'Address',esc(r.address||'—')+' '+mapBtn(companyMap(type,r),'Map')]]:[]),
+    ...(type==='suppliers'?[['Factory addresses',addrList(liveSites.length?liveSites:r.address2?[{address:r.address2}]:[])]]:[])]:[
     ['TRN / VAT',esc(r.trn||'—')],['Email',r.email?link('mailto:'+r.email,r.email):'—'],['Phone',r.phone?link('tel:'+r.phone.replace(/[^\d+]/g,''),r.phone):'—'],
     ['Website',r.website&&/^https?:\/\//i.test(r.website)?link(r.website,r.website.replace(/^https?:\/\//i,'')):'—'],
     ['Address',esc([r.address,r.city,r.country].filter(Boolean).join(', ')||'—')],
@@ -4220,23 +4355,25 @@ function masterEdit(type,id){
   const old=get(state,type,id), company=COMPANIES.includes(type), title=ENTITY[type], row=old||{};
   const product=type==='products', previousRecipe=product?get(state,'recipes',id):null;
   const packing=product?productPacking(state,old,previousRecipe):null;
-  const core=type==='materials'?materialFields(row,old):input('Code','code',row.code,{required:true})+input('Name','name',row.name,{required:true})+
-    (company?input('Contact person','contact',row.contact,{extra:'placeholder="Name of the person to talk to"'})+input('Email','email',row.email,{type:'email'})+
-      input('Phone','phone',row.phone)+input(type==='processors'?'Services (comma separated)':'Business / Supply details','details',row.details):
+  const core=type==='materials'?materialFields(row,old):
+    formSection(product?'stack':'nut',product?'Product':'Part',product?'Name, packing template and quantity':'What the part is and where it comes from',
+      nameCodeRow(input(product?'Product name':'Part name','name',row.name),codeField(type,old))+
       (product?suggestedInput('Category / packing formula template','category',row.category,
         [...Object.keys(PACKING_CATEGORIES),...state.products.map(p=>p.category)]):
         input('Category','category',row.category,{extra:'list="erp-categories"'}))+
       suggestedInput('Stock unit','unit',row.unit||'PCS',unitChoices(),true)+
-      (product?number('Default order quantity','orderQty',row.orderQty??1,1,1):
-        input('Dimensions / specifications','dimensions',row.dimensions,{full:true}))+
-      (type==='parts'?select('Part source','source',same(['Manufactured','Purchased','Stocked']),row.source||'Manufactured'):'')+
-      imageField(row.image,product?'Product photo':type==='parts'?'Part photo':'Image'));
+      (product?number('Quantity','orderQty',row.orderQty??1,1,1):
+        select('Part source','source',same(['Manufactured','Purchased','Stocked']),row.source||'Manufactured')+
+        input('Dimensions / specifications','dimensions',row.dimensions))+
+      imageField(row.image,product?'Product photo':'Part photo'))+
+    (product?packingParts(packing.rows,packing.quantities,true,row.orderQty??1):'')+
+    formSection('edit','Notes','',area('Notes','notes',row.notes));
   const list=[...new Set([...(type==='materials'?['Tubes','Steel sections','Sheets','Accessories']:type==='parts'?
     ['Safety net','Aluminium','Steel / fabricated parts','Fasteners / accessories']:[]),...state[type].map(x=>x.category).filter(Boolean)])];
-  const form=formModal((old?'Edit ':'Add ')+title,`<div class="form-grid ${type==='materials'?'material-form':''}">${core}${area('Notes','notes',row.notes)}</div>
+  const form=formModal((old?'Edit ':'Add ')+title,`<div class="item-form ${type==='materials'?'material-form':''}">${core}</div>
     ${!product&&!company?`<datalist id="erp-categories">${list.map(c=>`<option value="${esc(c)}"></option>`).join('')}</datalist>`:''}
     ${company?'<h4>Company locations</h4><div data-locations></div>':''}
-    ${product?packingParts(packing.rows,packing.quantities,true,row.orderQty??1):''}`,async f=>{
+`,async f=>{
     const data={...old,id:id||key(),code:valOf(f,'code'),name:valOf(f,'name'),notes:valOf(f,'notes'),
       active:type==='materials'?checked(f,'active'):old?.active!==false};
     let packingQuantities;
@@ -4246,7 +4383,7 @@ function masterEdit(type,id){
       for(const name of (product?['category','unit']:['category','unit','dimensions','source','profileKey']))data[name]=valOf(f,name);
       if(product){
         if(!data.category&&!packingCategory(row.category))data.category=row.category||'';
-        data.orderQty=whole(valOf(f,'orderQty')||1,'Default order quantity');
+        data.orderQty=whole(valOf(f,'orderQty')||1,'Quantity');
         packingQuantities=packing.rows.map((part,i)=>componentQty(
           valOf(f,packingInput(i))||0,packingUnit(part),part.name,true));
       }
@@ -4315,7 +4452,7 @@ function masterEdit(type,id){
         }
       }
     });
-  },{text:type==='materials'?(old?'Save changes':'Save material'):'Save'});
+  },{text:old?'Save changes':type==='materials'?'Save material':type==='parts'?'Save part':'Save product'});
   if(type==='materials'&&!old){
     const opening=form.elements.namedItem('opening'),location=form.querySelector('[data-opening-location]');
     const update=()=>{const show=Number(opening.value)>0;location.hidden=!show;
@@ -4448,7 +4585,7 @@ function masterView(type,id){
     (['parts','products'].includes(type)?kv([['On hand',qfmt(physical(state,r.id)+(type==='parts'?state.variants.filter(v=>v.partId===r.id).reduce((n,v)=>n+physical(state,v.id),0):0),r.unit)],
       ['Code',r.code],['Variants',type==='parts'?state.variants.filter(v=>v.partId===r.id).length||'':'']]):'')+
     kv([['Status',r.active===false?'Archived':'Active'],['Category',r.category],['Specifications',r.dimensions],
-    ['Type',type==='products'?packingCategory(r.category)?.type:''],['Default order quantity',r.orderQty],['Size',type==='products'?'':r.size],['Color',type==='products'?'':r.color],['Unit',r.unit],['Source',r.source],['Contact person',r.contact],['Email',r.email],['Phone',r.phone],['Services / supply',r.details],['Notes',r.notes]])+
+    ['Type',type==='products'?packingCategory(r.category)?.type:''],['Quantity',r.orderQty],['Size',type==='products'?'':r.size],['Color',type==='products'?'':r.color],['Unit',r.unit],['Source',r.source],['Contact person',r.contact],['Email',r.email],['Phone',r.phone],['Services / supply',r.details],['Notes',r.notes]])+
     (locations.length?panel('Linked locations',table(['Name','Address','City','Notes','Status','Map'],
       locations.map(l=>[esc(l.name),esc(l.address),esc(l.city),esc(l.notes),chip(l.active===false?'Archived':'Active'),mapAction(l)]))):'')+
     (packing?packingParts(packing.rows,packing.quantities,false,r.orderQty??1):'')+
@@ -4555,9 +4692,10 @@ function simpleCompanyPage(type){
     kanban(rows.map(r=>{
       const supplies=vendorSupplies(r), open=openCount(r);
       return {open:`masterView(${escapeArg(type)},${escapeArg(r.id)})`,
-        search:[r.code,r.name,r.position,r.phone,address(r),r.address2,...supplies.map(x=>label(get(state,'materials',x.sku)))].filter(Boolean).join(' '),
+        search:[r.code,r.name,r.position,r.phone,address(r),r.address2,r.work,...companyPositions(r).map(c=>c.position),...supplies.map(x=>label(get(state,'materials',x.sku)))].filter(Boolean).join(' '),
         html:`${companyAvatar(r,'co-avatar-md')}<div class="o-card-main"><div class="o-card-title">${esc(r.name)}</div>
           ${!vendor&&!proc&&r.position?`<div class="o-card-line">${esc(r.position)}</div>`:''}
+          ${proc&&(r.work||r.details)?`<div class="o-card-line">${ic('wrench')}${esc(r.work||r.details)}</div>`:''}
           ${r.phone?`<div class="o-card-line">${ic('phone')}${esc(r.phone)}</div>`:''}
           ${address(r)?`<div class="o-card-line o-muted">${esc(address(r))}</div>`:''}
           <div class="o-card-tags">${vendor&&supplies.length?`<span class="o-tag">${supplies.length} material${supplies.length===1?'':'s'}</span>`:''}${held(r)?`<span class="o-tag">${held(r)} item${held(r)===1?'':'s'} here</span>`:''}${open?`<span class="o-tag">${open} open ${vendor?'purchase':proc?'production order':'order'}${open===1?'':'s'}</span>`:''}${r.active===false?'<span class="o-tag">Archived</span>':''}</div></div>`};
@@ -6175,7 +6313,7 @@ const DRIVER_KINDS=['AMBS driver','Outside driver','Client pickup'];
 const TRIP_STATUS=['Next','On the way','Delivered','Cancelled'];
 const TRIP_SYSTEMS=['Safety Net','Edge Protection','Vertical Net','Fabrication','Hand Rail','Hoist Gate','Shaft Gate'];
 const PAPER_STATUS=['Pending','Signed & returned','Missing'];
-const DRIVER_PAPERS=[['licenseExpiry','Driving licence','licenseNo'],['vehicleExpiry','Vehicle registration (Mulkiya)','']];
+const DRIVER_PAPERS=[]; // licence / Mulkiya expiry dates were removed (Nov 2026); only the 'papers on file' tick counts
 const monthKey=d=>String(d||'').slice(0,7);
 const thisMonth=()=>todayISO().slice(0,7);
 function papersIssues(d,day=todayISO()){
@@ -6211,29 +6349,27 @@ function nextTripNo(s,date){
 }
 function driverEdit(id){
   const old=get(state,'drivers',id), d=old||{};
-  const form=formModal((old?'Edit':'Add')+' driver',`<div class="form-grid">
-    ${input('Driver name','name',d.name,{extra:'placeholder="e.g. Shabir Ahmad"'})}
+  const form=formModal((old?'Edit':'Add')+' driver',`<div class="form-grid driver-form">
+    ${nameCodeRow(input('Driver name','name',d.name,{extra:'placeholder="e.g. Shabir Ahmad"'}),codeField('drivers',old))}
     ${phoneField('Phone number','phone',d.phone)}
     ${select('Driver type','kind',same(DRIVER_KINDS),d.kind||DRIVER_KINDS[0],false)}
     ${suggestedInput('Vehicle type','vehicleType',d.vehicleType||'',['Pickup','3-ton truck','7-ton truck','Flatbed trailer','Van','Crane truck'])}
-    ${imageField(d.image,'Driver photo')}
-    </div><h4 class="erp-sub-head">${ic('idcard')} Official papers <small class="sub">— no deliveries until they are on file and not expired</small></h4>
-    <div class="form-grid">
     ${input('Driving licence number','licenseNo',d.licenseNo,{extra:'placeholder="e.g. 1234567"'})}
-    ${input('Driving licence expiry','licenseExpiry',d.licenseExpiry,{type:'date'})}
-    ${input('Vehicle registration (Mulkiya) expiry','vehicleExpiry',d.vehicleExpiry,{type:'date'})}
-    <div class="field papers-confirm"><label><input name="hasPapers" type="checkbox" ${d.hasPapers?'checked':''}>
-      <span><b>Official papers checked and on file</b><small>Licence and Mulkiya seen; copies kept.</small></span></label></div>
-    ${input('Notes','notes',d.notes,{full:true,extra:'placeholder="Optional"'})}</div>`,async f=>{
-    const data={...old,id:id||key(),name:valOf(f,'name'),phone:readPhone(f,'phone'),kind:valOf(f,'kind')||DRIVER_KINDS[0],
-      vehicleType:valOf(f,'vehicleType'),vehicleExpiry:valOf(f,'vehicleExpiry'),
-      licenseNo:valOf(f,'licenseNo'),licenseExpiry:valOf(f,'licenseExpiry'),
+    ${imageField(d.image,'Driver photo')}
+    ${input('Notes','notes',d.notes,{full:true,extra:'placeholder="Optional"'})}
+    <div class="field full papers-confirm"><label><input name="hasPapers" type="checkbox" ${d.hasPapers?'checked':''}>
+      <span><b>${ic('idcard')} Official papers checked and on file</b><small>Licence and Mulkiya seen; copies kept. No deliveries until this is ticked.</small></span></label></div>
+    </div>`,async f=>{
+    const data={...old,id:id||key(),code:valOf(f,'code'),name:valOf(f,'name'),phone:readPhone(f,'phone'),kind:valOf(f,'kind')||DRIVER_KINDS[0],
+      vehicleType:valOf(f,'vehicleType'),licenseNo:valOf(f,'licenseNo'),
       hasPapers:checked(f,'hasPapers'),notes:valOf(f,'notes'),active:old?.active!==false};
+    delete data.licenseExpiry;delete data.vehicleExpiry;
     need(data.name,'Enter the driver’s name.');
     data.image=await imageValue(f,old?.image);
     await commit(s=>{
       need(!old||sameCloudRecord(get(s,'drivers',data.id),old),'This driver changed. Reopen it before saving.');
       need(!s.drivers.some(x=>x.id!==data.id&&x.name.trim().toLowerCase()===data.name.toLowerCase()),'A driver with this name already exists.');
+      codeCheck(s,'drivers',data);
       add(s.drivers,{...data,at:now()});
     });
     const issues=papersIssues(data);
@@ -6389,11 +6525,10 @@ function tripExportRows(trips){
     t.date||'',t.status,t.priority||'',t.system||'',t.description||'',d?.name||'',d?.phone||'',t.vehicle||'',t.from||'',t.location||'',t.mapUrl||'',
     Number(t.km)||0,t.deliveredAt||'',t.paperStatus||'',d?(papersIssues(d).join('; ')||'OK'):''];});
 }
-const DRIVER_EXPORT_COLUMNS=['Driver','Type','Phone','Vehicle type','Licence no.','Licence expiry',
-  'Vehicle reg. expiry','Papers on file','Papers status','Trips','Delivered','Total km','Current status'];
+const DRIVER_EXPORT_COLUMNS=['Code','Driver','Type','Phone','Vehicle type','Licence no.','Papers on file','Papers status','Trips','Delivered','Total km','Current status'];
 function driverExportRows(drivers){
-  return drivers.map(d=>{const trips=driverTrips(d.id);return [d.name,d.kind||'',d.phone||'',d.vehicleType||'',d.licenseNo||'',
-    d.licenseExpiry||'',d.vehicleExpiry||'',d.hasPapers?'Yes':'No',papersIssues(d).join('; ')||'OK',
+  return drivers.map(d=>{const trips=driverTrips(d.id);return [d.code||'',d.name,d.kind||'',d.phone||'',d.vehicleType||'',d.licenseNo||'',
+    d.hasPapers?'Yes':'No',papersIssues(d).join('; ')||'OK',
     trips.length,trips.filter(t=>t.status==='Delivered').length,Number(tripKm(trips).toFixed(1)),driverWhere(d).text];});
 }
 function exportDeliveries(kind,driverId=''){
@@ -6415,14 +6550,11 @@ function driverView(id){
     ['ok','Delivered',trips.filter(t=>t.status==='Delivered').length,trips.filter(t=>t.status==='Next').length+' waiting'],
     ['pin','Where now',where.trip?'On the way':'At base',where.trip?(where.trip.location||where.trip.customerName||''):'Available']];
   infoModal(d.name,`<div class="co-hero">${logoUploader('drivers',d,'co-avatar-lg')}<div class="co-hero-main">
-      <div class="co-hero-name">${esc(d.name)}</div><div class="co-hero-sub">${esc(d.kind||'Driver')} · ${esc(d.phone||'no phone')} ${papersChip(d)}</div></div></div>`+
+      <div class="co-hero-name">${esc(d.name)}</div><div class="co-hero-sub">${d.code?esc(d.code)+' · ':''}${esc(d.kind||'Driver')} · ${esc(d.phone||'no phone')} ${papersChip(d)}</div></div></div>`+
     (issues.length?note('⛔ Nothing can be delivered with this driver: '+issues.join(' · ')+'.','bad'):'')+
     `<div class="co-smart-row">${tiles.map(([icon,l,v,sub])=>`<div class="co-smart">${ic(icon)}<span><b>${esc(v)}</b><small>${esc(l)}</small><em>${esc(sub)}</em></span></div>`).join('')}</div>`+
-    panel('Official papers',table(['Paper','Number','Expiry','Status'],[
-      ['Papers checked & on file','—','—',d.hasPapers?statusChip('ok','Yes'):statusChip('bad','No')],
-      ...DRIVER_PAPERS.map(([field,name,num])=>[esc(name),esc(d[num]||'—'),esc(d[field]?fmtDate(d[field]):'—'),
-        !d[field]?statusChip('neutral','No date'):d[field]<todayISO()?statusChip('bad','Expired'):papersSoon({[field]:d[field]}).length?statusChip('warn','Expires soon'):statusChip('ok','Valid')])]))+
-    panel('Vehicle',kv([['Type',d.vehicleType],['Registration expiry',d.vehicleExpiry?fmtDate(d.vehicleExpiry):'']]))+
+    panel('Driver details',kv([['Code',d.code],['Vehicle type',d.vehicleType],['Driving licence number',d.licenseNo],
+      ['Official papers on file',d.hasPapers?'Yes':'No']]))+
     panel('Trips · '+trips.length,table(['Packing no.','Date','Customer / project','Route','Km','Status','Papers'],trips.map(t=>[
       `<button type="button" class="link-btn" onclick="closeModal();tripView(${escapeArg(t.id)})">${esc(t.no)}</button>`,esc(fmtDate(t.date)),
       cell(t.customerName||'—',t.project),esc((t.from||'—')+' → '+(t.location||'—')),esc(t.km?nfmt(t.km,1):'—'),tripChip(t),esc(t.paperStatus||'—')]),
@@ -6463,7 +6595,7 @@ function driversPage(){
     (blocked.length?note('⛔ No delivery can go out with: '+blocked.map(d=>d.name+' ('+papersIssues(d)[0]+')').join(' · '),'bad'):'')+
     kanban(drivers.map(d=>{
       const trips=driverTrips(d.id), where=driverWhere(d);
-      return {open:`driverView(${escapeArg(d.id)})`,search:[d.name,d.phone,d.kind,d.vehicleType].filter(Boolean).join(' '),
+      return {open:`driverView(${escapeArg(d.id)})`,search:[d.code,d.name,d.phone,d.kind,d.vehicleType].filter(Boolean).join(' '),
         html:`${companyAvatar(d,'co-avatar-md')}<div class="o-card-main"><div class="o-card-title">${esc(d.name)}</div>
           <div class="o-card-line">${esc(d.vehicleType||d.kind||'')}</div>
           ${d.phone?`<div class="o-card-line">${ic('phone')}${esc(d.phone)}</div>`:''}
@@ -6471,7 +6603,7 @@ function driversPage(){
           <div class="o-card-line o-muted">${esc(where.text)}</div></div>`};
     }),{placeholder:'Search drivers by name, phone or vehicle…',noun:'drivers',empty:'Add your drivers: name, phone, vehicle and official papers.',
       list:{columns:['Driver','Type','Phone','Vehicle','Official papers','Trips','Distance','Where now'],
-        rows:drivers.map(d=>{const trips=driverTrips(d.id);return [`<div class="record-media co-media">${companyAvatar(d)}<div>${cell(d.name)}</div></div>`+openBtn(`driverView(${escapeArg(d.id)})`),
+        rows:drivers.map(d=>{const trips=driverTrips(d.id);return [`<div class="record-media co-media">${companyAvatar(d)}<div>${cell(d.name,d.code||'')}</div></div>`+openBtn(`driverView(${escapeArg(d.id)})`),
           esc(d.kind||'—'),esc(d.phone||'—'),esc(d.vehicleType||'—'),papersChip(d),esc(trips.length),esc(nfmt(tripKm(trips),1)+' km'),esc(driverWhere(d).text)];})}});
 }
 /* ---------------- Deliveries (operations): created from confirmed sales orders and dispatch jobs ----------------
@@ -7087,8 +7219,15 @@ const App={
       </div></nav>`;
   },
   back(){this.record=null;this.editing=false;this.render();window.scrollTo(0,0);},
-  discard(){this.editing=false;this.render();window.scrollTo(0,0);},
+  discard(){
+    const close=()=>{Drafts.leave(false);this.editing=false;this.render();window.scrollTo(0,0);};
+    if(!Drafts.dirty())return close();
+    confirmModal({title:'Discard your changes?',message:'What you typed into this form will be deleted. To keep it for later, click the page name in the breadcrumb or any menu instead — it stays as a draft.',
+      confirmText:'Discard changes',danger:true,onConfirm:close});
+  },
+  leaveForm(){this.editing=false;this.render();window.scrollTo(0,0);},
   render(){
+    if(Drafts.current)Drafts.leave(true);
     $('#sidebar').innerHTML=this.nav();
     $('#topbar').innerHTML=this.top();wireGlobalSearch();
     const screens={dashboard,tracking:trackingPage,drivers:driversPage,deliveries:deliveriesPage,sales:salesPage,production:productionPage,purchase:purchasingPage,movement:inventoryPage,
@@ -7110,10 +7249,154 @@ const App={
       finally{this.recordRendering=false;}
     }
     document.body.classList.toggle('o-record',!!this.record);
+    if(!this.record&&!utility&&!isOwner()){
+      const bar=Drafts.bar(this.route);
+      if(bar){const head=view.querySelector(':scope > .view-head,:scope > .o-cp');head?head.insertAdjacentHTML('afterend',bar):view.insertAdjacentHTML('afterbegin',bar);}
+    }
     stripWrites($('#view'));
     startClock();
+    if(!Drafts.booted&&state){Drafts.booted=true;setTimeout(()=>Drafts.resume(),0);}
   }
 };
+/* ---------------- Drafts: nothing typed into a form is ever lost ----------------
+   Every New / Add / Edit form page is saved in this browser while you type. Clicking another menu, the breadcrumb,
+   or refreshing the page keeps it: after a refresh the form comes back by itself, and the list page shows
+   "Unsaved draft — Continue". Only Save or Discard clears a draft. (A chosen photo file cannot be kept — pick it again.) */
+const DRAFT_EDITORS=['locationEdit','simpleCompanyEdit','companyEdit','masterEdit','variantEdit','recipeEdit','planEdit','orderEdit',
+  'purchaseEdit','receiptEdit','dispatchEdit','deliveryEdit','salesEdit','profileEdit','driverEdit','tripEdit'];
+const Drafts={
+  current:null,lastForm:null,booted:false,
+  store(){return 'ambs-drafts:'+((typeof CLOUD!=='undefined'&&CLOUD.email)||'local');},
+  all(){try{return JSON.parse(localStorage.getItem(this.store())||'{}')||{};}catch{return {};}},
+  put(all){try{localStorage.setItem(this.store(),JSON.stringify(all));}catch{}},
+  get(id){return this.all()[id]||null;},
+  drop(id){const all=this.all();if(all[id]){delete all[id];this.put(all);}},
+  idOf(fn,args){const a=[...args];while(a.length&&(a[a.length-1]==null||a[a.length-1]===''))a.pop();return fn+':'+JSON.stringify(a);},
+  setOpen(id){try{id?sessionStorage.setItem('ambs-open-form',id):sessionStorage.removeItem('ambs-open-form');}catch{}},
+  getOpen(){try{return sessionStorage.getItem('ambs-open-form')||'';}catch{return '';}},
+  skip:el=>!el.name||['file','submit','button','reset'].includes(el.type),
+  keyOf(el,form){
+    const line=el.closest('.erp-line,.plus-row');
+    if(!line)return el.name;
+    const box=line.closest('[data-repeat-box]'), lines=box?._lines?.()||[];
+    return 'L'+[...form.querySelectorAll('[data-repeat-box]')].indexOf(box)+'.'+lines.indexOf(line)+':'+el.name.replace(/^[^_]*_/,'');
+  },
+  snapshot(form){
+    const fields={};
+    for(const el of form.elements){
+      if(this.skip(el))continue;
+      (fields[this.keyOf(el,form)]??=[]).push(el.type==='checkbox'||el.type==='radio'?el.checked:el.value);
+    }
+    return {boxes:[...form.querySelectorAll('[data-repeat-box]')].map(b=>b._lines?b._lines().length:0),fields};
+  },
+  /* what counts as a change: empty extra lines and generated line ids do not */
+  sig(snap){
+    const out={};
+    for(const [k,v] of Object.entries(snap.fields).sort()){
+      if(/^L/.test(k)&&(/:id$/.test(k)||v.every(x=>x===''||x===false)))continue;
+      out[k]=v;
+    }
+    return JSON.stringify(out);
+  },
+  restore(form,snap){
+    [...form.querySelectorAll('[data-repeat-box]')].forEach((box,i)=>{
+      if(box._add)for(let n=box._lines().length;n<(snap.boxes?.[i]||0);n++)box._add();
+    });
+    // two passes: choosing a company or category can add the fields that depend on it
+    for(let pass=0;pass<2;pass++){
+      const seen={};
+      for(const el of [...form.elements]){
+        if(this.skip(el))continue;
+        const k=this.keyOf(el,form), i=seen[k]=(seen[k]??-1)+1, v=snap.fields?.[k]?.[i];
+        if(v===undefined)continue;
+        if(el.type==='checkbox'||el.type==='radio'){if(el.checked===v)continue;el.checked=v;}
+        else{if(el.value===v)continue;el.value=v;}
+        el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));
+      }
+    }
+    form.querySelectorAll('.erp-options').forEach(m=>m.replaceChildren());
+  },
+  attach(form,fn,args){
+    if(!form||form._draft||!form.isConnected||!form.classList.contains('o-form-page'))return;
+    const id=this.idOf(fn,args);
+    const cur={id,form,fn,args,title:form.querySelector('.o-bc-cur')?.textContent||'Form',route:App.route,initial:this.sig(this.snapshot(form))};
+    form._draft=cur;this.current=cur;this.setOpen(id);
+    const saved=this.get(id);
+    if(saved?.snap){
+      this.restore(form,saved.snap);
+      form.querySelector('.erp-modal-body')?.insertAdjacentHTML('afterbegin',`<div class="draft-bar draft-bar-in">${ic('save')}<span><b>Your unsaved draft is back</b> (saved ${esc(this.when(saved.at))}). Carry on where you stopped.</span>
+        <button type="button" class="btn btn-sm btn-ghost" onclick="Drafts.startOver()">Start over</button></div>`);
+    }
+    let timer=null;
+    cur.flush=()=>{clearTimeout(timer);timer=null;this.save(cur);};
+    const later=()=>{clearTimeout(timer);timer=setTimeout(cur.flush,200);};
+    form.addEventListener('input',later);form.addEventListener('change',later);
+    form.addEventListener('click',e=>{if(e.target.closest('.plus-btn,.erp-remove,.btn-sm'))later();});
+  },
+  save(cur){
+    if(!cur.form.isConnected)return;
+    const snap=this.snapshot(cur.form);
+    if(this.sig(snap)===cur.initial){this.drop(cur.id);return;}
+    const all=this.all();
+    all[cur.id]={fn:cur.fn,args:cur.args,title:cur.title,route:cur.route,at:new Date().toISOString(),snap};
+    this.put(all);
+  },
+  dirty(){const c=this.current;return !!(c&&c.form.isConnected&&this.sig(this.snapshot(c.form))!==c.initial);},
+  /* Leaving the form page: keep=true keeps the draft (menu click, breadcrumb), keep=false deletes it (Discard, saved). */
+  leave(keep=true){
+    const c=this.current;if(!c)return;
+    this.current=null;this.setOpen('');
+    if(!keep){this.drop(c.id);return;}
+    if(c.form.isConnected)c.flush();
+    if(this.get(c.id))setTimeout(()=>toast('“'+c.title+'” is kept as a draft — open it again any time to continue.','ok'),0);
+  },
+  finish(form){if(form?._draft&&this.current===form._draft)this.leave(false);else if(form?._draft)this.drop(form._draft.id);},
+  when(at){const d=new Date(at);return isNaN(d)?'earlier':d.toDateString()===new Date().toDateString()?
+    'today '+d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}):fmtDate(at.slice(0,10));},
+  open(id){
+    const d=this.get(id);if(!d||typeof window[d.fn]!=='function')return this.forget(id);
+    if(App.route!==d.route)App.go(d.route);
+    window[d.fn](...d.args);
+  },
+  forget(id){
+    const d=this.get(id);
+    confirmModal({title:'Delete this draft?',message:'What was typed into “'+esc(d?.title||'this form')+'” will be deleted.',confirmText:'Delete draft',danger:true,
+      onConfirm:()=>{this.drop(id);App.render();}});
+  },
+  startOver(){
+    const c=this.current;if(!c)return;
+    this.drop(c.id);this.current=null;this.setOpen('');
+    App.render();window[c.fn](...c.args);
+  },
+  /* the list page shows its drafts at the top */
+  bar(route){
+    const rows=Object.entries(this.all()).filter(([,d])=>d.route===route).sort((a,b)=>String(b[1].at).localeCompare(String(a[1].at)));
+    return rows.map(([id,d])=>`<div class="draft-bar">${ic('save')}<span><b>Unsaved draft:</b> ${esc(d.title)} <small>· saved ${esc(this.when(d.at))}</small></span>
+      <button type="button" class="btn btn-sm btn-primary" onclick="Drafts.open(${escapeArg(id)})">Continue</button>
+      <button type="button" class="btn btn-sm btn-ghost" onclick="Drafts.forget(${escapeArg(id)})">Discard</button></div>`).join('');
+  },
+  /* after a refresh: reopen the form that was open */
+  resume(){
+    const id=this.getOpen(), d=id&&this.get(id);
+    if(!d){this.setOpen('');return;}
+    if(typeof window[d.fn]!=='function'||isOwner())return;
+    if(App.route!==d.route)App.go(d.route);
+    try{window[d.fn](...d.args);}catch(e){toast(e.message,'bad');}
+  }
+};
+for(const fn of DRAFT_EDITORS){
+  const orig=window[fn];
+  if(typeof orig!=='function')continue;
+  window[fn]=function(...args){
+    const before=Drafts.lastForm, result=orig.apply(this,args);
+    const done=()=>{const form=Drafts.lastForm;if(form&&form!==before)Drafts.attach(form,fn,args);};
+    if(result&&typeof result.then==='function')result.then(done,()=>{});else done();
+    return result;
+  };
+}
+window.addEventListener('pagehide',()=>Drafts.current?.flush?.());
+window.addEventListener('beforeunload',()=>Drafts.current?.flush?.());
+
 /* Views opened from a page become full record pages (breadcrumb back to the list); from inside a dialog they stay dialogs. */
 for(const fn of ['masterView','companyView','driverView','tripView','recipeView','trackItem','salesView','purchaseView','dispatchView',
   'orderView','planView','eventView','variantsView','locationView']){
