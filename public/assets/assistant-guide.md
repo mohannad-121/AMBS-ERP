@@ -1035,7 +1035,7 @@ A packing list shows exactly what goes on the truck for one delivery.
 2. **Deliveries → To deliver → Assign driver**. The trip gets a packing-list number **PL<year>-<month>-<nnn>**.
 3. Open the dispatch job or the trip and click **Print packing list**. (On a sales order it is under **⚙ Actions → Packing list**.)
 
-The PDF has the PL number, date, customer, reference, ship-from store, driver and phone, vehicle, delivery address with a Google Maps link, the product and quantity, then every part with code, quantity, unit and a **Packed [ ]** tick column, and signature lines for **Packed by**, **Driver** and **Received by (customer)**. Before a driver is assigned it still prints, with "Not assigned yet". After delivery it prints exactly what was delivered on that trip.
+The PDF has the PL number, date, customer, reference, ship-from store, driver and phone, vehicle, delivery address with a Google Maps link, the product (with its photo) and quantity, then every part with its **picture**, code, quantity, unit and a **Packed [ ]** tick column, and signature lines for **Packed by**, **Driver** and **Received by (customer)**. Before a driver is assigned it still prints, with "Not assigned yet". After delivery it prints exactly what was delivered on that trip.
 
 ## Dispatch job statuses and cancelling
 Keywords: dispatch status, open, partially delivered, delivered, cancelled, cancel job, إلغاء الشحنة
@@ -1089,7 +1089,7 @@ There are no date-range filters or valuation reports. Filter the CSV in Excel if
 ## Download PDF of a plan, order, purchase, delivery or movement
 Keywords: pdf, download pdf, print, print order, print purchase, export record, طباعة, تحميل
 
-Open the record and click **⚙ Actions → PDF** (plans: **Download PDF**). Available for production plans and orders, purchases, sales orders, dispatch jobs, stock movements and drivers. Dispatch jobs and trips also have **Print packing list** at the top. The PDF opens in a new tab and is saved to **Downloads**.
+Open the record and click **⚙ Actions → PDF** (plans: **Download PDF**). PDFs that list items (packing list, dispatch job, sales order, purchase, production order / plan, stock movement, Stock PDF) show each item's **picture** next to it — add photos to raw materials, parts and products so they appear. The company logo from Settings & Data is printed in the header. Available for production plans and orders, purchases, sales orders, dispatch jobs, stock movements and drivers. Dispatch jobs and trips also have **Print packing list** at the top. The PDF opens in a new tab and is saved to **Downloads**.
 
 ## Stock alerts and warnings ⚠️
 Keywords: alerts, warnings, low stock, reorder, shortage alert, safety stock alert, تنبيه
