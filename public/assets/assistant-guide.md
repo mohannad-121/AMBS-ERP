@@ -199,7 +199,7 @@ Keywords: other trip, manual trip, trip without order, return trip, collect, tra
 ## Delivery and driver reports (PDF / Excel)
 Keywords: export deliveries, delivery report, driver report, trips excel, trips pdf, driver pdf, km report, monthly deliveries, تقرير التوصيل, تقرير السائق
 
-- **Deliveries → PDF / Excel**: the trips currently shown (use the filters first, e.g. a month or a driver). The PDF's **Items** column shows a photo of what each trip delivered (the product, or its first part / sales-order item that has a photo); trips without items stay blank. Excel has a **Deliveries** sheet and a **Drivers** sheet (papers, trips, km, status).
+- **Deliveries → PDF / Excel**: the trips currently shown (use the filters first, e.g. a month or a driver). The PDF's **Items on this trip** column shows **every item** on each trip as a small picture with its quantity under it (e.g. ×20). Items without a photo show as a grey box with their code. Trips without items (Other trip) stay blank. The driver's **⚙ Actions → PDF** looks the same. Excel has a **Deliveries** sheet and a **Drivers** sheet (papers, trips, km, status).
 - **Driver page → ⚙ Actions → PDF / Excel**: that driver's trips and papers.
 - PDFs open in a new tab and are saved to **Downloads**. Excel files go to **Downloads** (Ctrl+J); Excel may ask you to click **Enable Editing**.
 

@@ -394,11 +394,18 @@ function drawPDFTable(doc,options){
       const cell=raw&&typeof raw==='object'?raw:{content:raw};
       const span=Math.min(cell.colSpan||1,head.length-index), area=cols.slice(index,index+span).reduce((n,w)=>n+w,0);
       const strings=doc.splitTextToSize(String(cell.content??''),area-pad*2);
-      const result={x,area,strings,style:cell.styles||{},image:cell.image||null,imageSize:cell.imageSize||Math.min(40,area-pad*2)};
+      const result={x,area,strings,style:cell.styles||{},image:cell.image||null,imageSize:cell.imageSize||Math.min(40,area-pad*2),
+        gallery:cell.gallery||null,gallerySize:cell.gallerySize||26};
       x+=area;return result;
     });
   }
-  function rowHeight(cells){return Math.max(Math.max(1,...cells.map(c=>c.strings.length))*step,...cells.map(c=>c.image?c.imageSize:0))+pad*2;}
+  const GAP=4, CAPTION=8;
+  function galleryLayout(c){
+    const per=Math.max(1,Math.floor((c.area-pad*2+GAP)/(c.gallerySize+GAP)));
+    return {per,rows:Math.ceil(c.gallery.length/per)};
+  }
+  function galleryHeight(c){if(!c.gallery?.length)return 0;const {rows}=galleryLayout(c);return rows*(c.gallerySize+CAPTION+GAP)-GAP;}
+  function rowHeight(cells){return Math.max(Math.max(1,...cells.map(c=>c.strings.length))*step,...cells.map(c=>c.image?c.imageSize:0),...cells.map(galleryHeight))+pad*2;}
   function draw(cells,heading,alternate,maxLines=Infinity){
     const height=Math.min(rowHeight(cells),maxLines*step+pad*2);
     for(const c of cells){
@@ -415,6 +422,22 @@ function drawPDFTable(doc,options){
         const box=c.imageSize, r=c.image.w/c.image.h, w=r>=1?box:box*r, h=r>=1?box/r:box;
         try{doc.addImage(c.image.data,'JPEG',c.x+(c.area-w)/2,y+(height-h)/2,w,h,undefined,'FAST');}catch(e){}
         c.image=null;
+      }
+      if(c.gallery?.length){
+        const {per}=galleryLayout(c), box=c.gallerySize;
+        c.gallery.forEach((g,k)=>{
+          const gx=c.x+pad+(k%per)*(box+GAP), gy=y+pad+Math.floor(k/per)*(box+CAPTION+GAP);
+          if(g.pic){const r=g.pic.w/g.pic.h,w=r>=1?box:box*r,h=r>=1?box/r:box;
+            try{doc.addImage(g.pic.data,'JPEG',gx+(box-w)/2,gy+(box-h)/2,w,h,undefined,'FAST');}catch(e){}}
+          else{ // no photo: grey box with the item code
+            doc.setFillColor(241,243,245);doc.setDrawColor(210,214,220);doc.rect(gx,gy,box,box,'FD');
+            doc.setFont('helvetica','normal');doc.setFontSize(4.6);doc.setTextColor(110);
+            doc.text(doc.splitTextToSize(String(g.label||'').slice(0,24),box-2).slice(0,3),gx+box/2,gy+box/2-2,{align:'center'});}
+          doc.setFont('helvetica','bold');doc.setFontSize(6);doc.setTextColor(40);
+          doc.text(String(g.caption||''),gx+box/2,gy+box+CAPTION-2,{align:'center'});
+        });
+        c.gallery=null;
+        doc.setFontSize(fontSize);
       }
     }
     y+=height;
@@ -3221,7 +3244,7 @@ const TITLES={owner:'Owner overview',team:'Team activity',items:'Items & stock',
   'plan-new':'Production','purchase-new':'Purchasing'};
 /* Owner (super admin) gets his own menu: the team's work, items and tracking. Admins see the same pages under "Owner view". */
 /* Build version: stamped by scripts/bump-version.py together with the ?v= links in index.html. */
-const AMBS_VERSION='2026.11.26-1745';
+const AMBS_VERSION='2026.11.26-1747';
 const isOwner=()=>typeof CLOUD!=='undefined'&&CLOUD.role==='owner';
 const canSeeOwner=()=>typeof CLOUD!=='undefined'&&['owner','admin'].includes(CLOUD.role);
 const OWNER_GROUPS=[
@@ -5756,9 +5779,10 @@ function partSummary(){
     const [c,l,u]=JSON.parse(k);return [c,locName(state,l),v.keys.size,qfmt(v.qty,u)];
   }));
 }
-async function pdf(title,columns,rows,{landscape=false,pictures=true,pictureOf=null,pictureTitle='Picture'}={}){
+async function pdf(title,columns,rows,{landscape=false,pictures=true,pictureOf=null,pictureTitle='Picture',galleryOf=null,galleryWidth=.26}={}){
   if(!PDFR._ok())return;
   await PDFR._prepare();
+  if(galleryOf)return galleryPDF(title,columns,rows,{landscape,galleryOf,galleryWidth,pictureTitle});
   // pictureOf(i) gives a row's photo directly; otherwise the row's item is found from its label
   const srcs=!pictures?[]:pictureOf?rows.map((_,i)=>pictureOf(i)||''):rows.map(r=>{const id=pdfRowItem(r);return id?itemPicture(state,id):'';});
   const withPics=srcs.some(Boolean);
@@ -5771,6 +5795,24 @@ async function pdf(title,columns,rows,{landscape=false,pictures=true,pictureOf=n
   doc.autoTable({
     startY:94,head:[head],body,widths:withPics?[picW,...columns.map(()=>(1-picW)/columns.length)]:undefined,
     margin:{top:94,bottom:45,left:40,right:40},styles:{fontSize:8,overflow:'linebreak'},headStyles:{fillColor:[30,35,43]},
+    didDrawPage(){
+      drawBrand();
+      doc.setTextColor(30,35,43);doc.setFont('helvetica','bold');doc.setFontSize(11);
+      doc.text(doc.splitTextToSize(title,doc.internal.pageSize.getWidth()-80)[0],40,79);
+    }
+  });
+  doc.save('AMBS_'+title.replace(/[^a-z0-9_-]+/gi,'_')+'.pdf');
+}
+/* A list PDF whose first column shows every item of the row as a small picture with its quantity. */
+async function galleryPDF(title,columns,rows,{landscape,galleryOf,galleryWidth,pictureTitle}){
+  const lists=rows.map((_,i)=>galleryOf(i)||[]);
+  const pics=await Promise.all(lists.map(list=>Promise.all(list.map(g=>g.src?pdfPicture(g.src,120):null))));
+  const doc=PDFR._doc(landscape?'landscape':'portrait'), drawBrand=PDFR._hf(doc);
+  const body=rows.map((row,i)=>[{content:'',gallery:lists[i].map((g,k)=>({pic:pics[i][k],caption:g.caption,label:g.label})),gallerySize:26},
+    ...row.map(x=>String(x??''))]);
+  doc.autoTable({
+    startY:94,head:[[pictureTitle,...columns]],body,widths:[galleryWidth,...columns.map(()=>(1-galleryWidth)/columns.length)],
+    margin:{top:94,bottom:45,left:40,right:40},styles:{fontSize:7.5,overflow:'linebreak'},headStyles:{fillColor:[30,35,43]},
     didDrawPage(){
       drawBrand();
       doc.setTextColor(30,35,43);doc.setFont('helvetica','bold');doc.setFontSize(11);
@@ -6599,12 +6641,13 @@ function driverExportRows(drivers){
     d.hasPapers?'Yes':'No',papersIssues(d).join('; ')||'OK',
     trips.length,trips.filter(t=>t.status==='Delivered').length,Number(tripKm(trips).toFixed(1)),driverWhere(d).text];});
 }
-/* the photo of what a trip delivered: the dispatch job's product (or its first part with a photo), or the sales order's first item with a photo */
-function tripPicture(t){
+/* every item on a trip (what was delivered, or what is packed for it) with its picture and quantity */
+function tripItems(t){
   const job=t.jobId&&get(state,'jobs',t.jobId), sale=t.salesId&&get(state,'sales',t.salesId);
-  const ids=job?[job.productId,...(job.parts||[]).map(l=>l.sku)]:sale?sale.lines.map(l=>l.sku):[];
-  for(const id of ids){const src=itemPicture(state,id);if(src)return src;}
-  return '';
+  if(!job&&!sale)return [];
+  const {lines}=packingContents(t,job||null,sale||null);
+  return lines.map(l=>{const it=item(state,l.sku);
+    return {src:itemPicture(state,l.sku),caption:'×'+qfmt(l.qty).replace(/\s+\S+$/,''),label:it?.code||it?.name||''};});
 }
 function exportDeliveries(kind,driverId=''){
   const trips=driverId?driverTrips(driverId).sort((a,b)=>(b.date||'').localeCompare(a.date||'')):Drv.filtered();
@@ -6616,7 +6659,7 @@ function exportDeliveries(kind,driverId=''){
   pdf((driverId?'Driver trips · '+drivers[0].name+' · '+(papersOk(drivers[0])?'Papers OK':'PAPERS MISSING'):'Delivery tracking')+' · '+fmtDate(todayISO()),cols,
     trips.map(t=>[t.no,fmtDate(t.date),t.customerName||'',t.project||'',t.system||'',t.status+(t.priority==='Urgent'?' · URGENT':''),
       get(state,'drivers',t.driverId)?.name||'',t.vehicle||'',t.location||'',t.km?nfmt(t.km,1):'',t.deliveredAt?fmtDate(t.deliveredAt):'',t.paperStatus||'']),
-    {landscape:true,pictureOf:i=>tripPicture(trips[i]),pictureTitle:'Items'});
+    {landscape:true,galleryOf:i=>tripItems(trips[i]),pictureTitle:'Items on this trip'});
 }
 function driverView(id){
   const d=get(state,'drivers',id), trips=driverTrips(id).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
