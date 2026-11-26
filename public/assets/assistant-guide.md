@@ -190,7 +190,7 @@ Keywords: start trip, on the way, delivered, mark delivered, finish delivery, cl
 2. **Start trip** (one click) → status **On the way**; Live Tracking and the driver card show it on the road.
 3. When the customer has the goods → **Delivered** → confirm.
 
-**Delivered** takes the goods out of the store (parts for *Pack from parts*, products for *Finished stock*, or the sales order lines), posts the movement *store → customer* with the trip and driver, and closes the order (**Delivered**). Edit the trip's **Delivery papers** status (Pending / Signed & returned / Missing) with **Edit**. **⚙ Actions** has **Driver**, **Sales order** / **Dispatch job** links and **Delete trip**.
+**Delivered** takes the goods out of the store (parts for *Pack from parts*, products for *Finished stock*, or the sales order lines), posts the movement *store → customer* with the trip and driver, and closes the order (**Delivered**). When the driver brings back the customer's **signed delivery note** (packing list), open the delivered trip and click **Mark papers signed** (or **Mark papers missing**; **Mark papers pending** undoes it). The change is shown in the trip's history. Before delivery the papers status can also be set with **Edit**. Note: this is different from the driver's **Official papers** (licence / Mulkiya on file). **⚙ Actions** has **Driver**, **Sales order** / **Dispatch job** links and **Delete trip**.
 
 ## Other trip (not linked to an order)
 Keywords: other trip, manual trip, trip without order, return trip, collect, transfer trip, رحلة اخرى

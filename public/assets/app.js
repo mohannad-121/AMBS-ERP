@@ -3244,7 +3244,7 @@ const TITLES={owner:'Owner overview',team:'Team activity',items:'Items & stock',
   'plan-new':'Production','purchase-new':'Purchasing'};
 /* Owner (super admin) gets his own menu: the team's work, items and tracking. Admins see the same pages under "Owner view". */
 /* Build version: stamped by scripts/bump-version.py together with the ?v= links in index.html. */
-const AMBS_VERSION='2026.11.26-1854';
+const AMBS_VERSION='2026.11.26-1858';
 const isOwner=()=>typeof CLOUD!=='undefined'&&CLOUD.role==='owner';
 const canSeeOwner=()=>typeof CLOUD!=='undefined'&&['owner','admin'].includes(CLOUD.role);
 const OWNER_GROUPS=[
@@ -3339,7 +3339,8 @@ function recordHistory(rec){
   const push=(at,text,by)=>{if(at)out.push({at,text,by});};
   if(r){push(r.at,['sales','purchases','jobs','orders','plans','trips'].includes(ref.table)?'Created':'Last saved',r.by);
     push(r.updated,'Updated',r.by);push(r.departedAt,'Trip started — driver on the way',r.by);push(r.completedAt,'Production completed',r.by);
-    if(r.deliveredAt&&ref.table==='trips')push(r.deliveredAt,'Delivered',r.by);}
+    if(r.deliveredAt&&ref.table==='trips')push(r.deliveredTime||(String(r.updated||'').slice(0,10)===r.deliveredAt?r.updated:r.deliveredAt),'Delivered',r.by);
+    if(r.papersAt&&ref.table==='trips')push(r.papersAt,'Delivery papers: '+r.paperStatus,r.papersBy||r.by);}
   for(const e of state.events)if(e.partyId===id||e.salesId===id||e.purchaseId===id||e.jobId===id||e.orderId===id||e.id==='production:'+id||
     e.lines.some(l=>l.sku===id))push(e.at,evType(e.type)+(e.note?' · '+e.note:''),e.by);
   for(const t of state.trips)if(t.driverId===id||t.salesId===id||t.jobId===id||t.customerId===id){
@@ -6668,7 +6669,19 @@ function tripStatus(id,status){
       trip.status=status;trip.updated=now();
       if(status==='On the way')trip.departedAt=now();
       if(status==='Delivered'&&!trip.deliveredAt)trip.deliveredAt=todayISO();
+      if(status==='Delivered')trip.deliveredTime=now();
     },status==='On the way'?'Start trip':'Mark delivered');
+}
+/* the customer's signed delivery note (packing list) came back — or is missing */
+async function tripPapers(id,status){
+  try{
+    await commit(s=>{const t=get(s,'trips',id);need(t,'This trip no longer exists.');
+      // trips delivered before the exact time was saved: keep their delivery time before "updated" changes
+      if(t.status==='Delivered'&&!t.deliveredTime)t.deliveredTime=String(t.updated||'').slice(0,10)===t.deliveredAt?t.updated:t.deliveredAt;
+      t.paperStatus=status;t.papersAt=now();t.papersBy=whoami();t.updated=now();});
+    App.render();
+    toast(status==='Signed & returned'?'Delivery papers marked as signed and returned.':status==='Missing'?'Delivery papers marked as missing.':'Delivery papers set back to pending.','ok');
+  }catch(e){toast(e.message,'bad');}
 }
 function deleteTrip(id){
   const t=get(state,'trips',id);
@@ -6682,6 +6695,10 @@ function tripView(id){
       t.status==='Next'?button('Start trip',`tripStatus(${args},'On the way')`,'btn-sm btn-primary'):'',
       t.status==='On the way'?button('Delivered',`tripStatus(${args},'Delivered')`,'btn-sm btn-primary'):'',
       ['Next','On the way'].includes(t.status)?small('Edit',`tripEdit(${args})`):'',
+      // the signed delivery note comes back after the delivery: record it here
+      t.status==='Delivered'&&t.paperStatus!=='Signed & returned'?button('Mark papers signed',`tripPapers(${args},'Signed & returned')`,'btn-sm btn-primary','ok'):'',
+      t.status==='Delivered'&&t.paperStatus!=='Missing'?small('Mark papers missing',`tripPapers(${args},'Missing')`):'',
+      t.status==='Delivered'&&t.paperStatus&&t.paperStatus!=='Pending'?small('Mark papers pending',`tripPapers(${args},'Pending')`):'',
       t.salesId||t.jobId?button('Print packing list',`packingListPDF('trip',${args})`,'btn-sm','pdf'):'',
       t.salesId?small('Sales order',`salesView(${escapeArg(t.salesId)})`):'',t.jobId?small('Dispatch job',`dispatchView(${escapeArg(t.jobId)})`):''],
       ['Next','On the way','Delivered'],t.status)+`<div class="co-details">${[
@@ -6690,7 +6707,7 @@ function tripView(id){
     ['Customer',esc(t.customerName||get(state,'customers',t.customerId)?.name||'—')],['Project',esc(t.project||'—')],
     ['Route',esc((t.from||'—')+' → '+(t.location||'—'))],['Delivery location on map',mapBtn(t.mapUrl,'Open in Google Maps')||'—'],['Distance',esc(t.km?nfmt(t.km,1)+' km':'—')],
     ['Trip date',esc(fmtDate(t.date))],['Delivery date',esc(t.deliveredAt?fmtDate(t.deliveredAt):'—')],
-    ['System',esc(t.system||'—')],['Short description',esc(t.description||'—')],['Delivery papers',esc(t.paperStatus||'—')],
+    ['System',esc(t.system||'—')],['Short description',esc(t.description||'—')],['Delivery papers (signed delivery note)',t.paperStatus==='Signed & returned'?statusChip('ok','Signed & returned'):t.paperStatus==='Missing'?statusChip('bad','Missing'):statusChip('warn',t.paperStatus||'Pending')],
     ['Dispatch job',esc(get(state,'jobs',t.jobId)?.no||'—')],['Recorded by',esc(t.by||'—')]
   ].map(([k,v])=>`<div><span>${esc(k)}</span><div>${v}</div></div>`).join('')}</div>`+(t.notes?note(t.notes):''),
   actionGroup(d?small('Driver',`closeModal();driverView(${escapeArg(d.id)})`):'',
