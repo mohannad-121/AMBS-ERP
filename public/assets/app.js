@@ -3176,7 +3176,7 @@ const TITLES={owner:'Owner overview',team:'Team activity',items:'Items & stock',
   'plan-new':'Production','purchase-new':'Purchasing'};
 /* Owner (super admin) gets his own menu: the team's work, items and tracking. Admins see the same pages under "Owner view". */
 /* Build version: stamped by scripts/bump-version.py together with the ?v= links in index.html. */
-const AMBS_VERSION='2026.11.26-1552';
+const AMBS_VERSION='2026.11.26-1620';
 const isOwner=()=>typeof CLOUD!=='undefined'&&CLOUD.role==='owner';
 const canSeeOwner=()=>typeof CLOUD!=='undefined'&&['owner','admin'].includes(CLOUD.role);
 const OWNER_GROUPS=[
@@ -3284,6 +3284,8 @@ function recordHistory(rec){
     <span class="o-msg-avatar">${esc(initials(m.by||'System'))}</span><div><div class="o-msg-meta"><b>${esc(m.by||'System')}</b> · ${esc(stamp(m.at.length<=10?m.at+'T12:00:00':m.at))}</div>
     <div class="o-msg-text">${esc(m.text)}</div></div></div>`).join(''):'<div class="o-msg-empty">Nothing recorded yet.</div>'}</aside>`;
 }
+/* joins name / address / city without repeating the same text (a site is often named after its address) */
+const uniqText=(x,i,a)=>!!x&&a.indexOf(x)===i;
 const dateSort=(a,b)=>(b.at||'').localeCompare(a.at||'');
 const valOf=(form,name)=>form.elements.namedItem(name)?.value?.trim()||'';
 const checked=(form,name)=>form.elements.namedItem(name)?.checked===true;
@@ -5395,7 +5397,7 @@ function dispatchEdit(id){
   productEditor((rows,location,form)=>{
     const product=rows[0], destination=get(state,'locations',valOf(form,'destination'));
     const finished=valOf(form,'fulfilment')==='Finished stock';
-    return (destination?note('Destination · '+[destination.name,destination.address,destination.city].filter(Boolean).join(' · '))+mapAction(destination):'')+
+    return (destination?note('Destination · '+[destination.name,destination.address,destination.city].filter(uniqText).join(' · '))+mapAction(destination):'')+
       (finished?panel('Finished stock',textTable(['Product','Required','Available'],[[labelOf(state,product.productId),product.qty,
         qfmt(availability(state,product.productId,location),item(state,product.productId)?.unit)]])):
       panel('Packing requirements',table(['Part / SKU','Standard','Adjusted','Available at source'],product.parts.map(p=>[
@@ -5454,7 +5456,7 @@ function dispatchView(id){
       button('Print packing list',`packingListPDF('job',${args})`,'btn-sm','pdf'),
       open?small('Cancel job',`cancelJob(${args})`):''],
       ['Open','Partially delivered','Delivered'].filter(s=>s!=='Partially delivered'||j.status==='Partially delivered'),j.status)+kv([['Product',labelOf(state,j.productId)],['Customer',label(get(state,'customers',j.customerId))],
-    ['Delivery site',[destination.name,destination.address,destination.city].filter(Boolean).join(' · ')],
+    ['Delivery site',[destination.name,destination.address,destination.city].filter(uniqText).join(' · ')],
     ['Custody location',locName(state,j.location)],['Fulfilment',j.finished?'Finished stock':'Pack from parts'],
     ['Track at customer site',j.trackAtDestination?'Yes':'No'],
     ['Ordered',j.qty],['Delivered',j.delivered],['Outstanding',j.qty-j.delivered],['Status',j.status]])+
@@ -5756,7 +5758,7 @@ function packingListPDF(kind,id){
   const W=doc.internal.pageSize.getWidth();
   doc.setTextColor(30,35,43);doc.setFont('helvetica','bold');doc.setFontSize(16);doc.text('PACKING LIST',40,84);
   doc.setFontSize(12);doc.text(String(no||''),W-40,84,{align:'right'});
-  const where=[site?.name,site?.address,site?.city].filter(Boolean).join(', ')||trip?.location||'';
+  const where=[site?.name,site?.address,site?.city].filter(uniqText).join(', ')||trip?.location||'';
   const meta=[['Date',fmtDate(trip?.date||todayISO())],['Customer',customer?.name||trip?.customerName||''],
     ['Reference',[job?job.no+' · '+job.name:'',sale?sale.no+(sale.reference?' · PO '+sale.reference:''):''].filter(Boolean).join(' ')],['Ship from',from],
     ['Driver',driver?driver.name+(driver.phone?' · '+driver.phone:''):'Not assigned yet'],['Vehicle',trip?.vehicle||driver?.vehicleType||''],
@@ -5835,7 +5837,7 @@ function recordPDF(type,id){
     columns=['Part SKU','Standard','Adjusted','Delivery'];
     lines=row.parts.map(l=>[labelOf(state,l.sku),l.standard,l.qty,'']);
     lines.unshift([labelOf(state,row.productId),row.qty,row.delivered,row.status],
-      [get(state,'customers',row.customerId)?.name,row.destinationSnapshot.name,row.destinationSnapshot.address,row.destinationSnapshot.city]);
+      [get(state,'customers',row.customerId)?.name,row.destinationSnapshot.name,row.destinationSnapshot.address===row.destinationSnapshot.name?'':row.destinationSnapshot.address,row.destinationSnapshot.city]);
     lines.splice(2,0,['Stock tracking',row.trackAtDestination?'Customer site custody':'Delivered out','','']);
     lines.push(...state.events.filter(e=>e.jobId===id).map(e=>[e.reference,'','',e.deliveredQty]));
   }
@@ -6465,7 +6467,7 @@ function tripEdit(id,preset={}){
     const j=get(state,'jobs',e.target.value);if(!j)return;
     const c=get(state,'customers',j.customerId);
     if(c){form.elements.customer.value=c.id;form.elements.customerSearch.value=c.name+(c.code?' · '+c.code:'');}
-    if(!form.elements.location.value)form.elements.location.value=[j.destinationSnapshot?.name,j.destinationSnapshot?.address].filter(Boolean).join(', ');
+    if(!form.elements.location.value)form.elements.location.value=[j.destinationSnapshot?.name,j.destinationSnapshot?.address].filter(uniqText).join(', ');
     if(!form.elements.mapUrl.value)form.elements.mapUrl.value=mapsLink(get(state,'locations',j.destination)||{})||companyMap('customers',c);
     if(!form.elements.description.value)form.elements.description.value=labelOf(state,j.productId)+' × '+j.qty;
   });
@@ -6627,13 +6629,13 @@ function deliveryInfo(kind,d,s=state){
   if(kind==='job'){
     const site=get(s,'locations',d.destination)||d.destinationSnapshot||{};
     return {customerId:d.customerId,customerName:customer?.name||'',project:d.name||'',fromLocation:d.location,
-      location:[site.name==='Delivery address'?'':site.name,site.address,site.city].filter(Boolean).join(', '),mapUrl:mapsLink(site)||companyMap('customers',customer),
+      location:[site.name==='Delivery address'?'':site.name,site.address,site.city].filter(uniqText).join(', '),mapUrl:mapsLink(site)||companyMap('customers',customer),
       description:labelOf(s,d.productId)+' × '+(d.qty-d.delivered),items:(d.finished?[{sku:d.productId,qty:d.qty-d.delivered}]:d.parts.map(p=>({sku:p.sku,qty:p.qty*(d.qty-d.delivered)/d.qty})))};
   }
   const site=get(s,'locations',d.siteId)||deliverySite(s,'customers',d.customerId);
   const open=d.lines.filter(l=>l.qty-l.delivered>EPS);
   return {customerId:d.customerId,customerName:customer?.name||'',project:d.reference||d.no,fromLocation:'',
-    location:site?[site.name==='Delivery address'?'':site.name,site.address,site.city].filter(Boolean).join(', '):customer?.address||'',
+    location:site?[site.name==='Delivery address'?'':site.name,site.address,site.city].filter(uniqText).join(', '):customer?.address||'',
     mapUrl:(site&&mapsLink(site))||companyMap('customers',customer),
     description:open.map(l=>item(s,l.sku)?.name+' × '+qfmt(l.qty-l.delivered)).join(', '),items:open.map(l=>({sku:l.sku,qty:l.qty-l.delivered}))};
 }
@@ -7366,7 +7368,8 @@ window.addEventListener('popstate',()=>{
   }
   if(!history.state?.mPage&&page)Mobile.leave();
 });
-Mobile.query.addEventListener?.('change',()=>{if(typeof state!=='undefined'&&state)App.render();});
+// rotating a tablet / resizing only re-arranges the layout — an open form or record stays open
+Mobile.query.addEventListener?.('change',()=>{if(typeof state!=='undefined'&&state)Mobile.sync();});
 
 /* ---------------- Drafts: nothing typed into a form is ever lost ----------------
    Every New / Add / Edit form page is saved in this browser while you type. Clicking another menu, the breadcrumb,
