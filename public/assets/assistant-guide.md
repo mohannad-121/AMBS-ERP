@@ -961,7 +961,7 @@ Keywords: sales order status, draft, confirmed, partially delivered, delivered, 
 - **Delivered**: everything shipped.
 - **Cancelled**: the undelivered balance is closed. Deliveries already made stay in the stock history.
 
-The order page shows each line's ordered, delivered and outstanding quantities, total stock on hand, prices and the delivery history; **PDF** is under **⚙ Actions**.
+The order page shows each line's ordered, delivered and outstanding quantities, total stock on hand, prices and the delivery history; **PDF** is under **⚙ Actions**. The sales order PDF has the customer, delivery site, dates and status at the top, every line with its **picture**, ordered / delivered / outstanding quantities and prices, the order total, a **Deliveries** section (date, trip, store, driver and pictures of the items delivered) and signature lines.
 
 ## Example: receive 20 safety nets and deliver 13 to a customer
 Keywords: receive 20 give 13, part of stock to customer, split stock, sell some nets, deliver some, جزء من الكمية, استلمت وبدي اعطي
