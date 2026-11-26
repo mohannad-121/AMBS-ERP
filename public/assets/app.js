@@ -3221,7 +3221,7 @@ const TITLES={owner:'Owner overview',team:'Team activity',items:'Items & stock',
   'plan-new':'Production','purchase-new':'Purchasing'};
 /* Owner (super admin) gets his own menu: the team's work, items and tracking. Admins see the same pages under "Owner view". */
 /* Build version: stamped by scripts/bump-version.py together with the ?v= links in index.html. */
-const AMBS_VERSION='2026.11.26-1742';
+const AMBS_VERSION='2026.11.26-1745';
 const isOwner=()=>typeof CLOUD!=='undefined'&&CLOUD.role==='owner';
 const canSeeOwner=()=>typeof CLOUD!=='undefined'&&['owner','admin'].includes(CLOUD.role);
 const OWNER_GROUPS=[
@@ -5756,15 +5756,17 @@ function partSummary(){
     const [c,l,u]=JSON.parse(k);return [c,locName(state,l),v.keys.size,qfmt(v.qty,u)];
   }));
 }
-async function pdf(title,columns,rows,{landscape=false,pictures=true}={}){
+async function pdf(title,columns,rows,{landscape=false,pictures=true,pictureOf=null,pictureTitle='Picture'}={}){
   if(!PDFR._ok())return;
   await PDFR._prepare();
-  const ids=pictures?rows.map(pdfRowItem):[], withPics=ids.some(Boolean);
-  const pics=withPics?await Promise.all(ids.map(id=>id?pdfPicture(itemPicture(state,id)):null)):[];
+  // pictureOf(i) gives a row's photo directly; otherwise the row's item is found from its label
+  const srcs=!pictures?[]:pictureOf?rows.map((_,i)=>pictureOf(i)||''):rows.map(r=>{const id=pdfRowItem(r);return id?itemPicture(state,id):'';});
+  const withPics=srcs.some(Boolean);
+  const pics=withPics?await Promise.all(srcs.map(src=>src?pdfPicture(src):null)):[];
   const doc=PDFR._doc(landscape?'landscape':'portrait'), drawBrand=PDFR._hf(doc);
   const body=rows.map((row,i)=>{const cells=row.map(x=>String(x??''));
     return withPics?[{content:'',image:pics[i],imageSize:34},...cells]:cells;});
-  const head=withPics?['Picture',...columns]:columns;
+  const head=withPics?[pictureTitle,...columns]:columns;
   const picW=withPics?46/(doc.internal.pageSize.getWidth()-80):0;
   doc.autoTable({
     startY:94,head:[head],body,widths:withPics?[picW,...columns.map(()=>(1-picW)/columns.length)]:undefined,
@@ -6597,6 +6599,13 @@ function driverExportRows(drivers){
     d.hasPapers?'Yes':'No',papersIssues(d).join('; ')||'OK',
     trips.length,trips.filter(t=>t.status==='Delivered').length,Number(tripKm(trips).toFixed(1)),driverWhere(d).text];});
 }
+/* the photo of what a trip delivered: the dispatch job's product (or its first part with a photo), or the sales order's first item with a photo */
+function tripPicture(t){
+  const job=t.jobId&&get(state,'jobs',t.jobId), sale=t.salesId&&get(state,'sales',t.salesId);
+  const ids=job?[job.productId,...(job.parts||[]).map(l=>l.sku)]:sale?sale.lines.map(l=>l.sku):[];
+  for(const id of ids){const src=itemPicture(state,id);if(src)return src;}
+  return '';
+}
 function exportDeliveries(kind,driverId=''){
   const trips=driverId?driverTrips(driverId).sort((a,b)=>(b.date||'').localeCompare(a.date||'')):Drv.filtered();
   const drivers=driverId?[get(state,'drivers',driverId)]:state.drivers;
@@ -6607,7 +6616,7 @@ function exportDeliveries(kind,driverId=''){
   pdf((driverId?'Driver trips · '+drivers[0].name+' · '+(papersOk(drivers[0])?'Papers OK':'PAPERS MISSING'):'Delivery tracking')+' · '+fmtDate(todayISO()),cols,
     trips.map(t=>[t.no,fmtDate(t.date),t.customerName||'',t.project||'',t.system||'',t.status+(t.priority==='Urgent'?' · URGENT':''),
       get(state,'drivers',t.driverId)?.name||'',t.vehicle||'',t.location||'',t.km?nfmt(t.km,1):'',t.deliveredAt?fmtDate(t.deliveredAt):'',t.paperStatus||'']),
-    {landscape:true});
+    {landscape:true,pictureOf:i=>tripPicture(trips[i]),pictureTitle:'Items'});
 }
 function driverView(id){
   const d=get(state,'drivers',id), trips=driverTrips(id).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
