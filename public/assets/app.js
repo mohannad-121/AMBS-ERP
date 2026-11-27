@@ -3244,7 +3244,7 @@ const TITLES={owner:'Owner overview',team:'Team activity',items:'Items & stock',
   'plan-new':'Production','purchase-new':'Purchasing'};
 /* Owner (super admin) gets his own menu: the team's work, items and tracking. Admins see the same pages under "Owner view". */
 /* Build version: stamped by scripts/bump-version.py together with the ?v= links in index.html. */
-const AMBS_VERSION='2026.11.26-1900';
+const AMBS_VERSION='2026.11.27-1314';
 const isOwner=()=>typeof CLOUD!=='undefined'&&CLOUD.role==='owner';
 const canSeeOwner=()=>typeof CLOUD!=='undefined'&&['owner','admin'].includes(CLOUD.role);
 const OWNER_GROUPS=[
@@ -5039,12 +5039,21 @@ function productEditor(draw,onSave,{title,saveText,description,extra='',details,
     form.querySelector('[data-products] > button').remove();
     form.querySelector('[data-products] .erp-remove').remove();
   }
+  /* Finished stock ships the complete product (e.g. bought in ready-made), so it needs no Product BOM. */
+  const finishedOnly=()=>dispatch&&valOf(form,'fulfilment')==='Finished stock';
+  function standardParts(s,id,count){
+    if(finishedOnly()){
+      const recipe=get(s,'recipes',live(s,'products',id).id);
+      if(!(recipe?.kind==='product'&&recipe.approved&&recipe.lines.length))return [];
+    }
+    return productParts(s,id,count);
+  }
   function configure(line,overrides,preserve=false){
     const box=$('[data-config]',line);
     try{
       const id=fieldValue(line,'product'), count=whole(fieldValue(line,'count'));
       if(!id){box.innerHTML='';return;}
-      const standard=productParts(state,id,count);
+      const standard=standardParts(state,id,count);
       const prior=preserve?collectConfig(box):[];
       if(preserve&&prior.length===standard.length&&prior.every((l,i)=>l.partId===standard[i].partId&&l.standard===standard[i].standard))return;
       const rows=overrides?.length===standard.length&&overrides.every((l,i)=>l.partId===standard[i].partId&&l.standard===standard[i].standard)?
@@ -5060,7 +5069,7 @@ function productEditor(draw,onSave,{title,saveText,description,extra='',details,
     need(rows.length,'Add at least one product.');
     return rows.map(line=>{
       const productId=fieldValue(line,'product'), count=whole(fieldValue(line,'count'));
-      const standard=productParts(s,productId,count);
+      const standard=standardParts(s,productId,count);
       return {productId,qty:count,parts:configuredParts(s,standard,collectConfig(line))};
     });
   }
@@ -5074,6 +5083,7 @@ function productEditor(draw,onSave,{title,saveText,description,extra='',details,
       const count=Number(fieldValue(line,'count'));
       if(!countChange||(Number.isSafeInteger(count)&&count>0))configure(line,null,countChange);
     }
+    if(e?.target.name==='fulfilment')products().forEach(line=>configure(line,null,true));
     const summary=$('[data-summary]',form);
     try{summary.innerHTML=draw(readProducts(state),valOf(form,'location'),form);}
     catch(err){summary.innerHTML=note(err.message,'warn');}
@@ -5378,20 +5388,16 @@ function purchaseEdit(id,initial){
         const supplierId=live(s,'suppliers',valOf(f,'supplier')).id, location=loc(s,valOf(f,'location')).id;
         const supplierSiteId=valOf(f,'supplierSite');
         checkedCompanySite(s,'suppliers',supplierId,supplierSiteId);
-        items.forEach(l=>need(get(s,'materials',l.sku)||
-          ['Purchased','Stocked'].includes(get(s,'parts',item(s,l.sku)?.partId||l.sku)?.source),
-          'Choose a raw material or a purchased or stocked component.'));
         items.forEach(l=>{stockItem(s,l.sku);if(!get(s,'materials',l.sku))componentQty(l.qty,item(s,l.sku).unit,'Purchased component quantity');});
         add(s.purchases,{id:id||key(),no:prev?.no||operationNo('PR'),supplierId,supplierSiteId,location,notes:valOf(f,'notes'),lines:items,
           status:prev?.status||'Draft',at:prev?.at||now()});
       });
       return 'Purchase request saved.';
     });
-  const options=skus().filter(x=>get(state,'materials',x.id)||
-    ['Purchased','Stocked'].includes(get(state,'parts',x.partId||x.id)?.source));
+  const options=skus();
   wireCompanySite(form,'suppliers','supplier','supplierSite',old?.supplierSiteId);
   const lines=repeat(form,'[data-purchase]',(l,n)=>`<legend>Purchase line</legend><div class="form-grid">
-    ${searchable('Raw Material or purchased SKU',n+'_sku',pair(options),l.sku)}${number('Ordered quantity',n+'_qty',l.qty)}</div>`,
+    ${searchable('Raw material, part or product',n+'_sku',pair(options),l.sku)}${number('Ordered quantity',n+'_qty',l.qty)}</div>`,
     old?.lines||[initial||{}],'Add Line');
 }
 function purchaseStatus(id,status){
@@ -5533,7 +5539,7 @@ function dispatchView(id){
     ['Custody location',locName(state,j.location)],['Fulfilment',j.finished?'Finished stock':'Pack from parts'],
     ['Track at customer site',j.trackAtDestination?'Yes':'No'],
     ['Ordered',j.qty],['Delivered',j.delivered],['Outstanding',j.qty-j.delivered],['Status',j.status]])+
-    mapAction(destination)+panel('Saved packing configuration',partsTable(j.parts))+
+    mapAction(destination)+(j.parts.length?panel('Saved packing configuration',partsTable(j.parts)):'')+
     panel('Delivery history',table(['Delivery date','Product quantity','Reference','Actions'],history.map(e=>[
       esc(stamp(e.at)),esc(e.deliveredQty),esc(e.reference),small('View stock posting',`eventView(${escapeArg(e.id)})`)
     ]))),actionGroup(button('PDF',`recordPDF('jobs',${escapeArg(id)})`,'btn-sm','pdf'),
@@ -6265,7 +6271,7 @@ function validateState(s){
      ['Draft','Ordered','Received','Cancelled'].includes(p.status),'Invalid purchase request.');
   for(const j of s.jobs)need(site(j.location)&&site(j.destination)?.ownerId===j.customerId&&
     site(j.destination)?.ownerType==='customers'&&get(s,'customers',j.customerId)&&get(s,'products',j.productId)&&
-    parts(j.parts)&&j.parts.length&&integral(j.qty)&&Number.isSafeInteger(j.delivered)&&j.delivered>=0&&j.delivered<=j.qty&&
+    parts(j.parts)&&(j.finished||j.parts.length)&&integral(j.qty)&&Number.isSafeInteger(j.delivered)&&j.delivered>=0&&j.delivered<=j.qty&&
     typeof j.destinationSnapshot?.name==='string'&&(j.trackAtDestination==null||typeof j.trackAtDestination==='boolean')&&
     (!j.trackAtDestination||j.location!==j.destination)&&
     ['Open','Partially delivered','Delivered','Cancelled'].includes(j.status),'Invalid dispatch job.');
