@@ -3244,7 +3244,7 @@ const TITLES={owner:'Owner overview',team:'Team activity',items:'Items & stock',
   'plan-new':'Production','purchase-new':'Purchasing'};
 /* Owner (super admin) gets his own menu: the team's work, items and tracking. Admins see the same pages under "Owner view". */
 /* Build version: stamped by scripts/bump-version.py together with the ?v= links in index.html. */
-const AMBS_VERSION='2026.11.27-1314';
+const AMBS_VERSION='2026.11.27-1317';
 const isOwner=()=>typeof CLOUD!=='undefined'&&CLOUD.role==='owner';
 const canSeeOwner=()=>typeof CLOUD!=='undefined'&&['owner','admin'].includes(CLOUD.role);
 const OWNER_GROUPS=[
@@ -7207,7 +7207,7 @@ function trackingPage(){
   const locs=state.locations.filter(l=>l.stock||stockRows(state).some(b=>b.location===l.id)).map(l=>[l.id,locName(state,l.id)]);
   const moving=state.trips.filter(t=>t.status==='On the way'), today=todayISO();
   const todayMoves=state.events.filter(e=>(e.at||'').slice(0,10)===today);
-  return head('Overview',TITLES.tracking,liveChip(),button('Export movements','trackExport()','','xls'),button('Clear filters','Trk.reset()','','refresh'))+
+  return head('Overview',TITLES.tracking,liveChip(),button('Movements PDF','trackPDF()','','pdf'),button('Movements Excel','trackExport()','','xls'),button('Clear filters','Trk.reset()','','refresh'))+
     kpiRow([['layers','Items in stock',new Set(stockRows(state).filter(b=>b.qty>EPS).map(b=>b.sku)).size,'Across '+new Set(stockRows(state).map(b=>b.location)).size+' locations','k-ink'],
       ['swap','Movements today',todayMoves.length,todayMoves.reduce((n,e)=>n+e.lines.length,0)+' item lines','k-ok'],
       ['truck','Deliveries on the road',moving.length,moving.length?moving.map(t=>t.no).slice(0,2).join(', '):'Nothing moving','k-yellow','deliveries'],
@@ -7225,8 +7225,24 @@ function trackingPage(){
       <label class="trk-date">To <input class="inp" type="date" value="${esc(f.to)}" onchange="Trk.set('to',this.value)"></label></div></div>
     <div id="track-results">${Trk.results()}</div>`;
 }
+function trackRows(){
+  const f=Trk.f;
+  return ledger().filter(r=>(!f.from||r.e.at.slice(0,10)>=f.from)&&(!f.to||r.e.at.slice(0,10)<=f.to)).reverse();
+}
+/* The same movement history as the Excel export, as a PDF with each item's photo. */
+function trackPDF(){
+  const f=Trk.f, rows=trackRows();
+  if(!rows.length)return toast('No movements to export for these dates.','warn');
+  const range=f.from||f.to?' · '+(f.from||'start')+' to '+(f.to||'today'):'';
+  pdf('Stock movements'+range,['Date','Item','Movement','From','To','Change','Balance there','Trip / driver','Reference','By'],
+    rows.map(r=>{const it=item(state,r.l.sku), linked=eventLinks(state,r.e), u=it?.unit||'';
+      return [stamp(r.e.at),[it?.code,it?.name].filter(Boolean).join(' · ')+' ('+skuKind(r.l.sku)+')',evType(r.e.type),r.from,r.to,
+        (r.l.delta>0?'+':'')+qfmt(r.l.delta,u),qfmt(r.bal,u),[r.trip?.no,get(state,'drivers',r.trip?.driverId)?.name].filter(Boolean).join(' · '),
+        r.e.note||linked.document||'',r.e.by||''];}),
+    {landscape:true,pictureOf:i=>itemPicture(state,rows[i].l.sku)});
+}
 function trackExport(){
-  const f=Trk.f, rows=ledger().filter(r=>(!f.from||r.e.at.slice(0,10)>=f.from)&&(!f.to||r.e.at.slice(0,10)<=f.to)).reverse();
+  const rows=trackRows();
   XLSX.save('AMBS_Movements_'+todayISO(),[{name:'Movements',columns:['Date','Time','Item code','Item','Type','Movement','From','To','Change','Unit','Balance there','Trip','Driver','Reference','By'],
     rows:rows.map(r=>{const it=item(state,r.l.sku), linked=eventLinks(state,r.e);return [r.e.at.slice(0,10),new Date(r.e.at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}),
       it?.code||'',it?.name||'',skuKind(r.l.sku),evType(r.e.type),r.from,r.to,r.l.delta,it?.unit||'',
