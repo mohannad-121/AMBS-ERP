@@ -187,7 +187,7 @@ A trip is created with status **Next** and a packing number **PL<year>-<month>-<
 Keywords: distance, km, kilometres, automatic distance, route, road distance, google maps api, المسافة
 
 Whenever a form has two places — Assign driver, New trip, Transfer Stock and a new dispatch job — AMBS calculates the road distance by itself and fills **Distance (km)**.
-- It reads each place's **Google Maps URL** (short maps.app.goo.gl links work) or its **Latitude / Longitude**. Add one of them to every store, customer site and vendor site.
+- It reads each place's **Google Maps URL** (short maps.app.goo.gl links work — the AMBS website expands them) or its **Latitude / Longitude**. Add one of them to every store, customer site and vendor site.
 - The road distance comes from OpenStreetMap routing. **No Google Maps API key is needed** and nothing is billed.
 - If the road route cannot be reached, an estimate (straight line × 1.3) is shown with "≈".
 - A number you type yourself is kept. "Distance not calculated" means one of the two places has no map link or coordinates.
@@ -867,6 +867,8 @@ Keywords: transfer, move stock, relocate, send to site, نقل مخزون, تح�
 5. Enter **Quantity to transfer** (whole numbers for parts, variants and products) and optional **Reference / notes**.
 6. Optional — **Driver**: tick **Assign a driver to this transfer**, pick the **Driver** (drivers with missing papers are refused), check **Vehicle**, **Distance (km)** (filled automatically), **Trip date** and **Priority**.
 7. Click **Confirm Transfer**.
+
+**Exact address**: when the chosen location's company has several Google Maps addresses (company address, factories, sites — e.g. METAL SOLUTION INDUSTRIES with a Sharjah and a Dubai factory), an **Exact address (from / to)** list appears. Pick where the stock really goes; the distance and the driver's map link use that address. A stock location is matched to its company by owner, or by the same name.
 
 The form is split into sections: **Item & quantity**, **Route** (shows the road distance between the two locations), **Driver (optional)**, **Related company (optional)** and **Reference / notes**.
 With a driver, the stock moves at once and a trip (packing no. **PL…**) is created in **Deliveries**; the driver then **Starts** it and marks it **Delivered**. The trip page shows what was carried and a **Stock transfer** button.
