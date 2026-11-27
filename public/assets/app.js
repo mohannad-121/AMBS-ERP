@@ -9,6 +9,7 @@
 const IP = {
   dashboard:'M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z',
   box:'M21 8l-9-5-9 5v8l9 5 9-5V8zM3 8l9 5 9-5M12 13v8',
+  bell:'M6 9a6 6 0 1112 0c0 6 2.5 8 2.5 8h-17S6 15 6 9zM10 20.5a2.2 2.2 0 004 0',
   cube:'M12 2l9 5v10l-9 5-9-5V7l9-5zm0 2.3L5 8v8l7 3.9L19 16V8l-7-3.7z',
   bom:'M4 4h6v6H4V4zm10 0h6v6h-6V4zM4 14h6v6H4v-6zm10 0h6v6h-6v-6z',
   plan:'M9 2h6a1 1 0 011 1v1h2a2 2 0 012 2v13a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2V3a1 1 0 011-1zm0 4h6V4H9v2z',
@@ -3146,6 +3147,7 @@ async function refreshCloudWorkspace(render = false){
     legacy=snapshot.legacy;
     DB.weighDocs=legacy.weighDocs;
     reflect(snapshot.state);
+    Notify.changed();
     if(render){App.render();toast('Workspace refreshed.','ok');}
   }catch(e){
     if(!render)throw e;
@@ -3247,7 +3249,7 @@ const TITLES={owner:'Owner overview',team:'Team activity',items:'Items & stock',
   'plan-new':'Production','purchase-new':'Purchasing'};
 /* Owner (super admin) gets his own menu: the team's work, items and tracking. Admins see the same pages under "Owner view". */
 /* Build version: stamped by scripts/bump-version.py together with the ?v= links in index.html. */
-const AMBS_VERSION='2026.11.27-1459';
+const AMBS_VERSION='2026.11.27-1603';
 const isOwner=()=>typeof CLOUD!=='undefined'&&CLOUD.role==='owner';
 const canSeeOwner=()=>typeof CLOUD!=='undefined'&&['owner','admin'].includes(CLOUD.role);
 const OWNER_GROUPS=[
@@ -7910,6 +7912,27 @@ function liveChip(){
 
 /* ---------------- Dashboard ---------------- */
 /* Main dashboard: a few big numbers, what to do now, what is on the road, and the latest stock movements — in plain words. */
+/* What needs doing now: shared by the dashboard and the notification bell. [count, text, route, action, key] */
+function attentionItems(){
+  const moving=state.trips.filter(t=>t.status==='On the way'), ready=state.trips.filter(t=>t.status==='Next');
+  let queue=0;try{queue=deliveryQueue().length;}catch{}
+  let warn=0;try{warn=warningRows().length;}catch{}
+  const used=new Set(state.recipes.flatMap(r=>r.lines.map(l=>l.sku||l.variantId||l.partId)));
+  const out=current(state,'materials').filter(m=>used.has(m.id)&&physical(state,m.id)<=EPS).length;
+  const n=(t,f)=>(state[t]||[]).filter(f).length, plural=(c,one,many)=>c+' '+(c===1?one:many);
+  const badPapers=state.drivers.filter(d=>d.active!==false&&!papersOk(d)).length;
+  return [
+    [queue,`🚚 ${plural(queue,'order is','orders are')} waiting for a driver`,'deliveries','Assign driver'],
+    [ready.length,`🛻 ${plural(ready.length,'trip is','trips are')} ready to leave`,'deliveries','Start trip'],
+    [moving.length,`🛣️ ${plural(moving.length,'delivery is','deliveries are')} on the road — mark Delivered when done`,'deliveries','Open'],
+    [n('sales',o=>o.status==='Draft'),`🧾 ${plural(n('sales',o=>o.status==='Draft'),'sales order is','sales orders are')} still a draft`,'sales','Confirm'],
+    [n('purchases',x=>x.status==='Draft'),`🛒 ${plural(n('purchases',x=>x.status==='Draft'),'purchase is','purchases are')} not ordered yet`,'purchase','Mark ordered'],
+    [n('purchases',x=>x.status==='Ordered'),`📥 ${plural(n('purchases',x=>x.status==='Ordered'),'purchase is','purchases are')} waiting to be received`,'purchase','Receive'],
+    [n('orders',o=>o.status==='Draft'),`🏭 ${plural(n('orders',o=>o.status==='Draft'),'production order is','production orders are')} waiting to start`,'production','Release'],
+    [n('orders',o=>o.status==='Released'),`⚙️ ${plural(n('orders',o=>o.status==='Released'),'production order is','production orders are')} being made`,'production','Mark completed'],
+    [badPapers,`🛂 ${plural(badPapers,'driver has','drivers have')} missing or expired papers`,'drivers','Fix papers'],
+    [out+warn,`⚠️ ${plural(out+warn,'item is','items are')} out of stock or running low`,'materials','Check']].filter(x=>x[0]).map(x=>[...x,x[2]+':'+x[3]]);
+}
 function dashboard(){
   Live.start();
   const balances=stockRows(state), held=new Set(balances.filter(b=>b.qty>EPS).map(b=>b.sku)).size;
@@ -7921,17 +7944,7 @@ function dashboard(){
   const out=current(state,'materials').filter(m=>used.has(m.id)&&physical(state,m.id)<=EPS).length;
   const n=(t,f)=>(state[t]||[]).filter(f).length, plural=(c,one,many)=>c+' '+(c===1?one:many);
   const badPapers=state.drivers.filter(d=>d.active!==false&&!papersOk(d)).length;
-  const todo=[
-    [queue,`🚚 ${plural(queue,'order is','orders are')} waiting for a driver`,'deliveries','Assign driver'],
-    [ready.length,`🛻 ${plural(ready.length,'trip is','trips are')} ready to leave`,'deliveries','Start trip'],
-    [moving.length,`🛣️ ${plural(moving.length,'delivery is','deliveries are')} on the road — mark Delivered when done`,'deliveries','Open'],
-    [n('sales',o=>o.status==='Draft'),`🧾 ${plural(n('sales',o=>o.status==='Draft'),'sales order is','sales orders are')} still a draft`,'sales','Confirm'],
-    [n('purchases',x=>x.status==='Draft'),`🛒 ${plural(n('purchases',x=>x.status==='Draft'),'purchase is','purchases are')} not ordered yet`,'purchase','Mark ordered'],
-    [n('purchases',x=>x.status==='Ordered'),`📥 ${plural(n('purchases',x=>x.status==='Ordered'),'purchase is','purchases are')} waiting to be received`,'purchase','Receive'],
-    [n('orders',o=>o.status==='Draft'),`🏭 ${plural(n('orders',o=>o.status==='Draft'),'production order is','production orders are')} waiting to start`,'production','Release'],
-    [n('orders',o=>o.status==='Released'),`⚙️ ${plural(n('orders',o=>o.status==='Released'),'production order is','production orders are')} being made`,'production','Mark completed'],
-    [badPapers,`🛂 ${plural(badPapers,'driver has','drivers have')} missing or expired papers`,'drivers','Fix papers'],
-    [out+warn,`⚠️ ${plural(out+warn,'item is','items are')} out of stock or running low`,'materials','Check']].filter(x=>x[0]);
+  const todo=attentionItems();
   const hour=new Date().getHours(), hello=hour<12?'Good morning':hour<18?'Good afternoon':'Good evening';
   const who=typeof CLOUD!=='undefined'&&CLOUD.name?', '+CLOUD.name.split(' ')[0]:'';
   const big=(value,label,sub,go)=>`<button type="button" class="ow-big" onclick="App.go('${go}')"><b>${esc(value)}</b><span>${esc(label)}</span><small>${esc(sub)}</small></button>`;
@@ -8066,7 +8079,8 @@ const App={
         <div class="o-gs-results" id="o-gs-results" role="listbox" hidden></div></div>
       <button type="button" class="m-search-x" onclick="Mobile.search(false)">Cancel</button>
       <div class="o-nav-right">
-        <button class="o-nav-btn" onclick="refreshCloudWorkspace(true)" title="Refresh">${ic('refresh')}</button>
+        ${isOwner()?'':`<button type="button" class="o-nav-btn o-bell" id="o-bell" onclick="Notify.toggle()" aria-label="Notifications" title="Notifications">${ic('bell')}<span class="o-bell-n" id="o-bell-n" hidden></span></button>`}
+        <button class="o-nav-btn o-refresh" onclick="refreshCloudWorkspace(true)" title="Refresh">${ic('refresh')}</button>
         ${CLOUD.demo?'':'<button class="o-nav-btn" onclick="CLOUD.signOut()">Sign out</button>'}
         <div class="clock" id="clock"></div>
         <div class="avatar" title="${esc(CLOUD.email||'')}">${esc((CLOUD.email||'U').slice(0,1).toUpperCase())}</div>
@@ -8108,6 +8122,7 @@ const App={
       if(bar){const head=view.querySelector(':scope > .view-head,:scope > .o-cp');head?head.insertAdjacentHTML('afterend',bar):view.insertAdjacentHTML('afterbegin',bar);}
     }
     stripWrites($('#view'));
+    Notify.sync();
     startClock();
     Mobile.sync();
     if(!Drafts.booted&&state){Drafts.booted=true;Drafts.pull().then(changed=>{
@@ -8377,6 +8392,143 @@ for(const fn of DRAFT_EDITORS){
     return result;
   };
 }
+/* ---------------- Notifications: the bell, one reminder card, and a voice ----------------
+   The bell (top bar) lists the employee's unsaved drafts (click = back into that form) and what needs doing now.
+   Every 10 minutes, while anything is open, ONE reminder card comes up with a chime and a spoken sentence: the
+   same card is replaced each time, never stacked. When a colleague adds something important (seen when AMBS pulls
+   fresh data), the card and the voice come up at once. Only one open tab reminds. Browsers allow sound only after
+   the first click on the page, so a reminder that came earlier is spoken on that first click. */
+var Notify={
+  EVERY:10*60*1000,started:false,seen:null,pending:'',
+  on(){return typeof state!=='undefined'&&!!state&&!isOwner();},
+  drafts(skipOpen=false){
+    const open=skipOpen&&Drafts.dirty()?Drafts.current?.id:'';
+    return Drafts.live().filter(([id])=>id!==open).sort((a,b)=>String(b[1].at).localeCompare(String(a[1].at)));
+  },
+  items(){try{return attentionItems();}catch{return [];}},
+  plain:t=>String(t).replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}]/gu,'').replace(/\s+/g,' ').trim(),
+  counts(){return Object.fromEntries(this.items().map(x=>[x[4],x[0]]));},
+  /* the bell's number (and the open list, if any) */
+  sync(){
+    if(!this.on())return;
+    this.start();
+    this.seen=this.counts(); // after our own saves: the new totals are not news
+    const n=this.drafts().length+this.items().length, b=$('#o-bell-n');
+    if(b){b.textContent=n>99?'99+':String(n);b.hidden=!n;}
+    if($('#o-notify'))this.toggle(true);
+  },
+  /* fresh data arrived: anything that went UP is new work from a colleague, so say it now */
+  changed(){
+    if(!this.on())return;
+    const before=this.seen, now=this.counts();this.seen=now;
+    setTimeout(()=>this.sync());
+    if(!before)return;
+    const fresh=this.items().filter(x=>x[0]>(before[x[4]]||0));
+    if(fresh.length)this.alert('New in AMBS',fresh.map(x=>({text:x[1],go:`App.go('${x[2]}')`})),
+      'New in AMBS. '+fresh.map(x=>this.plain(x[1])).join('. ')+'.');
+  },
+  toggle(open){
+    let box=$('#o-notify');
+    if(open===undefined)open=!box;
+    if(!open){box?.remove();if(this.outside)document.removeEventListener('pointerdown',this.outside,true);return;}
+    const drafts=this.drafts(), items=this.items();
+    const html=`<div class="ntf-head"><b>${ic('bell')} Notifications</b><button type="button" class="ntf-x" onclick="Notify.toggle(false)" aria-label="Close">×</button></div>
+      <div class="ntf-body">
+      <h5>Unsaved drafts${drafts.length?' · '+drafts.length:''}</h5>
+      ${drafts.length?drafts.map(([id,d])=>`<button type="button" class="ntf-row" onclick="Notify.toggle(false);Drafts.open(${escapeArg(id)})">
+        <span class="ntf-ic">${ic('save')}</span><span class="ntf-txt"><b>${esc(d.title)}</b><small>Saved ${esc(Drafts.when(d.at))} · click to continue</small></span></button>`).join(''):
+        '<p class="ntf-none">No unsaved drafts.</p>'}
+      <h5>Needs attention${items.length?' · '+items.length:''}</h5>
+      ${items.length?items.map(x=>`<button type="button" class="ntf-row" onclick="Notify.toggle(false);App.go('${x[2]}')">
+        <span class="ntf-txt">${esc(x[1])}</span><em>${esc(x[3])} →</em></button>`).join(''):'<p class="ntf-none">Nothing waiting.</p>'}
+      </div><div class="ntf-foot"><span>A reminder with voice comes every 10 minutes while something is open.</span>
+      <button type="button" class="btn btn-sm" onclick="Notify.toggle(false);Notify.remind(true)">${ic('bell')} Remind me now</button></div>`;
+    if(!box){
+      box=document.createElement('div');box.id='o-notify';box.className='ntf-panel';
+      box.setAttribute('role','dialog');box.setAttribute('aria-label','Notifications');
+      document.body.append(box);
+      this.outside=e=>{if(!e.target.closest('#o-notify,#o-bell'))this.toggle(false);};
+      document.addEventListener('pointerdown',this.outside,true);
+    }
+    box.innerHTML=html;
+  },
+  /* the 10-minute reminder: unsaved drafts and open work */
+  remind(force=false){
+    if(!this.on())return;
+    this.mark();
+    const drafts=this.drafts(true), items=this.items();
+    if(!drafts.length&&!items.length){
+      if(force)this.alert('All clear',[{text:'Nothing is waiting for you right now.'}],'All clear. Nothing is waiting in AMBS.');
+      return;
+    }
+    const plural=(c,one,many)=>c+' '+(c===1?one:many);
+    const lines=[...drafts.slice(0,3).map(([id,d])=>({text:'📝 Unsaved draft: '+d.title,go:`Drafts.open(${escapeArg(id)})`})),
+      ...items.slice(0,4).map(x=>({text:x[1],go:`App.go('${x[2]}')`}))];
+    const said=[drafts.length?'You have '+plural(drafts.length,'unsaved draft','unsaved drafts')+': '+drafts.slice(0,2).map(([,d])=>d.title).join(' and '):'',
+      ...items.slice(0,2).map(x=>this.plain(x[1]))].filter(Boolean);
+    this.alert('Reminder',lines,'Reminder from AMBS. '+said.join('. ')+'.');
+  },
+  /* the ONE card: replaced every time, never stacked */
+  alert(title,lines,speech){
+    let card=$('#o-remind');
+    if(!card){card=document.createElement('div');card.id='o-remind';card.className='ntf-card';card.setAttribute('role','alert');document.body.append(card);}
+    card.innerHTML=`<div class="ntf-card-head"><span class="ntf-bell">${ic('bell')}</span><b>${esc(title)}</b>
+      <small>${esc(new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}))}</small>
+      <button type="button" class="ntf-x" onclick="Notify.dismiss()" aria-label="Close">×</button></div>
+      <div class="ntf-card-body">${lines.map(l=>l.go?`<button type="button" class="ntf-row" onclick="Notify.dismiss();${l.go}"><span class="ntf-txt">${esc(l.text)}</span><em>Open →</em></button>`:
+        `<p class="ntf-none">${esc(l.text)}</p>`).join('')}</div>
+      <div class="ntf-card-foot"><button type="button" class="btn btn-sm" onclick="Notify.dismiss();Notify.toggle(true)">See all</button>
+      <button type="button" class="btn btn-sm btn-ghost" onclick="Notify.dismiss()">Later</button></div>`;
+    card.classList.remove('ntf-in');void card.offsetWidth;card.classList.add('ntf-in');
+    this.say(speech);
+  },
+  dismiss(){$('#o-remind')?.remove();this.pending='';try{speechSynthesis.cancel();}catch{}},
+  /* sound: a short two-tone chime, then the sentence read aloud */
+  say(text){
+    this.pending=text;
+    if(navigator.userActivation&&!navigator.userActivation.hasBeenActive)return; // spoken on the first click
+    this.pending='';
+    this.chime();
+    try{
+      speechSynthesis.cancel();
+      const u=new SpeechSynthesisUtterance(text), voices=speechSynthesis.getVoices();
+      const voice=voices.find(v=>/^en[-_](GB|US)/i.test(v.lang))||voices.find(v=>/^en/i.test(v.lang));
+      if(voice)u.voice=voice;
+      u.lang=voice?.lang||'en-GB';u.rate=1;u.volume=1;
+      setTimeout(()=>speechSynthesis.speak(u),650);
+    }catch{}
+  },
+  chime(){
+    try{
+      this.ctx||=new (window.AudioContext||window.webkitAudioContext)();
+      const ctx=this.ctx;ctx.resume?.();
+      [[880,0],[1318.5,.18]].forEach(([f,t])=>{
+        const o=ctx.createOscillator(), g=ctx.createGain(), at=ctx.currentTime+t;
+        o.type='sine';o.frequency.value=f;
+        g.gain.setValueAtTime(0.0001,at);g.gain.exponentialRampToValueAtTime(0.35,at+0.02);g.gain.exponentialRampToValueAtTime(0.0001,at+0.45);
+        o.connect(g).connect(ctx.destination);o.start(at);o.stop(at+0.5);
+      });
+    }catch{}
+  },
+  /* one reminder per 10 minutes across all open tabs of this browser */
+  last(){try{return +localStorage.getItem('ambs-remind-at')||0;}catch{return 0;}},
+  mark(){try{localStorage.setItem('ambs-remind-at',String(Date.now()));}catch{}},
+  start(){
+    if(this.started)return;
+    this.started=true;
+    // the first reminder comes one minute after opening AMBS
+    if(Date.now()-this.last()>this.EVERY)try{localStorage.setItem('ambs-remind-at',String(Date.now()-this.EVERY+60000));}catch{}
+    setInterval(()=>{if(Date.now()-this.last()>=this.EVERY)this.remind();},30000);
+    // colleagues' new work: pull fresh data every 3 minutes while nothing is being typed
+    setInterval(async()=>{
+      if(!this.on()||_modalStack||App.editing||document.activeElement?.matches?.('input,select,textarea'))return;
+      if(Live.timer&&['dashboard','tracking','deliveries'].includes(App.route)&&document.visibilityState==='visible')return; // Live refreshes these every 30 s
+      try{await refreshCloudWorkspace(false);}catch{}
+    },3*60000);
+    document.addEventListener('pointerdown',()=>{if(this.pending)setTimeout(()=>this.say(this.pending),50);},true);
+    try{speechSynthesis.getVoices();}catch{}
+  }
+};
 window.addEventListener('pagehide',()=>{
   Drafts.current?.flush?.();
   // send pending drafts right away (keepalive survives the page closing)
