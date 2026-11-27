@@ -3247,7 +3247,7 @@ const TITLES={owner:'Owner overview',team:'Team activity',items:'Items & stock',
   'plan-new':'Production','purchase-new':'Purchasing'};
 /* Owner (super admin) gets his own menu: the team's work, items and tracking. Admins see the same pages under "Owner view". */
 /* Build version: stamped by scripts/bump-version.py together with the ?v= links in index.html. */
-const AMBS_VERSION='2026.11.27-1351';
+const AMBS_VERSION='2026.11.27-1400';
 const isOwner=()=>typeof CLOUD!=='undefined'&&CLOUD.role==='owner';
 const canSeeOwner=()=>typeof CLOUD!=='undefined'&&['owner','admin'].includes(CLOUD.role);
 const OWNER_GROUPS=[
@@ -4433,7 +4433,8 @@ function companyView(type,id){
       esc(o.no)+openBtn(`orderView(${escapeArg(o.id)})`),esc(labelOf(state,o.sku)),esc(o.qty),chip(o.status)])))):'')+
     section('co-stock',panel('Stock at this company’s sites',textTable(['Item / SKU','Location','Balance'],stock.map(b=>[
       labelOf(state,b.sku),locName(state,b.location),qfmt(b.qty,item(state,b.sku)?.unit)]),'No stock is held at this company’s sites.')))+
-    section('co-activity',panel('What moved with them · by period',companyActivity(type,flow,id)))+
+    section('co-activity',panel('Report by dates',reportBar(fmt=>`companyReport(${escapeArg(type)},${escapeArg(id)},'${fmt}',this)`))+
+      panel('What moved with them · by period',companyActivity(type,flow)))+
     section('co-moves',panel('Recent stock movements',events.length?eventsTable(events.slice(0,15)):table(['Movement'],[],'No stock movements linked to this company yet.'))),
     actionGroup(button('Edit',`closeModal();masterEdit(${escapeArg(type)},${escapeArg(id)})`,'btn-sm btn-primary'),
       dangerSmall('Delete',`closeModal();deleteMaster(${escapeArg(type)},${escapeArg(id)})`)));
@@ -7425,12 +7426,9 @@ function periodKey(at,p){
   return [m.getFullYear()+'-'+pad2(m.getMonth()+1)+'-'+pad2(m.getDate()),'Week of '+m.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})];
 }
 /* Week / Month / Year switch; every view is drawn up front, so switching needs no re-render. */
-function periodTabs(render,kind,args){
-  const out=fmt=>`periodExport(this,${escapeArg(kind)},${escapeArg(args)},'${fmt}')`;
-  return `<div class="period-box card-body"><div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px">
-    <div class="seg" role="group">${Object.entries(PERIODS).map(([p,t])=>
-    `<button type="button" class="btn btn-sm${p==='month'?' btn-primary':''}" onclick="periodShow(this,'${p}')">${t}</button>`).join('')}</div>
-    <span style="margin-left:auto;display:flex;gap:6px">${button('PDF',out('pdf'),'btn-sm','pdf')}${button('Excel',out('xlsx'),'btn-sm','xls')}</span></div>`+
+function periodTabs(render){
+  return `<div class="period-box card-body"><div class="seg" role="group" style="margin-bottom:10px">${Object.entries(PERIODS).map(([p,t])=>
+    `<button type="button" class="btn btn-sm${p==='month'?' btn-primary':''}" onclick="periodShow(this,'${p}')">${t}</button>`).join('')}</div>`+
     Object.keys(PERIODS).map(p=>`<div data-period="${p}"${p==='month'?'':' hidden'}>${render(p)}</div>`).join('')+'</div>';
 }
 function periodShow(btn,p){
@@ -7452,10 +7450,9 @@ function periodGroups(lines,p,byItem,side){
 }
 const numCell=(n,u,cls='')=>n?`<strong class="num ${cls}">${esc(qfmt(n,u))}</strong>`:'<span class="sub">—</span>';
 /* One item: how many times it moved and how much went in / out in each period. */
-function itemActivity(rows,unit,id){
-  return periodTabs(p=>table(['Period','Movements','In','Out','Net change'],periodGroups(rows,p,false,r=>r.l.delta>0).map(x=>[
-    esc(x.name),`<strong class="num">${x.moves.size}</strong>`,numCell(x.a,unit,'trk-in'),numCell(x.b,unit,'trk-out'),
-    `<strong class="num">${x.a-x.b>0?'+':''}${esc(qfmt(x.a-x.b,unit))}</strong>`]),'No movements yet.'),'item',[id]);
+function itemActivity(rows,unit){
+  return periodTabs(p=>table(['Period','Movements','In','Out'],periodGroups(rows,p,false,r=>r.l.delta>0).map(x=>[
+    esc(x.name),`<strong class="num">${x.moves.size}</strong>`,numCell(x.a,unit,'trk-in'),numCell(x.b,unit,'trk-out')]),'No movements yet.'));
 }
 /* One company: every stock line that went to them or came from them.
    Lines at their own sites count by direction there; otherwise a line on a document linked to them
@@ -7478,60 +7475,7 @@ function companyActivity(type,lines,id){
     const it=item(state,x.sku);
     return [esc(x.name),`<div class="record-media">${it?recordPicture(it):''}<div>${cell(it?.name||'—',it?.code||'')}</div></div>`,
       `<strong class="num">${x.moves.size}</strong>`,numCell(x.a,it?.unit,'trk-out'),numCell(x.b,it?.unit,'trk-in')];
-  }),'No stock has moved to or from this company yet.'),'company',[type,id]);
-}
-/* Export the period summary the person is looking at (Week / Month / Year) as PDF or Excel. */
-function periodExport(btn,kind,args,fmt){
-  const p=btn.closest('.period-box').querySelector('[data-period]:not([hidden])')?.dataset.period||'month';
-  const by=PERIODS[p].toLowerCase(), n=x=>Number(x.toFixed(6));
-  let title,columns,rows,sheet,skus=[];
-  if(kind==='item'){
-    const [id]=args, it=item(state,id), u=it?.unit||'';
-    const groups=periodGroups(ledger().filter(r=>r.l.sku===id),p,false,r=>r.l.delta>0);
-    if(!groups.length)return toast('No movements to export.','warn');
-    title='Movements by '+by+' · '+label(it);
-    columns=['Period','Movements','In','Out','Net change'];
-    rows=groups.map(x=>[x.name,x.moves.size,qfmt(x.a,u),qfmt(x.b,u),(x.a-x.b>0?'+':'')+qfmt(x.a-x.b,u)]);
-    sheet={columns:['Period','Movements','In','Out','Net change','Unit'],rows:groups.map(x=>[x.name,x.moves.size,n(x.a),n(x.b),n(x.a-x.b),u])};
-  }else{
-    const [type,id]=args, r=get(state,type,id), [to,from]=COMPANY_FLOW[type];
-    const siteIds=new Set(companyLocations(state,type,id,false).map(l=>l.id));
-    const groups=periodGroups(companyLines(type,id,siteIds),p,true,x=>x.toThem);
-    if(!groups.length)return toast('No movements to export.','warn');
-    title='Movements with '+r.name+' by '+by;
-    columns=['Period','Item','Movements',to,from];
-    skus=groups.map(x=>x.sku);
-    rows=groups.map(x=>{const it=item(state,x.sku), u=it?.unit||'';
-      return [x.name,[it?.code,it?.name].filter(Boolean).join(' · '),x.moves.size,x.a?qfmt(x.a,u):'—',x.b?qfmt(x.b,u):'—'];});
-    sheet={columns:['Period','Item code','Item','Movements',to,from,'Unit'],rows:groups.map(x=>{const it=item(state,x.sku);
-      return [x.name,it?.code||'',it?.name||'',x.moves.size,n(x.a),n(x.b),it?.unit||''];})};
-  }
-  if(fmt==='pdf'&&kind==='item')return itemMovementsPDF(args[0],p);
-  if(fmt==='pdf')return companyMovementsPDF(args[0],args[1],p);
-  if(fmt==='pdf')return pdf(title,columns,rows,kind==='item'?{pictures:false}:{pictureOf:i=>itemPicture(state,skus[i])});
-  const extra=[];
-  if(kind==='item'){
-    const id=args[0], u=item(state,id)?.unit||'';
-    extra.push({name:'Where it is now',columns:['Location','Balance','Unit'],rows:stockRows(state).filter(b=>b.sku===id).map(b=>[locName(state,b.location),n(b.qty),u])},
-      {name:'Every movement',columns:['Date','Time','Movement','From','To','Change','Balance there','Unit','Trip','Driver','Reference','By'],
-        rows:ledger().filter(r=>r.l.sku===id).reverse().map(r=>[r.e.at.slice(0,10),new Date(r.e.at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}),
-          evType(r.e.type),r.from,r.to,r.l.delta,n(r.bal),u,r.trip?.no||'',get(state,'drivers',r.trip?.driverId)?.name||'',r.e.note||eventLinks(state,r.e).document||'',r.e.by||''])});
-    sheet.columns.splice(5,0,'From -> To');
-    sheet.rows=itemRoutes(id,p).map(x=>[x.name,x.moves.size,n(x.a),n(x.b),n(x.a-x.b),routeText(x.routes,u),u]);
-  }
-  if(kind==='company'){
-    const [type,id]=args, c=companyFlow(type,id), [to,from]=COMPANY_FLOW[type];
-    sheet.columns.splice(6,0,'From -> To');
-    sheet.rows=companyRoutes(c.lines,p).map(x=>{const it=item(state,x.sku), u=it?.unit||'';
-      return [x.name,it?.code||'',it?.name||'',x.moves.size,n(x.a),n(x.b),routeText(x.routes,u),u];});
-    extra.push({name:'Held at their sites now',columns:['Item code','Item','Location','Balance','Unit'],rows:c.stock.map(b=>{const it=item(state,b.sku);
-        return [it?.code||'',it?.name||'',locName(state,b.location),n(b.qty),it?.unit||''];})},
-      {name:'Every movement',columns:['Date','Time','Item code','Item','Movement','From','To','Direction','Quantity','Unit','Trip','Driver','Reference','By'],
-        rows:c.lines.slice().reverse().map(r=>{const it=item(state,r.l.sku);return [r.e.at.slice(0,10),new Date(r.e.at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}),
-          it?.code||'',it?.name||'',evType(r.e.type),r.from,r.to,r.toThem?to:from,n(Math.abs(r.l.delta)),it?.unit||'',r.trip?.no||'',
-          get(state,'drivers',r.trip?.driverId)?.name||'',r.e.note||eventLinks(state,r.e).document||'',r.e.by||''];})});
-  }
-  XLSX.save('AMBS_'+title.replace(/[^a-z0-9_-]+/gi,'_'),[{name:'By '+by,...sheet},...extra]);
+  }),'No stock has moved to or from this company yet.'));
 }
 function trackItem(id){
   const it=item(state,id), rows=ledger().filter(r=>r.l.sku===id), here=stockRows(state).filter(b=>b.sku===id);
@@ -7540,18 +7484,18 @@ function trackItem(id){
   if(points.length)points.push({t:points.length,v:total});
   infoModal('Track · '+label(it),`<div class="co-hero">${recordPicture(it,'thumb-record')}<div class="co-hero-main"><div class="co-hero-name">${esc(it.name)}</div>
     <div class="co-hero-sub">${esc(it.code)} · ${esc(skuKind(id))} · on hand <b>${esc(qfmt(total,it.unit))}</b></div></div></div>`+
+    panel('Report by dates',reportBar(fmt=>`itemReport(${escapeArg(id)},'${fmt}',this)`))+
     (points.length>1?panel('Total balance over time',`<div class="card-body">${sparkline(points)}<div class="viz-x"><span>${esc(fmtDate(rows[0].e.at.slice(0,10)))}</span><span style="margin-left:auto">Today</span></div></div>`):'')+
     panel('Where it is now',hbars(here.sort((a,b)=>b.qty-a.qty).map(b=>({label:locName(state,b.location),value:b.qty,tip:locName(state,b.location)+': '+qfmt(b.qty,it.unit)})),
       {empty:'Not held at any location.',fmt:v=>qfmt(v,it.unit)}))+
-    panel('Movements by period',itemActivity(rows,it.unit,id))+
+    panel('Movements by period',itemActivity(rows,it.unit))+
     (pendingDeliveries(id).length?panel('Waiting to be delivered',pendingTable(pendingDeliveries(id),false)):'')+
-    panel('Every movement · '+rows.length,table(['When','Movement','From → To','Change','Balance there','Trip / driver','Reference'],rows.slice().reverse().map(r=>[
-      esc(stamp(r.e.at)),esc(evType(r.e.type)),routeCell(r),
+    panel('Every movement · '+rows.length,table(['When','What happened','From → To','Change','Balance there','Trip / driver','Reference'],rows.slice().reverse().map(r=>[
+      esc(stamp(r.e.at)),esc(moveLabel(r.e,r.l)),routeCell(r),
       `<strong class="num ${r.l.delta<0?'trk-out':'trk-in'}">${r.l.delta<0?'':'+'}${esc(qfmt(r.l.delta,it.unit))}</strong>`,esc(qfmt(r.bal)),
       tripCell(r.trip),esc(r.e.note||'—')]),'No movements yet.')),
-    actionGroup(button('PDF · every movement',`itemMovementsPDF(${escapeArg(id)})`,'btn-sm btn-primary','pdf'),small('Open item',`closeModal();masterView(${escapeArg(get(state,'variants',id)?'variants':get(state,'materials',id)?'materials':get(state,'parts',id)?'parts':'products')},${escapeArg(id)})`)));
+    actionGroup(small('Open item',`closeModal();masterView(${escapeArg(get(state,'variants',id)?'variants':get(state,'materials',id)?'materials':get(state,'parts',id)?'parts':'products')},${escapeArg(id)})`)));
 }
-/* an item's period groups plus where it went in each period: "Main Store → Site ×6" */
 /* period groups (per item if byItem) with the from -> to routes and quantity in each */
 function routeGroups(lines,p,byItem,side){
   const list=periodGroups(lines,p,byItem,side);
@@ -7563,96 +7507,139 @@ function routeGroups(lines,p,byItem,side){
   }
   return list;
 }
-const itemRoutes=(id,p)=>routeGroups(ledger().filter(r=>r.l.sku===id),p,false,r=>r.l.delta>0);
-const companyRoutes=(lines,p)=>routeGroups(lines,p,true,r=>r.toThem);
 const routeText=(routes,u)=>[...routes].map(([route,q])=>route+'  ('+qfmt(q,u)+')').join(String.fromCharCode(10));
-/* a company's movement lines and what sits at their sites now */
-function companyFlow(type,id){
-  const siteIds=new Set(companyLocations(state,type,id,false).map(l=>l.id));
-  return {lines:companyLines(type,id,siteIds),stock:stockRows(state).filter(b=>siteIds.has(b.location))};
+/* ---------------- Owner reports: one item or one company between two dates ---------------- */
+/* plain words for what happened to a stock line */
+function moveLabel(e,l){
+  return {'Supplier receipt':'Received from vendor','Customer delivery':'Delivered to customer','Sales delivery':'Delivered to customer',
+    'Transfer Stock':'Moved to another location','Opening stock':'Opening stock','Verified legacy opening':'Opening stock',
+    'Record Stock Adjustment':'Stock correction','Physical Stock Check':'Stock count correction'}[e.type]||
+    (e.type==='Production completion'?(l.delta<0?'Used to make parts':'Made in production'):evType(e.type));
 }
-/* company period groups per item, with each item's from -> to routes in that period */
-/* One company's full history with AMBS as a PDF: what they hold, a period summary per item with routes, then every movement. */
-async function companyMovementsPDF(type,id,p='month'){
-  if(!PDFR._ok())return;
+/* From / To dates with PDF and Excel buttons; empty dates mean the full history */
+function reportBar(call){
+  const f=Trk.f;
+  return `<div class="report-bar card-body" style="display:flex;flex-wrap:wrap;gap:10px;align-items:center">
+    <label class="trk-date">From <input class="inp" type="date" name="repFrom" value="${esc(f.from)}"></label>
+    <label class="trk-date">To <input class="inp" type="date" name="repTo" value="${esc(f.to)}"></label>
+    <span style="display:flex;gap:6px">${button('PDF',call('pdf'),'btn-sm btn-primary','pdf')}${button('Excel',call('xlsx'),'btn-sm','xls')}</span>
+    <span class="hint">Leave the dates empty for the full history.</span></div>`;
+}
+function reportRange(btn){
+  const bar=btn.closest('.report-bar'), from=bar.querySelector('[name=repFrom]').value, to=bar.querySelector('[name=repTo]').value;
+  need(!from||!to||from<=to,'The From date must be before the To date.');
+  return {from,to,inside:r=>(!from||r.e.at.slice(0,10)>=from)&&(!to||r.e.at.slice(0,10)<=to),
+    before:r=>!!from&&r.e.at.slice(0,10)<from,upTo:r=>!to||r.e.at.slice(0,10)<=to,
+    text:from&&to?fmtDate(from)+' to '+fmtDate(to):from?'From '+fmtDate(from)+' to today':to?'Up to '+fmtDate(to):'Full history'};
+}
+/* PDF page with the company band, a photo or logo, a title and the report period */
+async function reportStart(docTitle,title,sub,picSrc,period){
+  if(!PDFR._ok())return null;
   await PDFR._prepare();
-  const r=get(state,type,id), c=companyFlow(type,id), [to,from]=COMPANY_FLOW[type];
-  if(!c.lines.length)return toast('No stock has moved to or from this company yet.','warn');
-  const skus=[...new Set([...c.lines.map(x=>x.l.sku),...c.stock.map(b=>b.sku)])];
+  const pic=picSrc?await pdfPicture(picSrc,240):null;
+  const doc=PDFR._doc('landscape'), drawBrand=PDFR._hf(doc,docTitle);
+  drawBrand();
+  let x=40;
+  if(pic){const q=pic.w/pic.h,w=q>=1?64:64*q,h=q>=1?64/q:64;try{doc.addImage(pic.data,'JPEG',40+(64-w)/2,72+(64-h)/2,w,h);x=116;}catch(e){}}
+  doc.setTextColor(30,35,43);doc.setFont('helvetica','bold');doc.setFontSize(15);doc.text(title,x,92);
+  doc.setFont('helvetica','normal');doc.setFontSize(9.5);doc.setTextColor(90);doc.text(sub,x,108);
+  doc.setFont('helvetica','bold');doc.setTextColor(30,35,43);doc.text('Report period: '+period,x,124);
+  const opts={margin:{top:74,bottom:45,left:40,right:40},styles:{fontSize:8.5,overflow:'linebreak'},headStyles:{fillColor:[30,35,43]},didDrawPage:drawBrand};
+  const heading=(text,y)=>{doc.setTextColor(30,35,43);doc.setFont('helvetica','bold');doc.setFontSize(11);doc.text(text,40,y);};
+  const room=y=>{if(y>doc.internal.pageSize.getHeight()-110){doc.addPage();drawBrand();return 96;}return y;};
+  return {doc,opts,heading,room};
+}
+const greenRed=n=>({fontStyle:'bold',textColor:n<0?[180,30,30]:n>0?[20,120,60]:[30,35,43]});
+const signed=(n,u)=>(n>0?'+':'')+qfmt(n,u);
+/* One item between two dates: balance at the start, what came in and went out, what is left, and each movement.
+   A transfer between two AMBS locations is one row: it moves the item but does not change the total. */
+function itemReportData(id,range){
+  const all=ledger().filter(r=>r.l.sku===id), start=all.filter(range.before).reduce((n,r)=>n+r.l.delta,0);
+  const rows=[];let bal=start,inQty=0,outQty=0;
+  const events=new Map();
+  for(const r of all.filter(range.inside))(events.get(r.e.id)||events.set(r.e.id,[]).get(r.e.id)).push(r);
+  for(const lines of events.values()){
+    const transfer=lines.length===2&&lines[0].l.delta===-lines[1].l.delta;
+    const r0=lines.find(r=>r.l.delta<0)||lines[0];
+    if(transfer){rows.push({r:r0,label:moveLabel(r0.e,r0.l),from:r0.from,to:r0.to,qty:Math.abs(r0.l.delta),move:0,bal});continue;}
+    for(const r of lines){
+      bal+=r.l.delta;if(r.l.delta>0)inQty+=r.l.delta;else outQty-=r.l.delta;
+      rows.push({r,label:moveLabel(r.e,r.l),from:r.from,to:r.to,qty:r.l.delta,move:r.l.delta,bal});
+    }
+  }
+  const where=new Map();
+  for(const r of all.filter(range.upTo))where.set(r.l.location,(where.get(r.l.location)||0)+r.l.delta);
+  return {start,inQty,outQty,left:bal,rows:rows.reverse(),
+    where:[...where].filter(([,q])=>Math.abs(q)>EPS).sort((a,b)=>b[1]-a[1])};
+}
+const reportRef=r=>[r.e.note||eventLinks(state,r.e).document,r.trip?'Trip '+r.trip.no+(get(state,'drivers',r.trip.driverId)?' · '+get(state,'drivers',r.trip.driverId).name:''):'']
+  .filter(Boolean).join(' · ')||'—';
+async function itemReport(id,fmt,btn){
+  let range;try{range=reportRange(btn);}catch(e){return toast(e.message,'warn');}
+  const it=item(state,id), u=it?.unit||'', d=itemReportData(id,range), n=x=>Number(x.toFixed(6));
+  const endLabel=range.to?'on '+fmtDate(range.to):'now';
+  if(fmt==='xlsx')return XLSX.save('AMBS_'+(it.code||id)+'_'+(range.from||'start')+'_to_'+(range.to||todayISO()),[
+    {name:'Summary',columns:['Item code','Item','Unit','From date','To date','Balance at start','Came in','Went out','Left at the end'],
+      rows:[[it.code,it.name,u,range.from||'',range.to||todayISO(),n(d.start),n(d.inQty),n(d.outQty),n(d.left)]]},
+    {name:'Where it is',columns:['Location','Balance','Unit'],rows:d.where.map(([l,q])=>[locName(state,l),n(q),u])},
+    {name:'Movements',columns:['Date','Time','What happened','From','To','Quantity','Balance left','Unit','Reference'],
+      rows:d.rows.map(x=>[x.r.e.at.slice(0,10),new Date(x.r.e.at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}),x.label,x.from,x.to,
+        n(x.qty),n(x.bal),u,reportRef(x.r)])}]);
+  const P=await reportStart('Item movements',it.name,[it.code,skuKind(id),'Unit: '+(u||'—')].filter(Boolean).join('   ·   '),itemPicture(state,id),range.text);
+  if(!P)return;
+  const {doc,opts,heading,room}=P;
+  heading('Summary for this period',158);
+  doc.autoTable({...opts,startY:166,head:[['Balance at the start','Came in','Went out','Left at the end']],
+    body:[[qfmt(d.start,u),{content:d.inQty?'+'+qfmt(d.inQty,u):'—',styles:greenRed(d.inQty)},{content:d.outQty?'-'+qfmt(d.outQty,u):'—',styles:greenRed(-d.outQty)},
+      {content:qfmt(d.left,u),styles:{fontStyle:'bold'}}]]});
+  let y=room(doc.lastAutoTable.finalY+24);
+  heading('Where it is '+endLabel,y);
+  doc.autoTable({...opts,startY:y+8,head:[['Location','Balance']],
+    body:d.where.length?d.where.map(([l,q])=>[locName(state,l),{content:qfmt(q,u),styles:{fontStyle:'bold'}}]):[['Not held at any location','—']]});
+  y=room(doc.lastAutoTable.finalY+24);
+  heading('Movements · '+d.rows.length,y);
+  doc.autoTable({...opts,startY:y+8,widths:[.11,.15,.17,.17,.09,.1,.21],head:[['Date','What happened','From','To','Quantity','Balance left','Reference']],
+    body:d.rows.length?d.rows.map(x=>[stamp(x.r.e.at),x.label,x.from,x.to,{content:x.move?signed(x.qty,u):qfmt(x.qty,u),styles:greenRed(x.move)},qfmt(x.bal,u),reportRef(x.r)]):
+      [['—','No movements in this period','','','','','']]});
+  doc.save('AMBS_'+String(it.code||id).replace(/[^a-z0-9_-]+/gi,'_')+'_'+(range.from||'start')+'_to_'+(range.to||todayISO())+'.pdf');
+}
+/* One company between two dates: per item what went to them and what came back, what they hold at the end, and each movement. */
+async function companyReport(type,id,fmt,btn){
+  let range;try{range=reportRange(btn);}catch(e){return toast(e.message,'warn');}
+  const r=get(state,type,id), [toWord,fromWord]=COMPANY_FLOW[type], n=x=>Number(x.toFixed(6));
+  const siteIds=new Set(companyLocations(state,type,id,false).map(l=>l.id)), all=companyLines(type,id,siteIds);
+  const lines=all.filter(range.inside), held=new Map(), per=new Map();
+  for(const x of all.filter(range.upTo))if(siteIds.has(x.l.location)){const k=x.l.sku+'|'+x.l.location;held.set(k,(held.get(k)||0)+x.l.delta);}
+  for(const x of lines){const p=per.get(x.l.sku)||{to:0,from:0};p[x.toThem?'to':'from']+=Math.abs(x.l.delta);per.set(x.l.sku,p);}
+  const holding=[...held].filter(([,q])=>Math.abs(q)>EPS).map(([k,q])=>{const [sku,location]=k.split('|');return {sku,location,q};});
+  const unit=k=>item(state,k)?.unit||'', name=k=>{const it=item(state,k);return [it?.code,it?.name].filter(Boolean).join(' · ');};
+  const items=[...per].sort((a,b)=>name(a[0]).localeCompare(name(b[0])));
+  const rows=lines.slice().reverse(), endLabel=range.to?'on '+fmtDate(range.to):'now';
+  if(fmt==='xlsx')return XLSX.save('AMBS_'+(r.code||r.name)+'_'+(range.from||'start')+'_to_'+(range.to||todayISO()),[
+    {name:'Summary',columns:['Item code','Item',toWord,fromWord,'Unit'],rows:items.map(([k,p])=>[item(state,k)?.code||'',item(state,k)?.name||'',n(p.to),n(p.from),unit(k)])},
+    {name:'Held at their sites',columns:['Item code','Item','Location','Balance','Unit'],rows:holding.map(h=>[item(state,h.sku)?.code||'',item(state,h.sku)?.name||'',locName(state,h.location),n(h.q),unit(h.sku)])},
+    {name:'Movements',columns:['Date','Time','Item code','Item','What happened','From','To','Quantity','Unit','Reference'],
+      rows:rows.map(x=>[x.e.at.slice(0,10),new Date(x.e.at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}),item(state,x.l.sku)?.code||'',
+        item(state,x.l.sku)?.name||'',moveLabel(x.e,x.l),x.from,x.to,n(Math.abs(x.l.delta)),unit(x.l.sku),reportRef(x)])}]);
+  const P=await reportStart('Company movements',r.name,[r.code,COMPANY_KIND[type],r.phone].filter(Boolean).join('   ·   '),validImage(r.image)?r.image:'',range.text);
+  if(!P)return;
+  const {doc,opts,heading,room}=P;
+  const skus=[...new Set([...items.map(([k])=>k),...holding.map(h=>h.sku),...rows.map(x=>x.l.sku)])];
   const pics=new Map(await Promise.all(skus.map(async k=>[k,await pdfPicture(itemPicture(state,k),120)])));
-  const logo=validImage(r.image)?await pdfPicture(r.image,240):null;
-  const doc=PDFR._doc('landscape'), drawBrand=PDFR._hf(doc,'Company movements');
-  drawBrand();
-  let x=40;
-  if(logo){const q=logo.w/logo.h,w=q>=1?72:72*q,h=q>=1?72/q:72;
-    try{doc.addImage(logo.data,'JPEG',40+(72-w)/2,74+(72-h)/2,w,h);x=124;}catch(e){}}
-  const moves=new Set(c.lines.map(l=>l.e.id)).size;
-  doc.setTextColor(30,35,43);doc.setFont('helvetica','bold');doc.setFontSize(15);doc.text(r.name,x,90);
-  doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(90);
-  doc.text([r.code,COMPANY_KIND[type],r.phone].filter(Boolean).join('   ·   '),x,106);
-  doc.text(moves+(moves===1?' movement':' movements')+'   ·   '+skus.length+(skus.length===1?' item':' items')+'   ·   '+fmtDate(c.lines[0].e.at.slice(0,10))+' to '+fmtDate(c.lines[c.lines.length-1].e.at.slice(0,10)),x,120);
-  doc.text('Printed '+stamp(new Date().toISOString()),x,134);
-  const heading=(text,y)=>{doc.setTextColor(30,35,43);doc.setFont('helvetica','bold');doc.setFontSize(11);doc.text(text,40,y);};
-  const opts={margin:{top:74,bottom:45,left:40,right:40},styles:{fontSize:8,overflow:'linebreak'},headStyles:{fillColor:[30,35,43]},didDrawPage:drawBrand};
   const photo=k=>({content:'',image:pics.get(k),imageSize:22});
-  const name=k=>{const it=item(state,k);return [it?.code,it?.name].filter(Boolean).join(' · ');};
-  const q=(n,k)=>n?qfmt(n,item(state,k)?.unit||''):'—';
-  const room=y=>{if(y>doc.internal.pageSize.getHeight()-120){doc.addPage();drawBrand();return 96;}return y;};
-  heading('Held at their sites now',166);
-  doc.autoTable({...opts,startY:174,widths:[.07,.5,.28,.15],head:[['Photo','Item','Location','Balance']],
-    body:c.stock.length?c.stock.map(b=>[photo(b.sku),name(b.sku),locName(state,b.location),{content:q(b.qty,b.sku),styles:{fontStyle:'bold'}}]):[['','Nothing held at their sites','','—']]});
-  let y=room(doc.lastAutoTable.finalY+26);
-  heading('Summary by '+PERIODS[p].toLowerCase()+' · from where to where',y);
-  doc.autoTable({...opts,startY:y+8,widths:[.11,.06,.18,.07,.1,.1,.38],head:[[PERIODS[p],'Photo','Item','Moves',to,from,'From -> To (quantity)']],
-    body:companyRoutes(c.lines,p).map(g=>[g.name,photo(g.sku),name(g.sku),String(g.moves.size),q(g.a,g.sku),q(g.b,g.sku),routeText(g.routes,item(state,g.sku)?.unit||'')])});
-  y=room(doc.lastAutoTable.finalY+26);
-  heading('Every movement · '+c.lines.length+' lines',y);
-  doc.autoTable({...opts,startY:y+8,widths:[.1,.05,.15,.1,.12,.12,.1,.08,.1,.08],
-    head:[['When','Photo','Item','Movement','From','To','Direction','Quantity','Reference','By']],
-    body:c.lines.slice().reverse().map(l=>[stamp(l.e.at),photo(l.l.sku),name(l.l.sku),evType(l.e.type),l.from,l.to,l.toThem?to:from,
-      {content:q(Math.abs(l.l.delta),l.l.sku),styles:{textColor:l.toThem?[180,30,30]:[20,120,60],fontStyle:'bold'}},
-      l.e.note||eventLinks(state,l.e).document||'—',l.e.by||'—'])});
-  doc.save('AMBS_Movements_'+String(r.code||r.name).replace(/[^a-z0-9_-]+/gi,'_')+'_'+todayISO()+'.pdf');
-}
-/* One item's full history as a PDF: photo and balances, a monthly summary, then every movement. */
-async function itemMovementsPDF(id,p='month'){
-  if(!PDFR._ok())return;
-  await PDFR._prepare();
-  const it=item(state,id), u=it?.unit||'', rows=ledger().filter(r=>r.l.sku===id);
-  if(!rows.length)return toast('This item has no movements yet.','warn');
-  const pic=await pdfPicture(itemPicture(state,id),240);
-  const doc=PDFR._doc('landscape'), drawBrand=PDFR._hf(doc,'Item movements'), W=doc.internal.pageSize.getWidth();
-  drawBrand();
-  // item header: photo, name, code, balances
-  let x=40;
-  if(pic){const r=pic.w/pic.h,w=r>=1?72:72*r,h=r>=1?72/r:72;
-    try{doc.addImage(pic.data,'JPEG',40+(72-w)/2,74+(72-h)/2,w,h);x=124;}catch(e){}}
-  const onHand=rows.reduce((n,r)=>n+r.l.delta,0), here=stockRows(state).filter(b=>b.sku===id);
-  const totIn=rows.filter(r=>r.l.delta>0).reduce((n,r)=>n+r.l.delta,0), totOut=rows.filter(r=>r.l.delta<0).reduce((n,r)=>n-r.l.delta,0);
-  doc.setTextColor(30,35,43);doc.setFont('helvetica','bold');doc.setFontSize(15);doc.text(it?.name||id,x,90);
-  doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(90);
-  doc.text([it?.code,skuKind(id),'Unit: '+(u||'—')].filter(Boolean).join('   ·   '),x,106);
-  doc.text('On hand now: '+qfmt(onHand,u)+(here.length?'   ('+here.map(b=>locName(state,b.location)+' '+qfmt(b.qty)).join(', ')+')':''),x,120);
-  doc.text(new Set(rows.map(r=>r.e.id)).size+' movements   ·   total in '+qfmt(totIn,u)+'   ·   total out '+qfmt(totOut,u)+
-    '   ·   '+fmtDate(rows[0].e.at.slice(0,10))+' to '+fmtDate(rows[rows.length-1].e.at.slice(0,10))+'   ·   printed '+stamp(new Date().toISOString()),x,134);
-  const heading=(text,y)=>{doc.setTextColor(30,35,43);doc.setFont('helvetica','bold');doc.setFontSize(11);doc.text(text,40,y);};
-  const opts={margin:{top:74,bottom:45,left:40,right:40},styles:{fontSize:8,overflow:'linebreak'},headStyles:{fillColor:[30,35,43]},didDrawPage:drawBrand};
-  heading('Where it is now',166);
-  doc.autoTable({...opts,startY:174,head:[['Location','Balance']],
-    body:here.length?here.sort((a,b)=>b.qty-a.qty).map(b=>[locName(state,b.location),{content:qfmt(b.qty,u),styles:{fontStyle:'bold'}}]):[['Not held at any location','—']]});
-  let y=doc.lastAutoTable.finalY+26;
-  heading('Summary by '+PERIODS[p].toLowerCase()+' · from where to where',y);
-  doc.autoTable({...opts,startY:y+8,widths:[.15,.09,.09,.09,.1,.48],head:[[PERIODS[p],'Movements','In','Out','Net change','From -> To (quantity)']],
-    body:itemRoutes(id,p).map(x=>[x.name,String(x.moves.size),x.a?qfmt(x.a,u):'—',x.b?qfmt(x.b,u):'—',(x.a-x.b>0?'+':'')+qfmt(x.a-x.b,u),routeText(x.routes,u)])});
-  y=doc.lastAutoTable.finalY+26;
-  if(y>doc.internal.pageSize.getHeight()-120){doc.addPage();drawBrand();y=96;}
-  heading('Every movement · '+rows.length+' lines',y);
-  doc.autoTable({...opts,startY:y+8,widths:[.11,.11,.14,.14,.08,.08,.12,.13,.09],
-    head:[['When','Movement','From','To','Change','Balance there','Trip / driver','Reference','By']],
-    body:rows.slice().reverse().map(r=>[stamp(r.e.at),evType(r.e.type),r.from,r.to,
-      {content:(r.l.delta>0?'+':'')+qfmt(r.l.delta,u),styles:{textColor:r.l.delta<0?[180,30,30]:[20,120,60],fontStyle:'bold'}},qfmt(r.bal,u),
-      [r.trip?.no,get(state,'drivers',r.trip?.driverId)?.name].filter(Boolean).join(' · ')||'—',r.e.note||eventLinks(state,r.e).document||'—',r.e.by||'—'])});
-  doc.save('AMBS_Movements_'+String(it?.code||id).replace(/[^a-z0-9_-]+/gi,'_')+'_'+todayISO()+'.pdf');
+  heading('Summary for this period',158);
+  doc.autoTable({...opts,startY:166,widths:[.07,.43,.25,.25],head:[['Photo','Item',toWord,fromWord]],
+    body:items.length?items.map(([k,p])=>[photo(k),name(k),p.to?qfmt(p.to,unit(k)):'—',p.from?qfmt(p.from,unit(k)):'—']):[['','Nothing moved with them in this period','','']]});
+  let y=room(doc.lastAutoTable.finalY+24);
+  heading('Held at their sites '+endLabel,y);
+  doc.autoTable({...opts,startY:y+8,widths:[.07,.43,.3,.2],head:[['Photo','Item','Location','Balance']],
+    body:holding.length?holding.map(h=>[photo(h.sku),name(h.sku),locName(state,h.location),{content:qfmt(h.q,unit(h.sku)),styles:{fontStyle:'bold'}}]):[['','Nothing held at their sites','','—']]});
+  y=room(doc.lastAutoTable.finalY+24);
+  heading('Movements · '+rows.length,y);
+  doc.autoTable({...opts,startY:y+8,widths:[.1,.05,.17,.14,.14,.14,.09,.17],head:[['Date','Photo','Item','What happened','From','To','Quantity','Reference']],
+    body:rows.length?rows.map(x=>[stamp(x.e.at),photo(x.l.sku),name(x.l.sku),moveLabel(x.e,x.l),x.from,x.to,
+      {content:qfmt(Math.abs(x.l.delta),unit(x.l.sku)),styles:{fontStyle:'bold'}},reportRef(x)]):[['—','','No movements in this period','','','','','']]});
+  doc.save('AMBS_'+String(r.code||r.name).replace(/[^a-z0-9_-]+/gi,'_')+'_'+(range.from||'start')+'_to_'+(range.to||todayISO())+'.pdf');
 }
 
 /* ---------------- Live refresh: dashboard, tracking and drivers pull fresh data every 30 s ---------------- */
