@@ -3249,7 +3249,7 @@ const TITLES={owner:'Owner overview',team:'Team activity',items:'Items & stock',
   'plan-new':'Production','purchase-new':'Purchasing'};
 /* Owner (super admin) gets his own menu: the team's work, items and tracking. Admins see the same pages under "Owner view". */
 /* Build version: stamped by scripts/bump-version.py together with the ?v= links in index.html. */
-const AMBS_VERSION='2026.11.27-1616';
+const AMBS_VERSION='2026.11.27-1619';
 const isOwner=()=>typeof CLOUD!=='undefined'&&CLOUD.role==='owner';
 const canSeeOwner=()=>typeof CLOUD!=='undefined'&&['owner','admin'].includes(CLOUD.role);
 const OWNER_GROUPS=[
@@ -5883,12 +5883,77 @@ function cancelJob(id){
     for(const t of s.trips)if(t.jobId===id&&['Next','On the way'].includes(t.status))t.status='Cancelled';
   });
 }
+/* Packing & Dispatch as a timeline (same look as Live Tracking and Deliveries):
+   grouped by the day the job was created, one card per job, coloured by status. */
+const Dsp={
+  f:{q:'',status:''},
+  set(name,value){this.f[name]=value;const box=$('#dispatch-results');if(box)box.innerHTML=this.results();},
+  filtered(){
+    const f=this.f, q=searchKey(f.q);
+    return state.jobs.filter(j=>(!f.status||j.status===f.status)&&(!q||searchKey([j.no,j.name,get(state,'customers',j.customerId)?.name,
+      j.destinationSnapshot?.name,labelOf(state,j.productId),locName(state,j.location)].join(' ')).includes(q))).sort(dateSort);
+  },
+  results(){
+    const rows=this.filtered(), count=st=>rows.filter(j=>j.status===st).length;
+    return `<div class="trk-summary tl-sum">${[['Jobs',rows.length],['Open',count('Open'),'tl-c-next'],['Partly delivered',count('Partially delivered'),'tl-c-road'],
+        ['Delivered',count('Delivered'),'tl-c-done']].map(([k,v,c])=>`<span>${esc(k)} <b class="${c||''}">${esc(v)}</b></span>`).join('')}
+      <div class="tl-legend">${[['next','Open'],['road','Partly delivered'],['done','Delivered'],['cancel','Cancelled']].map(([k,t])=>`<span class="tl-${k}"><i></i>${t}</span>`).join('')}</div></div>`+
+      `<div class="tl-feed">${jobTimeline(rows)}</div>`;
+  }
+};
+const JOB_KIND={'Open':['next','box','Open'],'Partially delivered':['road','truck','Partly delivered'],'Delivered':['done','ok','Delivered'],'Cancelled':['cancel','x','Cancelled']};
+function jobTimeline(jobs){
+  if(!jobs.length)return `<p class="tl-empty">${state.jobs.length?'No dispatch jobs match.':'No dispatch jobs yet. Click New to pack a product for a customer.'}</p>`;
+  let day='',html='';
+  for(const j of jobs){
+    const d=String(j.at||'').slice(0,10);
+    if(d!==day){if(day)html+='</div>';day=d;html+=`<div class="tl-day"><div class="tl-date">${esc(d?feedDay(d):'No date')}</div>`;}
+    html+=jobEntry(j);
+  }
+  return html+'</div>';
+}
+function jobEntry(j){
+  const [kind,icon,title]=JOB_KIND[j.status]||['next','box',j.status];
+  const args=escapeArg(j.id), it=item(state,j.productId), customer=get(state,'customers',j.customerId);
+  const site=get(state,'locations',j.destination)||j.destinationSnapshot||{};
+  const trip=state.trips.find(t=>t.jobId===j.id&&t.status!=='Cancelled'), driver=trip&&get(state,'drivers',trip.driverId)?.name;
+  const open=['Open','Partially delivered'].includes(j.status), pct=j.qty?Math.round(j.delivered/j.qty*100):0;
+  const at=j.at&&/T/.test(j.at)?new Date(j.at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}):'';
+  const acts=[open&&!trip?button('Assign driver',`assignDelivery('job',${args})`,'btn-sm btn-primary'):'',
+    button('Packing list',`packingListPDF('job',${args})`,'btn-sm','pdf'),small('Open',`dispatchView(${args})`)].filter(Boolean).join('');
+  return `<div class="tl-entry tl-${kind}">
+    <div class="tl-time">${esc(at)}</div>
+    <div class="tl-dot">${ic(icon)}</div>
+    <div class="tl-body"><div class="tl-head"><b>${esc(title)}</b>
+        <button type="button" class="tl-no" onclick="dispatchView(${args})">${esc(j.no)}</button>
+        ${j.name?`<span class="tl-ref">${esc(j.name)}</span>`:''}
+        <span class="tl-route"><span>${esc(locName(state,j.location))}</span><b>→</b><span>${esc([customer?.name,site.name].filter(Boolean).join(' · ')||'—')}</span>${mapBtn(mapsLink(site))}</span></div>
+      <div class="tl-lines"><div class="tl-line">
+        <button type="button" class="tl-item-name" onclick="trackItem(${escapeArg(j.productId)})" title="Track this item">${recordPicture(it||{})}
+          <span><b>${esc(it?.name||'—')}</b><small>${esc(it?.code||'')} · ${esc(j.finished?(get(state,'products',j.productId)?'Finished stock':'From stock'):'Packed from '+j.parts.length+' part'+(j.parts.length===1?'':'s'))}</small></span></button>
+        <span class="tl-qty tl-q-move">${esc(j.qty)} ${esc(it?.unit||'')}</span>
+        <span class="tl-bal">${esc(j.delivered)} delivered · ${esc(j.qty-j.delivered)} left</span></div></div>
+      <div class="tl-progress" title="${pct}% delivered"><i style="width:${pct}%"></i></div>
+      <div class="tl-meta">${trip?`<button type="button" class="tl-tag tl-tag-link" onclick="tripView(${escapeArg(trip.id)})">${ic('truck')}${esc(trip.no)}${driver?' · '+esc(driver):''} · ${esc(trip.status)}</button>`:
+          open?`<span class="tl-tag">${ic('alert')}No driver yet</span>`:''}
+        ${j.trackAtDestination?`<span class="tl-tag">${ic('pin')}Tracked at customer site</span>`:''}
+        <span class="tl-acts">${acts}</span></div></div></div>`;
+}
 function dispatchPage(){
+  const f=Dsp.f, opt=(rows,sel,all)=>`<option value="">${esc(all)}</option>`+rows.map(([v,l])=>`<option value="${esc(v)}" ${v===sel?'selected':''}>${esc(l)}</option>`).join('');
+  const jobs=state.jobs, live=jobs.filter(j=>['Open','Partially delivered'].includes(j.status));
+  const noDriver=live.filter(j=>!state.trips.some(t=>t.jobId===j.id&&t.status!=='Cancelled')).length;
+  const month=jobs.filter(j=>j.status==='Delivered'&&monthKey(j.at)===thisMonth()).length;
   return head('Operations',TITLES.dispatch,button('New','dispatchEdit()','btn-primary'))+
-    searchableTable(['Job','Customer / site','Item','Requested','Delivered','Outstanding','Status'],state.jobs.slice().sort(dateSort).map(j=>[
-      cell(j.no,j.name),cell(get(state,'customers',j.customerId)?.name,j.destinationSnapshot.name),
-      esc(labelOf(state,j.productId)),esc(j.qty),esc(j.delivered),esc(j.qty-j.delivered),chip(j.status)+openBtn(`dispatchView(${escapeArg(j.id)})`)
-    ]),'No dispatch jobs yet. Click New to pack a product for a customer.');
+    '<div class="trk-scope">'+kpiRow([['box','Open jobs',live.length,live.length?live.reduce((n,j)=>n+j.qty-j.delivered,0)+' units still to deliver':'Nothing open','k-ink'],
+      ['alert','Without a driver',noDriver,noDriver?'Assign a driver to send them':'All have a driver',noDriver?'k-red':'k-ok','deliveries'],
+      ['truck','Partly delivered',jobs.filter(j=>j.status==='Partially delivered').length,'Rest still to go','k-yellow'],
+      ['ok','Delivered this month',month,'Jobs completed','k-ok']])+
+    `<section class="card erp-table"><div class="card-head"><div class="card-title">Dispatch jobs</div></div>
+      <div class="toolbar trip-filters"><div class="search">${ic('search')}<input class="inp" aria-label="Search dispatch jobs" placeholder="Search job no., reference, customer, item…"
+        value="${esc(f.q)}" oninput="Dsp.set('q',this.value)"></div>
+        <select class="sel" aria-label="Status" onchange="Dsp.set('status',this.value)">${opt(same(['Open','Partially delivered','Delivered','Cancelled']),f.status,'All statuses')}</select></div>
+      <div id="dispatch-results" class="card-body-flush">${Dsp.results()}</div></section></div>`;
 }
 
 /* Sales orders: customer orders for any stock item, delivered in one or more shipments. */

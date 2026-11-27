@@ -1004,6 +1004,11 @@ Keywords: dispatch, delivery, packing, ship, send to customer, DSP, job, شحن,
 
 Each job holds one item. Errors include "Enter a dispatch reference.", "Select a delivery site belonging to this customer." and "Save the Product BOM for … first."
 
+## The Packing & Dispatch page
+Keywords: dispatch list, jobs list, dispatch timeline, packing page
+
+The page shows four numbers (open jobs, jobs without a driver, partly delivered, delivered this month), then **Dispatch jobs** as a timeline grouped by the day each job was created. Each job is one card, coloured by status: blue *open*, orange *partly delivered*, green *delivered*, grey *cancelled*. A card shows the job no. and reference, source store → customer · site (📍), the item with its photo and how it ships, the quantity, a progress bar with *delivered / left*, and the trip and driver (or *No driver yet*). Buttons on the card: **Assign driver**, **Packing list** and **Open**. Search by job no., reference, customer or item, or filter by status.
+
 ## Fulfilment: Pack from parts vs Finished stock
 Keywords: fulfilment, pack from parts, finished stock, kit, deduct parts, تجهيز
 
