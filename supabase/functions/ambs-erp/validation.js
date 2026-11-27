@@ -163,7 +163,7 @@ function validateState(s){
     }
     if(e.orderId){
       const order=get(s,'orders',e.orderId);
-      need(order&&e.id==='production:'+e.orderId,'Invalid production event link.');
+      need(order&&(e.id==='production:'+e.orderId||e.id.startsWith('production:'+e.orderId+':')),'Invalid production event link.');
       if(e.partyId)need(e.partyType==='customers'&&e.partyId===order.customerId&&
         e.siteId===(order.customerSiteId||''),'Production event has an invalid customer or site link.');
     }
@@ -211,7 +211,16 @@ function validateState(s){
   }
   for(const j of s.jobs)need((delivered.get(j.id)||0)===j.delivered,'Delivery totals do not match the ledger.');
   for(const p of s.purchases)for(const l of p.lines)need(Math.abs((received.get(JSON.stringify([p.id,l.sku]))||0)-l.received)<EPS*10,'Receipt totals do not match the ledger.');
-  for(const o of s.orders)need((o.status==='Completed')===!!get(s,'events','production:'+o.id),'Completion does not match the ledger.');
+  for(const o of s.orders){
+    // pieces received: old orders post one event when completed; newer ones keep o.received in step with their receipts
+    const posted=s.events.filter(e=>e.orderId===o.id||e.id==='production:'+o.id);
+    if(o.received==null)need((o.status==='Completed')===(posted.length>0),'Completion does not match the ledger.');
+    else{
+      const made=posted.reduce((n,e)=>n+e.lines.filter(l=>l.sku===o.sku&&l.delta>0).reduce((m,l)=>m+l.delta,0),0);
+      need(Number.isSafeInteger(o.received)&&o.received>=0&&o.received<=o.qty&&made===o.received&&
+        (o.status==='Completed'?o.received>0:o.status==='Released'?o.received<o.qty:o.received===0),'Production receipts do not match the ledger.');
+    }
+  }
   for(const o of s.sales)for(const l of o.lines)need(Math.abs((shipped.get(JSON.stringify([o.id,l.sku]))||0)-l.delivered)<EPS*10,
     'Sales delivery totals do not match the ledger.');
 }

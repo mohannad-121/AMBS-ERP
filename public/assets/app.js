@@ -322,7 +322,8 @@ function pending(s,sku,location){
 function reserved(s,sku,location,exclude=''){
   const orders=s.orders.filter(o=>o.status==='Released' && o.location===location && o.id!==exclude);
   const plans=s.plans.filter(p=>p.status==='Reserved' && p.location===location && p.id!==exclude);
-  return orders.concat(plans).reduce((n,p)=>n+p.materials.filter(l=>l.sku===sku).reduce((sum,l)=>sum+l.qty,0),0);
+  const left=p=>p.qty&&p.received?Math.max(0,1-p.received/p.qty):1; // orders partly received reserve only the rest
+  return orders.concat(plans).reduce((n,p)=>n+p.materials.filter(l=>l.sku===sku).reduce((sum,l)=>sum+l.qty*left(p),0),0);
 }
 function emptyStateData(settings={}){
   return {...Object.fromEntries(LIVE.map(k=>[k,[]])),settings:{...DEFAULTS,...settings},deletedWorkbookParts:[],schema:3};
@@ -3246,7 +3247,7 @@ const TITLES={owner:'Owner overview',team:'Team activity',items:'Items & stock',
   'plan-new':'Production','purchase-new':'Purchasing'};
 /* Owner (super admin) gets his own menu: the team's work, items and tracking. Admins see the same pages under "Owner view". */
 /* Build version: stamped by scripts/bump-version.py together with the ?v= links in index.html. */
-const AMBS_VERSION='2026.11.27-1339';
+const AMBS_VERSION='2026.11.27-1351';
 const isOwner=()=>typeof CLOUD!=='undefined'&&CLOUD.role==='owner';
 const canSeeOwner=()=>typeof CLOUD!=='undefined'&&['owner','admin'].includes(CLOUD.role);
 const OWNER_GROUPS=[
@@ -5165,7 +5166,7 @@ function orderEdit(initialPart='',initialLocation='',id){
     <div data-variant></div>${area('Notes','notes',old?.notes)}</div><div data-preview></div>`,async f=>{
       await commit(s=>{
         const prev=get(s,'orders',id);
-        need(!id||prev?.status!=='Completed'&&sameCloudRecord(prev,old),'This order changed or has posted stock. Reopen it before saving.');
+        need(!id||prev?.status!=='Completed'&&!prev?.received&&sameCloudRecord(prev,old),'This order changed or has posted stock. Reopen it before saving.');
         const part=live(s,'parts',valOf(f,'part'));
         need(part.source==='Manufactured','Choose a manufactured part.');
         const count=whole(valOf(f,'qty')), variant=valOf(f,'variant'), source=expandPart(s,part.id,count,variant);
@@ -5200,16 +5201,66 @@ function orderView(id){
   const o=get(state,'orders',id), args=escapeArg(id);
   infoModal(o.no+' · '+labelOf(state,o.sku),formHeader([
       o.status==='Draft'?button('Release',`orderTransition(${args},'Released')`,'btn-sm btn-primary'):'',
-      o.status==='Released'?button('Mark completed',`orderTransition(${args},'Completed')`,'btn-sm btn-primary'):'',
-      ['Draft','Released'].includes(o.status)?small('Edit',`orderEdit('','',${args})`):'',
-      ['Draft','Released'].includes(o.status)?small('Cancel',`orderTransition(${args},'Cancelled')`):''],['Draft','Released','Completed'],o.status)+
-    kv([['Status',o.status],['Quantity',o.qty],['Location',locName(state,o.location)],
+      o.status==='Released'?button('Receive pieces',`orderReceive(${args})`,'btn-sm btn-primary'):'',
+      ['Draft','Released'].includes(o.status)&&!o.received?small('Edit',`orderEdit('','',${args})`):'',
+      ['Draft','Released'].includes(o.status)&&!o.received?small('Cancel',`orderTransition(${args},'Cancelled')`):''],['Draft','Released','Completed'],o.status)+
+    kv([['Status',orderStatusText(o)],['Quantity ordered',o.qty],
+    ['Received',o.status==='Completed'&&o.received==null?o.qty:(o.received||0)],
+    ['Still to receive',o.status==='Released'?o.qty-(o.received||0):''],['Location',locName(state,o.location)],
     ['Customer',get(state,'customers',o.customerId)?.name],['Customer site',get(state,'locations',o.customerSiteId)?.name],
     ['Processing company',get(state,'processors',o.processorId)?.name],['Processing site',get(state,'locations',o.processorSiteId)?.name],
     ['Notes',o.notes]])+
-    panel('Raw material requirements',requireTable(state,o.materials,o.location,o.id))+panel('BOM trace',traceTable(o.source)),
+    panel('Raw material requirements',requireTable(state,o.materials,o.location,o.id))+
+    (orderEvents(state,id).length?panel('Pieces received',eventsTable(orderEvents(state,id).slice().sort(dateSort))):'')+
+    panel('BOM trace',traceTable(o.source)),
     actionGroup(button('PDF',`recordPDF('orders',${escapeArg(id)})`,'btn-sm','pdf'),
-      o.status!=='Completed'?dangerSmall('Delete',`deleteOperation('orders',${escapeArg(id)})`):''));
+      o.status!=='Completed'&&!o.received?dangerSmall('Delete',`deleteOperation('orders',${escapeArg(id)})`):''));
+}
+/* the production receipts posted for an order (old orders have one event 'production:<id>', new ones one per receipt) */
+const orderEvents=(s,id)=>s.events.filter(e=>e.orderId===id||e.id==='production:'+id);
+/* raw material already used by an order's earlier receipts */
+const materialUsed=(s,id,sku)=>orderEvents(s,id).reduce((m,e)=>m-e.lines.filter(x=>x.sku===sku&&x.delta<0).reduce((a,x)=>a+x.delta,0),0);
+const orderStatusText=o=>o.status==='Released'&&o.received>0?'Partially received ('+o.received+' of '+o.qty+')':o.status==='Completed'&&o.received!=null&&o.received<o.qty?'Closed short ('+o.received+' of '+o.qty+')':o.status;
+/* Receive what actually came back: all of it, part of it (order stays open), or part of it and close the order.
+   Raw materials are used in proportion to the pieces received; the last receipt of a full order uses exactly the rest. */
+function orderReceive(id){
+  const o=get(state,'orders',id), done=o.received||0, left=o.qty-done, unit=item(state,o.sku)?.unit;
+  const form=formModal('Receive pieces · '+o.no,
+    note('Ordered '+o.qty+' · received so far '+done+' · still to receive '+left+'. Raw materials are used in proportion to the pieces received.')+
+    `<div class="form-grid">${number('Pieces received now','pieces',left,0,1)}
+    ${tick('Close the order — no more pieces are coming','close',false)}</div><div data-receive-preview></div>`,async f=>{
+    const n=whole(valOf(f,'pieces'),'Pieces received',true), close=checked(f,'close');
+    await commit(s=>{
+      const r=get(s,'orders',id);
+      need(r?.status==='Released','Release this order before receiving pieces.');
+      const before=r.received||0, rest=r.qty-before;
+      need(n<=rest,'Only '+rest+' pieces are still to receive on this order.');
+      need(n>0||close&&before>0,n===0&&before===0?'Enter the pieces received, or cancel the order instead.':'Enter the pieces received.');
+      if(n>0){
+        const full=before+n===r.qty;
+        const lines=r.materials.map(l=>({sku:l.sku,location:r.location,delta:-(full?roundMeasured(l.qty-materialUsed(s,id,l.sku)):roundMeasured(l.qty*n/r.qty))}))
+          .filter(l=>l.delta<0);
+        const eventId='production:'+id+':'+(orderEvents(s,id).length+1);
+        event(s,eventId,'Production completion',[...lines,{sku:r.sku,location:r.location,delta:n}],r.no+' · '+n+' of '+r.qty+' pcs');
+        Object.assign(get(s,'events',eventId),{orderId:id,
+          ...(r.customerId?{partyType:'customers',partyId:r.customerId,siteId:r.customerSiteId||''}:{})});
+      }
+      r.received=before+n;
+      if(r.received===r.qty||close){r.status='Completed';r.completedAt=now();}
+    });
+    return n?n+' pieces received.'+(close||done+n===o.qty?' Order completed.':' The rest stays open on the order.'):'Order closed.';
+  },{text:'Confirm receipt'});
+  const box=$('[data-receive-preview]',form);
+  const update=()=>{
+    const n=Number(valOf(form,'pieces'));
+    if(!Number.isSafeInteger(n)||n<0||n>left){box.innerHTML=note('Enter 0 to '+left+' pieces.','warn');return;}
+    const after=done+n, closing=checked(form,'close')||after===o.qty;
+    box.innerHTML=(n?panel('Raw materials used for these '+n+' pieces',table(['Raw material','Used now'],o.materials.map(l=>{
+        const m=item(state,l.sku);return [esc(label(m)),esc(qfmt(after===o.qty?l.qty-materialUsed(state,id,l.sku):l.qty*n/o.qty,m?.unit))];}))):'')+
+      note(closing?(after<o.qty?'The order will be closed with '+after+' of '+o.qty+' pieces. The unused raw materials stay in stock.':'All '+o.qty+' pieces received. The order will be completed.'):
+        'The order stays open with '+(o.qty-after)+' pieces still to receive.',closing&&after<o.qty?'warn':'');
+  };
+  form.addEventListener('input',update);form.addEventListener('change',update);update();
 }
 function orderTransition(id,status){
   const word={Released:'Release',Completed:'Confirm completion',Cancelled:'Cancel order'}[status];
@@ -5217,8 +5268,9 @@ function orderTransition(id,status){
     status==='Released'?'Reserve the raw materials for this order. Physical balances stay the same.':'Cancel this order and release its requirements.',s=>{
     const o=get(s,'orders',id);
     need(o&&(
-      status==='Released'?o.status==='Draft':status==='Completed'?o.status==='Released':['Draft','Released'].includes(o.status)
+      status==='Released'?o.status==='Draft':status==='Completed'?o.status==='Released'&&!o.received:['Draft','Released'].includes(o.status)
     ),'The order already changed status.');
+    need(status!=='Cancelled'||!o.received,'Pieces were already received. Use Receive pieces and close the order instead.');
     if(status==='Released') {loc(s,o.location);stockItem(s,o.sku);o.materials.forEach(m=>stockItem(s,m.sku));}
     if(status==='Completed'){
       event(s,'production:'+id,'Production completion',[
@@ -5234,10 +5286,10 @@ function orderTransition(id,status){
 function productionPage(){
   return head('Operations','Production',button('New','orderEdit()','btn-primary'))+
     panel('Production orders',table(['Order','Part / SKU','Qty','Fabrication location','Customer / site','Processor / site','Status'],state.orders.slice().sort(dateSort).map(o=>[
-      esc(o.no),esc(labelOf(state,o.sku)),esc(qfmt(o.qty,item(state,o.sku)?.unit)),esc(locName(state,o.location)),
+      esc(o.no),esc(labelOf(state,o.sku)),esc(qfmt(o.qty,item(state,o.sku)?.unit)+(o.received&&o.status==='Released'?' · '+o.received+' received':'')),esc(locName(state,o.location)),
       esc([get(state,'customers',o.customerId)?.name,get(state,'locations',o.customerSiteId)?.name].filter(Boolean).join(' / ')),
       esc([get(state,'processors',o.processorId)?.name,get(state,'locations',o.processorSiteId)?.name].filter(Boolean).join(' / ')),
-      chip(o.status)+openBtn(`orderView(${escapeArg(o.id)})`)
+      chip(o.status==='Released'&&o.received?'Partially received':o.status)+openBtn(`orderView(${escapeArg(o.id)})`)
     ]),'No production orders yet. Click New to make parts.'))+
     panel('Production plans',`<div class="card-body o-panel-link"><button type="button" class="link-btn" onclick="planEdit()">+ New production plan</button>
       <span class="sub">Plan several products at once and reserve their raw materials.</span></div>`+
@@ -6299,7 +6351,7 @@ function validateState(s){
     }
     if(e.orderId){
       const order=get(s,'orders',e.orderId);
-      need(order&&e.id==='production:'+e.orderId,'Invalid production event link.');
+      need(order&&(e.id==='production:'+e.orderId||e.id.startsWith('production:'+e.orderId+':')),'Invalid production event link.');
       if(e.partyId)need(e.partyType==='customers'&&e.partyId===order.customerId&&
         e.siteId===(order.customerSiteId||''),'Production event has an invalid customer or site link.');
     }
@@ -6347,7 +6399,16 @@ function validateState(s){
   }
   for(const j of s.jobs)need((delivered.get(j.id)||0)===j.delivered,'Delivery totals do not match the ledger.');
   for(const p of s.purchases)for(const l of p.lines)need(Math.abs((received.get(JSON.stringify([p.id,l.sku]))||0)-l.received)<EPS*10,'Receipt totals do not match the ledger.');
-  for(const o of s.orders)need((o.status==='Completed')===!!get(s,'events','production:'+o.id),'Completion does not match the ledger.');
+  for(const o of s.orders){
+    // pieces received: old orders post one event when completed; newer ones keep o.received in step with their receipts
+    const posted=s.events.filter(e=>e.orderId===o.id||e.id==='production:'+o.id);
+    if(o.received==null)need((o.status==='Completed')===(posted.length>0),'Completion does not match the ledger.');
+    else{
+      const made=posted.reduce((n,e)=>n+e.lines.filter(l=>l.sku===o.sku&&l.delta>0).reduce((m,l)=>m+l.delta,0),0);
+      need(Number.isSafeInteger(o.received)&&o.received>=0&&o.received<=o.qty&&made===o.received&&
+        (o.status==='Completed'?o.received>0:o.status==='Released'?o.received<o.qty:o.received===0),'Production receipts do not match the ledger.');
+    }
+  }
   for(const o of s.sales)for(const l of o.lines)need(Math.abs((shipped.get(JSON.stringify([o.id,l.sku]))||0)-l.delivered)<EPS*10,
     'Sales delivery totals do not match the ledger.');
 }
