@@ -3244,7 +3244,7 @@ const TITLES={owner:'Owner overview',team:'Team activity',items:'Items & stock',
   'plan-new':'Production','purchase-new':'Purchasing'};
 /* Owner (super admin) gets his own menu: the team's work, items and tracking. Admins see the same pages under "Owner view". */
 /* Build version: stamped by scripts/bump-version.py together with the ?v= links in index.html. */
-const AMBS_VERSION='2026.11.27-1317';
+const AMBS_VERSION='2026.11.27-1324';
 const isOwner=()=>typeof CLOUD!=='undefined'&&CLOUD.role==='owner';
 const canSeeOwner=()=>typeof CLOUD!=='undefined'&&['owner','admin'].includes(CLOUD.role);
 const OWNER_GROUPS=[
@@ -4346,6 +4346,7 @@ function companyView(type,id){
   const purchases=type==='suppliers'?state.purchases.filter(p=>p.supplierId===id).sort(dateSort):[];
   const orders=state.orders.filter(o=>type==='customers'?o.customerId===id:type==='processors'?o.processorId===id:false).sort(dateSort);
   const events=state.events.filter(e=>e.partyType===type&&e.partyId===id||e.lines.some(l=>siteIds.has(l.location))).sort(dateSort);
+  const flow=companyLines(type,id,siteIds);
   const openSales=sales.filter(o=>SALES_OPEN.includes(o.status));
   const openValue=openSales.reduce((n,o)=>n+o.lines.reduce((m,l)=>m+(l.price||0)*Math.max(0,l.qty-l.delivered),0),0);
   const orderedValue=sales.filter(o=>o.status!=='Cancelled').reduce((n,o)=>n+salesTotal(o),0);
@@ -4365,6 +4366,7 @@ function companyView(type,id){
       ['wrench','Production orders',orders.length,openOrders.length+' open','co-orders']]
     }[type]).concat([
       ['layers','Stock at sites',stock.length,stock.length?'Item balances':'Nothing held','co-stock'],
+      ['swap','Item movements',new Set(flow.map(r=>r.e.id)).size,new Set(flow.map(r=>r.l.sku)).size+' items','co-activity'],
       ['users','Contacts',contacts.length,contacts[0]?.name||'None yet','co-contacts'],
       ['dashboard','Locations',sites.filter(l=>l.active!==false).length,sites.some(l=>l.stock)?'Some hold stock':'Delivery / pickup sites','co-locations']]);
   const over=type==='customers'&&r.creditLimit>0&&openValue>r.creditLimit;
@@ -4428,6 +4430,7 @@ function companyView(type,id){
       esc(o.no)+openBtn(`orderView(${escapeArg(o.id)})`),esc(labelOf(state,o.sku)),esc(o.qty),chip(o.status)])))):'')+
     section('co-stock',panel('Stock at this company’s sites',textTable(['Item / SKU','Location','Balance'],stock.map(b=>[
       labelOf(state,b.sku),locName(state,b.location),qfmt(b.qty,item(state,b.sku)?.unit)]),'No stock is held at this company’s sites.')))+
+    section('co-activity',panel('What moved with them · by period',companyActivity(type,flow)))+
     section('co-moves',panel('Recent stock movements',events.length?eventsTable(events.slice(0,15)):table(['Movement'],[],'No stock movements linked to this company yet.'))),
     actionGroup(button('Edit',`closeModal();masterEdit(${escapeArg(type)},${escapeArg(id)})`,'btn-sm btn-primary'),
       dangerSmall('Delete',`closeModal();deleteMaster(${escapeArg(type)},${escapeArg(id)})`)));
@@ -7250,6 +7253,69 @@ function trackExport(){
     {name:'Stock now',columns:['Item code','Item','Type','Location','Balance','Unit'],rows:stockRows(state).map(b=>{const it=item(state,b.sku);
       return [it?.code||'',it?.name||'',skuKind(b.sku),locName(state,b.location),Number(b.qty.toFixed(6)),it?.unit||''];})}]);
 }
+/* ---------------- Movements grouped by week / month / year ---------------- */
+const PERIODS={week:'Week',month:'Month',year:'Year'};
+const pad2=n=>String(n).padStart(2,'0');
+function periodKey(at,p){
+  const d=new Date(at);
+  if(p==='year')return [String(d.getFullYear()),String(d.getFullYear())];
+  if(p==='month')return [d.getFullYear()+'-'+pad2(d.getMonth()+1),d.toLocaleDateString('en-GB',{month:'long',year:'numeric'})];
+  const m=new Date(d.getFullYear(),d.getMonth(),d.getDate()-(d.getDay()+6)%7); // weeks start on Monday
+  return [m.getFullYear()+'-'+pad2(m.getMonth()+1)+'-'+pad2(m.getDate()),'Week of '+m.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})];
+}
+/* Week / Month / Year switch; every view is drawn up front, so switching needs no re-render. */
+function periodTabs(render){
+  return `<div class="period-box card-body"><div class="seg" role="group" style="margin-bottom:10px">${Object.entries(PERIODS).map(([p,t])=>
+    `<button type="button" class="btn btn-sm${p==='month'?' btn-primary':''}" onclick="periodShow(this,'${p}')">${t}</button>`).join('')}</div>`+
+    Object.keys(PERIODS).map(p=>`<div data-period="${p}"${p==='month'?'':' hidden'}>${render(p)}</div>`).join('')+'</div>';
+}
+function periodShow(btn,p){
+  const box=btn.closest('.period-box');
+  box.querySelectorAll('.seg .btn').forEach(b=>b.classList.toggle('btn-primary',b===btn));
+  box.querySelectorAll('[data-period]').forEach(d=>d.hidden=d.dataset.period!==p);
+}
+/* group ledger lines by period (and optionally by item): distinct movements plus quantity each way */
+function periodGroups(lines,p,byItem,side){
+  const g=new Map();
+  for(const r of lines){
+    const [k,name]=periodKey(r.e.at,p), id=k+'|'+(byItem?r.l.sku:'');
+    const x=g.get(id)||{k,name,sku:r.l.sku,moves:new Set(),a:0,b:0};
+    x.moves.add(r.e.id);
+    if(side(r))x.a+=Math.abs(r.l.delta);else x.b+=Math.abs(r.l.delta);
+    g.set(id,x);
+  }
+  return [...g.values()].sort((x,y)=>y.k.localeCompare(x.k)||labelOf(state,x.sku).localeCompare(labelOf(state,y.sku)));
+}
+const numCell=(n,u,cls='')=>n?`<strong class="num ${cls}">${esc(qfmt(n,u))}</strong>`:'<span class="sub">—</span>';
+/* One item: how many times it moved and how much went in / out in each period. */
+function itemActivity(rows,unit){
+  return periodTabs(p=>table(['Period','Movements','In','Out','Net change'],periodGroups(rows,p,false,r=>r.l.delta>0).map(x=>[
+    esc(x.name),`<strong class="num">${x.moves.size}</strong>`,numCell(x.a,unit,'trk-in'),numCell(x.b,unit,'trk-out'),
+    `<strong class="num">${x.a-x.b>0?'+':''}${esc(qfmt(x.a-x.b,unit))}</strong>`]),'No movements yet.'));
+}
+/* One company: every stock line that went to them or came from them.
+   Lines at their own sites count by direction there; otherwise a line on a document linked to them
+   (purchase, dispatch, sale, production order) counts as leaving AMBS to them or arriving from them. */
+function companyLines(type,id,siteIds){
+  const linked=e=>e.partyType===type&&e.partyId===id||
+    type==='customers'&&(get(state,'jobs',e.jobId||'')?.customerId===id||get(state,'sales',e.salesId||'')?.customerId===id)||
+    type==='suppliers'&&get(state,'purchases',e.purchaseId||'')?.supplierId===id||
+    type==='processors'&&eventLinks(state,e).order?.processorId===id;
+  return ledger().filter(r=>{
+    if(siteIds.has(r.l.location))return true;
+    return linked(r.e)&&!r.e.lines.some(l=>siteIds.has(l.location));
+  }).map(r=>({...r,toThem:siteIds.has(r.l.location)?r.l.delta>0:r.l.delta<0}));
+}
+const COMPANY_FLOW={customers:['Delivered to them','Returned by them'],suppliers:['Sent to them','Received from them'],
+  processors:['Sent to them','Back from them / used there']};
+function companyActivity(type,lines){
+  const [to,from]=COMPANY_FLOW[type];
+  return periodTabs(p=>table(['Period','Item','Movements',to,from],periodGroups(lines,p,true,r=>r.toThem).map(x=>{
+    const it=item(state,x.sku);
+    return [esc(x.name),`<div class="record-media">${it?recordPicture(it):''}<div>${cell(it?.name||'—',it?.code||'')}</div></div>`,
+      `<strong class="num">${x.moves.size}</strong>`,numCell(x.a,it?.unit,'trk-out'),numCell(x.b,it?.unit,'trk-in')];
+  }),'No stock has moved to or from this company yet.'));
+}
 function trackItem(id){
   const it=item(state,id), rows=ledger().filter(r=>r.l.sku===id), here=stockRows(state).filter(b=>b.sku===id);
   // one step per movement, so a busy single day is as readable as a month
@@ -7260,6 +7326,7 @@ function trackItem(id){
     (points.length>1?panel('Total balance over time',`<div class="card-body">${sparkline(points)}<div class="viz-x"><span>${esc(fmtDate(rows[0].e.at.slice(0,10)))}</span><span style="margin-left:auto">Today</span></div></div>`):'')+
     panel('Where it is now',hbars(here.sort((a,b)=>b.qty-a.qty).map(b=>({label:locName(state,b.location),value:b.qty,tip:locName(state,b.location)+': '+qfmt(b.qty,it.unit)})),
       {empty:'Not held at any location.',fmt:v=>qfmt(v,it.unit)}))+
+    panel('Movements by period',itemActivity(rows,it.unit))+
     (pendingDeliveries(id).length?panel('Waiting to be delivered',pendingTable(pendingDeliveries(id),false)):'')+
     panel('Every movement · '+rows.length,table(['When','Movement','From → To','Change','Balance there','Trip / driver','Reference'],rows.slice().reverse().map(r=>[
       esc(stamp(r.e.at)),esc(evType(r.e.type)),routeCell(r),
