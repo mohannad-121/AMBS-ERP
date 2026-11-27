@@ -3244,7 +3244,7 @@ const TITLES={owner:'Owner overview',team:'Team activity',items:'Items & stock',
   'plan-new':'Production','purchase-new':'Purchasing'};
 /* Owner (super admin) gets his own menu: the team's work, items and tracking. Admins see the same pages under "Owner view". */
 /* Build version: stamped by scripts/bump-version.py together with the ?v= links in index.html. */
-const AMBS_VERSION='2026.11.27-1324';
+const AMBS_VERSION='2026.11.27-1325';
 const isOwner=()=>typeof CLOUD!=='undefined'&&CLOUD.role==='owner';
 const canSeeOwner=()=>typeof CLOUD!=='undefined'&&['owner','admin'].includes(CLOUD.role);
 const OWNER_GROUPS=[
@@ -4430,7 +4430,7 @@ function companyView(type,id){
       esc(o.no)+openBtn(`orderView(${escapeArg(o.id)})`),esc(labelOf(state,o.sku)),esc(o.qty),chip(o.status)])))):'')+
     section('co-stock',panel('Stock at this company’s sites',textTable(['Item / SKU','Location','Balance'],stock.map(b=>[
       labelOf(state,b.sku),locName(state,b.location),qfmt(b.qty,item(state,b.sku)?.unit)]),'No stock is held at this company’s sites.')))+
-    section('co-activity',panel('What moved with them · by period',companyActivity(type,flow)))+
+    section('co-activity',panel('What moved with them · by period',companyActivity(type,flow,id)))+
     section('co-moves',panel('Recent stock movements',events.length?eventsTable(events.slice(0,15)):table(['Movement'],[],'No stock movements linked to this company yet.'))),
     actionGroup(button('Edit',`closeModal();masterEdit(${escapeArg(type)},${escapeArg(id)})`,'btn-sm btn-primary'),
       dangerSmall('Delete',`closeModal();deleteMaster(${escapeArg(type)},${escapeArg(id)})`)));
@@ -7264,9 +7264,12 @@ function periodKey(at,p){
   return [m.getFullYear()+'-'+pad2(m.getMonth()+1)+'-'+pad2(m.getDate()),'Week of '+m.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})];
 }
 /* Week / Month / Year switch; every view is drawn up front, so switching needs no re-render. */
-function periodTabs(render){
-  return `<div class="period-box card-body"><div class="seg" role="group" style="margin-bottom:10px">${Object.entries(PERIODS).map(([p,t])=>
-    `<button type="button" class="btn btn-sm${p==='month'?' btn-primary':''}" onclick="periodShow(this,'${p}')">${t}</button>`).join('')}</div>`+
+function periodTabs(render,kind,args){
+  const out=fmt=>`periodExport(this,${escapeArg(kind)},${escapeArg(args)},'${fmt}')`;
+  return `<div class="period-box card-body"><div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px">
+    <div class="seg" role="group">${Object.entries(PERIODS).map(([p,t])=>
+    `<button type="button" class="btn btn-sm${p==='month'?' btn-primary':''}" onclick="periodShow(this,'${p}')">${t}</button>`).join('')}</div>
+    <span style="margin-left:auto;display:flex;gap:6px">${button('PDF',out('pdf'),'btn-sm','pdf')}${button('Excel',out('xlsx'),'btn-sm','xls')}</span></div>`+
     Object.keys(PERIODS).map(p=>`<div data-period="${p}"${p==='month'?'':' hidden'}>${render(p)}</div>`).join('')+'</div>';
 }
 function periodShow(btn,p){
@@ -7288,10 +7291,10 @@ function periodGroups(lines,p,byItem,side){
 }
 const numCell=(n,u,cls='')=>n?`<strong class="num ${cls}">${esc(qfmt(n,u))}</strong>`:'<span class="sub">—</span>';
 /* One item: how many times it moved and how much went in / out in each period. */
-function itemActivity(rows,unit){
+function itemActivity(rows,unit,id){
   return periodTabs(p=>table(['Period','Movements','In','Out','Net change'],periodGroups(rows,p,false,r=>r.l.delta>0).map(x=>[
     esc(x.name),`<strong class="num">${x.moves.size}</strong>`,numCell(x.a,unit,'trk-in'),numCell(x.b,unit,'trk-out'),
-    `<strong class="num">${x.a-x.b>0?'+':''}${esc(qfmt(x.a-x.b,unit))}</strong>`]),'No movements yet.'));
+    `<strong class="num">${x.a-x.b>0?'+':''}${esc(qfmt(x.a-x.b,unit))}</strong>`]),'No movements yet.'),'item',[id]);
 }
 /* One company: every stock line that went to them or came from them.
    Lines at their own sites count by direction there; otherwise a line on a document linked to them
@@ -7308,13 +7311,42 @@ function companyLines(type,id,siteIds){
 }
 const COMPANY_FLOW={customers:['Delivered to them','Returned by them'],suppliers:['Sent to them','Received from them'],
   processors:['Sent to them','Back from them / used there']};
-function companyActivity(type,lines){
+function companyActivity(type,lines,id){
   const [to,from]=COMPANY_FLOW[type];
   return periodTabs(p=>table(['Period','Item','Movements',to,from],periodGroups(lines,p,true,r=>r.toThem).map(x=>{
     const it=item(state,x.sku);
     return [esc(x.name),`<div class="record-media">${it?recordPicture(it):''}<div>${cell(it?.name||'—',it?.code||'')}</div></div>`,
       `<strong class="num">${x.moves.size}</strong>`,numCell(x.a,it?.unit,'trk-out'),numCell(x.b,it?.unit,'trk-in')];
-  }),'No stock has moved to or from this company yet.'));
+  }),'No stock has moved to or from this company yet.'),'company',[type,id]);
+}
+/* Export the period summary the person is looking at (Week / Month / Year) as PDF or Excel. */
+function periodExport(btn,kind,args,fmt){
+  const p=btn.closest('.period-box').querySelector('[data-period]:not([hidden])')?.dataset.period||'month';
+  const by=PERIODS[p].toLowerCase(), n=x=>Number(x.toFixed(6));
+  let title,columns,rows,sheet,skus=[];
+  if(kind==='item'){
+    const [id]=args, it=item(state,id), u=it?.unit||'';
+    const groups=periodGroups(ledger().filter(r=>r.l.sku===id),p,false,r=>r.l.delta>0);
+    if(!groups.length)return toast('No movements to export.','warn');
+    title='Movements by '+by+' · '+label(it);
+    columns=['Period','Movements','In','Out','Net change'];
+    rows=groups.map(x=>[x.name,x.moves.size,qfmt(x.a,u),qfmt(x.b,u),(x.a-x.b>0?'+':'')+qfmt(x.a-x.b,u)]);
+    sheet={columns:['Period','Movements','In','Out','Net change','Unit'],rows:groups.map(x=>[x.name,x.moves.size,n(x.a),n(x.b),n(x.a-x.b),u])};
+  }else{
+    const [type,id]=args, r=get(state,type,id), [to,from]=COMPANY_FLOW[type];
+    const siteIds=new Set(companyLocations(state,type,id,false).map(l=>l.id));
+    const groups=periodGroups(companyLines(type,id,siteIds),p,true,x=>x.toThem);
+    if(!groups.length)return toast('No movements to export.','warn');
+    title='Movements with '+r.name+' by '+by;
+    columns=['Period','Item','Movements',to,from];
+    skus=groups.map(x=>x.sku);
+    rows=groups.map(x=>{const it=item(state,x.sku), u=it?.unit||'';
+      return [x.name,[it?.code,it?.name].filter(Boolean).join(' · '),x.moves.size,x.a?qfmt(x.a,u):'—',x.b?qfmt(x.b,u):'—'];});
+    sheet={columns:['Period','Item code','Item','Movements',to,from,'Unit'],rows:groups.map(x=>{const it=item(state,x.sku);
+      return [x.name,it?.code||'',it?.name||'',x.moves.size,n(x.a),n(x.b),it?.unit||''];})};
+  }
+  if(fmt==='pdf')return pdf(title,columns,rows,kind==='item'?{pictures:false}:{pictureOf:i=>itemPicture(state,skus[i])});
+  XLSX.save('AMBS_'+title.replace(/[^a-z0-9_-]+/gi,'_'),[{name:'By '+by,...sheet}]);
 }
 function trackItem(id){
   const it=item(state,id), rows=ledger().filter(r=>r.l.sku===id), here=stockRows(state).filter(b=>b.sku===id);
@@ -7326,7 +7358,7 @@ function trackItem(id){
     (points.length>1?panel('Total balance over time',`<div class="card-body">${sparkline(points)}<div class="viz-x"><span>${esc(fmtDate(rows[0].e.at.slice(0,10)))}</span><span style="margin-left:auto">Today</span></div></div>`):'')+
     panel('Where it is now',hbars(here.sort((a,b)=>b.qty-a.qty).map(b=>({label:locName(state,b.location),value:b.qty,tip:locName(state,b.location)+': '+qfmt(b.qty,it.unit)})),
       {empty:'Not held at any location.',fmt:v=>qfmt(v,it.unit)}))+
-    panel('Movements by period',itemActivity(rows,it.unit))+
+    panel('Movements by period',itemActivity(rows,it.unit,id))+
     (pendingDeliveries(id).length?panel('Waiting to be delivered',pendingTable(pendingDeliveries(id),false)):'')+
     panel('Every movement · '+rows.length,table(['When','Movement','From → To','Change','Balance there','Trip / driver','Reference'],rows.slice().reverse().map(r=>[
       esc(stamp(r.e.at)),esc(evType(r.e.type)),routeCell(r),
