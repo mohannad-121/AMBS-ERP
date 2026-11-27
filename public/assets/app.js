@@ -5218,6 +5218,7 @@ function orderView(id){
 }
 /* the production receipts posted for an order (old orders have one event 'production:<id>', new ones one per receipt) */
 const orderEvents=(s,id)=>s.events.filter(e=>e.orderId===id||e.id==='production:'+id);
+const pcs=n=>n+(n===1?' piece':' pieces');
 /* raw material already used by an order's earlier receipts */
 const materialUsed=(s,id,sku)=>orderEvents(s,id).reduce((m,e)=>m-e.lines.filter(x=>x.sku===sku&&x.delta<0).reduce((a,x)=>a+x.delta,0),0);
 const orderStatusText=o=>o.status==='Released'&&o.received>0?'Partially received ('+o.received+' of '+o.qty+')':o.status==='Completed'&&o.received!=null&&o.received<o.qty?'Closed short ('+o.received+' of '+o.qty+')':o.status;
@@ -5234,7 +5235,7 @@ function orderReceive(id){
       const r=get(s,'orders',id);
       need(r?.status==='Released','Release this order before receiving pieces.');
       const before=r.received||0, rest=r.qty-before;
-      need(n<=rest,'Only '+rest+' pieces are still to receive on this order.');
+      need(n<=rest,'Only '+pcs(rest)+' still to receive on this order.');
       need(n>0||close&&before>0,n===0&&before===0?'Enter the pieces received, or cancel the order instead.':'Enter the pieces received.');
       if(n>0){
         const full=before+n===r.qty;
@@ -5248,7 +5249,7 @@ function orderReceive(id){
       r.received=before+n;
       if(r.received===r.qty||close){r.status='Completed';r.completedAt=now();}
     });
-    return n?n+' pieces received.'+(close||done+n===o.qty?' Order completed.':' The rest stays open on the order.'):'Order closed.';
+    return n?pcs(n)+' received.'+(close||done+n===o.qty?' Order completed.':' The rest stays open on the order.'):'Order closed.';
   },{text:'Confirm receipt'});
   const box=$('[data-receive-preview]',form);
   const update=()=>{
