@@ -3246,7 +3246,7 @@ const TITLES={owner:'Owner overview',team:'Team activity',items:'Items & stock',
   'plan-new':'Production','purchase-new':'Purchasing'};
 /* Owner (super admin) gets his own menu: the team's work, items and tracking. Admins see the same pages under "Owner view". */
 /* Build version: stamped by scripts/bump-version.py together with the ?v= links in index.html. */
-const AMBS_VERSION='2026.11.27-1334';
+const AMBS_VERSION='2026.11.27-1337';
 const isOwner=()=>typeof CLOUD!=='undefined'&&CLOUD.role==='owner';
 const canSeeOwner=()=>typeof CLOUD!=='undefined'&&['owner','admin'].includes(CLOUD.role);
 const OWNER_GROUPS=[
@@ -7170,11 +7170,20 @@ const Trk={
   f:{q:'',kind:'',location:'',type:'',from:'',to:''},
   set(name,value){this.f[name]=value;const box=$('#track-results');if(box)box.innerHTML=this.results();},
   reset(){this.f={q:'',kind:'',location:'',type:'',from:'',to:''};App.render();},
-  results(){
-    const f=this.f, q=searchKey(f.q), all=ledger();
-    const match=r=>(!f.kind||skuKind(r.l.sku)===f.kind)&&(!f.location||r.l.location===f.location||r.other===f.location)&&
+  /* the filters on screen; the PDF and Excel exports use the same ones */
+  match(r){
+    const f=this.f, q=searchKey(f.q);
+    return (!f.kind||skuKind(r.l.sku)===f.kind)&&(!f.location||r.l.location===f.location||r.other===f.location)&&
       (!f.type||evType(r.e.type)===f.type)&&(!f.from||r.e.at.slice(0,10)>=f.from)&&(!f.to||r.e.at.slice(0,10)<=f.to)&&
       (!q||searchKey([labelOf(state,r.l.sku),r.e.note,evType(r.e.type),r.from,r.to,r.trip?.no,get(state,'drivers',r.trip?.driverId)?.name].join(' ')).includes(q));
+  },
+  /* a short line describing the filters in use, for export titles */
+  describe(){
+    const f=this.f;
+    return [f.q&&'"'+f.q+'"',f.kind,f.location&&locName(state,f.location),f.type,(f.from||f.to)&&(f.from||'start')+' to '+(f.to||'today')].filter(Boolean).join(' · ');
+  },
+  results(){
+    const f=this.f, q=searchKey(f.q), all=ledger(), match=r=>this.match(r);
     const feed=all.filter(match).reverse();
     const ids=[...new Set(feed.map(r=>r.l.sku))];
     // Items with no stock and no movement stay hidden unless someone searches for them by name.
@@ -7230,21 +7239,50 @@ function trackingPage(){
       <label class="trk-date">To <input class="inp" type="date" value="${esc(f.to)}" onchange="Trk.set('to',this.value)"></label></div></div>
     <div id="track-results">${Trk.results()}</div>`;
 }
-function trackRows(){
-  const f=Trk.f;
-  return ledger().filter(r=>(!f.from||r.e.at.slice(0,10)>=f.from)&&(!f.to||r.e.at.slice(0,10)<=f.to)).reverse();
-}
-/* The same movement history as the Excel export, as a PDF with each item's photo. */
-function trackPDF(){
-  const f=Trk.f, rows=trackRows();
-  if(!rows.length)return toast('No movements to export for these dates.','warn');
-  const range=f.from||f.to?' · '+(f.from||'start')+' to '+(f.to||'today'):'';
-  pdf('Stock movements'+range,['Date','Item','Movement','From','To','Change','Balance there','Trip / driver','Reference','By'],
-    rows.map(r=>{const it=item(state,r.l.sku), linked=eventLinks(state,r.e), u=it?.unit||'';
-      return [stamp(r.e.at),[it?.code,it?.name].filter(Boolean).join(' · ')+' ('+skuKind(r.l.sku)+')',evType(r.e.type),r.from,r.to,
-        (r.l.delta>0?'+':'')+qfmt(r.l.delta,u),qfmt(r.bal,u),[r.trip?.no,get(state,'drivers',r.trip?.driverId)?.name].filter(Boolean).join(' · '),
-        r.e.note||linked.document||'',r.e.by||''];}),
-    {landscape:true,pictureOf:i=>itemPicture(state,rows[i].l.sku)});
+function trackRows(){return ledger().filter(r=>Trk.match(r)).reverse();}
+/* Live Tracking as a PDF: where each item is now, a monthly summary with from -> to, then every movement — all with item photos.
+   Uses the filters on screen. */
+async function trackPDF(){
+  const rows=trackRows();
+  if(!rows.length)return toast('No movements match these filters.','warn');
+  if(!PDFR._ok())return;
+  await PDFR._prepare();
+  const skus=[...new Set(rows.map(r=>r.l.sku))];
+  const pics=new Map(await Promise.all(skus.map(async k=>[k,await pdfPicture(itemPicture(state,k),120)])));
+  const doc=PDFR._doc('landscape'), drawBrand=PDFR._hf(doc,'Stock movements'), filters=Trk.describe();
+  drawBrand();
+  const moves=new Set(rows.map(r=>r.e.id)).size, first=rows[rows.length-1].e.at, last=rows[0].e.at;
+  doc.setTextColor(30,35,43);doc.setFont('helvetica','bold');doc.setFontSize(15);doc.text('Stock movements',40,90);
+  doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(90);
+  doc.text(moves+(moves===1?' movement':' movements')+'   ·   '+skus.length+(skus.length===1?' item':' items')+'   ·   '+
+    fmtDate(first.slice(0,10))+' to '+fmtDate(last.slice(0,10))+'   ·   printed '+stamp(new Date().toISOString()),40,106);
+  doc.text('Filters: '+(filters||'none (everything)'),40,120);
+  const heading=(text,y)=>{doc.setTextColor(30,35,43);doc.setFont('helvetica','bold');doc.setFontSize(11);doc.text(text,40,y);};
+  const opts={margin:{top:74,bottom:45,left:40,right:40},styles:{fontSize:8,overflow:'linebreak'},headStyles:{fillColor:[30,35,43]},didDrawPage:drawBrand};
+  const photo=k=>({content:'',image:pics.get(k),imageSize:22});
+  const name=k=>{const it=item(state,k);return [it?.code,it?.name].filter(Boolean).join(' · ');};
+  const unit=k=>item(state,k)?.unit||'';
+  const room=y=>{if(y>doc.internal.pageSize.getHeight()-120){doc.addPage();drawBrand();return 96;}return y;};
+  const balances=stockRows(state);
+  heading('Where every item is now',150);
+  doc.autoTable({...opts,startY:158,widths:[.06,.32,.12,.12,.38],head:[['Photo','Item','Type','On hand','Locations']],
+    body:skus.map(k=>{const here=balances.filter(b=>b.sku===k).sort((a,b)=>b.qty-a.qty), total=here.reduce((n,b)=>n+b.qty,0);
+      return [photo(k),name(k),skuKind(k),{content:qfmt(total,unit(k)),styles:{fontStyle:'bold'}},
+        here.length?here.map(b=>locName(state,b.location)+': '+qfmt(b.qty,unit(k))).join(String.fromCharCode(10)):'Not held anywhere'];})});
+  let y=room(doc.lastAutoTable.finalY+26);
+  heading('Summary by month · from where to where',y);
+  doc.autoTable({...opts,startY:y+8,widths:[.1,.06,.2,.07,.09,.09,.39],head:[['Month','Photo','Item','Moves','In','Out','From -> To (quantity)']],
+    body:routeGroups(rows,'month',true,r=>r.l.delta>0).map(g=>[g.name,photo(g.sku),name(g.sku),String(g.moves.size),
+      g.a?qfmt(g.a,unit(g.sku)):'—',g.b?qfmt(g.b,unit(g.sku)):'—',routeText(g.routes,unit(g.sku))])});
+  y=room(doc.lastAutoTable.finalY+26);
+  heading('Every movement · '+rows.length+' lines',y);
+  doc.autoTable({...opts,startY:y+8,widths:[.1,.05,.14,.09,.12,.12,.07,.07,.09,.08,.07],
+    head:[['When','Photo','Item','Movement','From','To','Change','Balance there','Trip / driver','Reference','By']],
+    body:rows.map(r=>[stamp(r.e.at),photo(r.l.sku),name(r.l.sku),evType(r.e.type),r.from,r.to,
+      {content:(r.l.delta>0?'+':'')+qfmt(r.l.delta,unit(r.l.sku)),styles:{textColor:r.l.delta<0?[180,30,30]:[20,120,60],fontStyle:'bold'}},
+      qfmt(r.bal,unit(r.l.sku)),[r.trip?.no,get(state,'drivers',r.trip?.driverId)?.name].filter(Boolean).join(' · ')||'—',
+      r.e.note||eventLinks(state,r.e).document||'—',r.e.by||'—'])});
+  doc.save('AMBS_Movements_'+todayISO()+'.pdf');
 }
 function trackExport(){
   const rows=trackRows();
@@ -7252,6 +7290,9 @@ function trackExport(){
     rows:rows.map(r=>{const it=item(state,r.l.sku), linked=eventLinks(state,r.e);return [r.e.at.slice(0,10),new Date(r.e.at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}),
       it?.code||'',it?.name||'',skuKind(r.l.sku),evType(r.e.type),r.from,r.to,r.l.delta,it?.unit||'',
       Number(r.bal.toFixed(6)),r.trip?.no||'',get(state,'drivers',r.trip?.driverId)?.name||'',r.e.note||linked.document||'',r.e.by||''];})},
+    {name:'By month',columns:['Month','Item code','Item','Movements','In','Out','From -> To','Unit'],
+      rows:routeGroups(rows,'month',true,r=>r.l.delta>0).map(g=>{const it=item(state,g.sku), u=it?.unit||'';
+        return [g.name,it?.code||'',it?.name||'',g.moves.size,Number(g.a.toFixed(6)),Number(g.b.toFixed(6)),routeText(g.routes,u),u];})},
     {name:'Stock now',columns:['Item code','Item','Type','Location','Balance','Unit'],rows:stockRows(state).map(b=>{const it=item(state,b.sku);
       return [it?.code||'',it?.name||'',skuKind(b.sku),locName(state,b.location),Number(b.qty.toFixed(6)),it?.unit||''];})}]);
 }
@@ -7393,16 +7434,19 @@ function trackItem(id){
     actionGroup(button('PDF · every movement',`itemMovementsPDF(${escapeArg(id)})`,'btn-sm btn-primary','pdf'),small('Open item',`closeModal();masterView(${escapeArg(get(state,'variants',id)?'variants':get(state,'materials',id)?'materials':get(state,'parts',id)?'parts':'products')},${escapeArg(id)})`)));
 }
 /* an item's period groups plus where it went in each period: "Main Store → Site ×6" */
-function itemRoutes(id,p){
-  const rows=ledger().filter(r=>r.l.sku===id), list=periodGroups(rows,p,false,r=>r.l.delta>0);
-  const byKey=new Map(list.map(x=>[x.k,Object.assign(x,{routes:new Map(),seen:new Set()})]));
-  for(const r of rows){
-    const x=byKey.get(periodKey(r.e.at,p)[0]), route=r.from+' -> '+r.to;
+/* period groups (per item if byItem) with the from -> to routes and quantity in each */
+function routeGroups(lines,p,byItem,side){
+  const list=periodGroups(lines,p,byItem,side);
+  const byKey=new Map(list.map(x=>[x.k+'|'+(byItem?x.sku:''),Object.assign(x,{routes:new Map(),seen:new Set()})]));
+  for(const r of lines){
+    const x=byKey.get(periodKey(r.e.at,p)[0]+'|'+(byItem?r.l.sku:'')), route=r.from+' -> '+r.to;
     if(x.seen.has(r.e.id+route))continue; // a transfer has an out line and an in line: count it once
     x.seen.add(r.e.id+route);x.routes.set(route,(x.routes.get(route)||0)+Math.abs(r.l.delta));
   }
   return list;
 }
+const itemRoutes=(id,p)=>routeGroups(ledger().filter(r=>r.l.sku===id),p,false,r=>r.l.delta>0);
+const companyRoutes=(lines,p)=>routeGroups(lines,p,true,r=>r.toThem);
 const routeText=(routes,u)=>[...routes].map(([route,q])=>route+'  ('+qfmt(q,u)+')').join(String.fromCharCode(10));
 /* a company's movement lines and what sits at their sites now */
 function companyFlow(type,id){
@@ -7410,16 +7454,6 @@ function companyFlow(type,id){
   return {lines:companyLines(type,id,siteIds),stock:stockRows(state).filter(b=>siteIds.has(b.location))};
 }
 /* company period groups per item, with each item's from -> to routes in that period */
-function companyRoutes(lines,p){
-  const list=periodGroups(lines,p,true,r=>r.toThem);
-  const byKey=new Map(list.map(x=>[x.k+'|'+x.sku,Object.assign(x,{routes:new Map(),seen:new Set()})]));
-  for(const r of lines){
-    const x=byKey.get(periodKey(r.e.at,p)[0]+'|'+r.l.sku), route=r.from+' -> '+r.to;
-    if(x.seen.has(r.e.id+route))continue;
-    x.seen.add(r.e.id+route);x.routes.set(route,(x.routes.get(route)||0)+Math.abs(r.l.delta));
-  }
-  return list;
-}
 /* One company's full history with AMBS as a PDF: what they hold, a period summary per item with routes, then every movement. */
 async function companyMovementsPDF(type,id,p='month'){
   if(!PDFR._ok())return;
