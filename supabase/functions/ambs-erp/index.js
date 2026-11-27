@@ -42,6 +42,38 @@ async function readBody(request) {
   return JSON.parse(text + decoder.decode());
 }
 
+/* Google Maps short links (maps.app.goo.gl/…) only reveal their coordinates after a redirect, which a browser
+   cannot follow across origins. This expands one link, following redirects only while they stay on Google. */
+const SHORT_MAP = /^https:\/\/(?:maps\.app\.goo\.gl\/[A-Za-z0-9_-]+|goo\.gl\/maps\/[A-Za-z0-9_-]+)\/?(?:\?[^#]*)?$/;
+const GOOGLE_HOST = /^(?:maps\.app\.goo\.gl|goo\.gl|(?:[a-z]+\.)?google\.[a-z]{2,3}(?:\.[a-z]{2})?)$/i;
+function mapCoords(url) {
+  let text = String(url || '');
+  try { text = decodeURIComponent(text.replace(/\+/g, ' ')); } catch { /* keep raw text */ }
+  const num = '(-?\\d{1,3}\\.\\d+)';
+  for (const re of [new RegExp('!3d' + num + '!4d' + num), new RegExp('/search/' + num + ',\\s*' + num),
+    new RegExp('[?&](?:q|query|ll|destination|center)=' + num + ',\\s*' + num), new RegExp('@' + num + ',' + num)]) {
+    const m = text.match(re);
+    if (m && Math.abs(+m[1]) <= 90 && Math.abs(+m[2]) <= 180) return { lat: +m[1], lng: +m[2] };
+  }
+  return null;
+}
+async function expandMap(url) {
+  if (!SHORT_MAP.test(url)) return null;
+  let next = url;
+  for (let hop = 0; hop < 5; hop++) {
+    const response = await fetch(next, { redirect: 'manual', headers: { 'User-Agent': 'Mozilla/5.0 (compatible; AMBS)' } });
+    const target = response.headers.get('location');
+    await response.body?.cancel();
+    if (!target) return null;
+    const link = new URL(target, next);
+    if (link.protocol !== 'https:' || !GOOGLE_HOST.test(link.hostname)) return null;
+    const point = mapCoords(link.href) || mapCoords(link.searchParams.get('continue') || '');
+    if (point) return point;
+    next = link.href;
+  }
+  return null;
+}
+
 async function verifiedEmailRequired() {
   const response = await fetch(endpoint + '/auth/v1/settings',{ headers: { apikey: publicKey } });
   if (!response.ok) throw Error('Unable to verify the Auth settings.');
@@ -86,6 +118,14 @@ Deno.serve(async request => {
     }
     if (!await verifiedEmailRequired()) return answer({message:'Verified-email access is temporarily unavailable.'},503);
     const email = user.email.toLowerCase();
+    if (new URL(request.url).pathname.endsWith('/geo')) {
+      if (request.method !== 'GET') return answer({ message: 'Method not allowed.' }, 405);
+      if (!await rpc('member', { p_email: email })) return answer({ message: 'This account does not have AMBS access.' }, 403);
+      const link = new URL(request.url).searchParams.get('url') || '';
+      if (!SHORT_MAP.test(link)) return answer({ message: 'Send a maps.app.goo.gl link.' }, 400);
+      const point = await expandMap(link).catch(() => null);
+      return point ? answer(point) : answer({ message: 'This Google Maps link has no coordinates.' }, 404);
+    }
     // Unsaved form drafts of this employee only (so a half-filled form follows them to another device).
     if (new URL(request.url).pathname.endsWith('/drafts')) {
       if (request.method === 'GET') {

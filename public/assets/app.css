@@ -1493,6 +1493,16 @@ tr.o-group td{background:#f8f9fa!important;font-weight:600;cursor:pointer;color:
 .fsec-switch label{display:flex;gap:10px;align-items:center;cursor:pointer;margin:0}
 .fsec-switch input{width:18px;height:18px}
 .fsec-switch span{display:flex;flex-direction:column}.fsec-switch small{font-weight:400;color:var(--o-muted,#6c757d)}
+/* stock transfer / check / adjustment: titled sections, rows line up at the bottom */
+.inv-form{display:flex;flex-direction:column;gap:14px;margin-bottom:14px}
+.inv-form .form-grid{align-items:end}
+.inv-form [data-driver]>.form-grid{margin-top:4px}
+.inv-form [data-route]:empty,.inv-form [data-km-hint]:empty{display:none}
+.inv-form .fsec-switch label{display:flex!important;flex-direction:row;align-items:center;gap:10px}
+.field[hidden]{display:none!important}
+/* automatic distance line under "Distance (km)" and route fields */
+.route-hint{display:flex;align-items:center;gap:6px}
+.route-hint svg{width:15px;height:15px;flex:0 0 auto;color:var(--o-accent,#9b1c1c)}
 /* driver: papers tick at the very bottom, full width */
 .driver-form .papers-confirm{margin-top:4px}
 .driver-form .papers-confirm b{display:inline-flex;align-items:center;gap:6px}

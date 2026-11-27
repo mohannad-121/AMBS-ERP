@@ -3247,7 +3247,7 @@ const TITLES={owner:'Owner overview',team:'Team activity',items:'Items & stock',
   'plan-new':'Production','purchase-new':'Purchasing'};
 /* Owner (super admin) gets his own menu: the team's work, items and tracking. Admins see the same pages under "Owner view". */
 /* Build version: stamped by scripts/bump-version.py together with the ?v= links in index.html. */
-const AMBS_VERSION='2026.11.27-1400';
+const AMBS_VERSION='2026.11.27-1439';
 const isOwner=()=>typeof CLOUD!=='undefined'&&CLOUD.role==='owner';
 const canSeeOwner=()=>typeof CLOUD!=='undefined'&&['owner','admin'].includes(CLOUD.role);
 const OWNER_GROUPS=[
@@ -3775,6 +3775,113 @@ function mapsLink(location){
   if(Number.isFinite(location.lat)&&Number.isFinite(location.lng))
     return 'https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(location.lat+','+location.lng);
   return '';
+}
+/* ---- Automatic distance between two places (no Google API key needed) ----
+   1. Coordinates come from the Latitude / Longitude fields, or from the Google Maps link.
+      Short links (maps.app.goo.gl/…) are expanded by the AMBS cloud function, because a browser cannot follow them.
+   2. The road distance comes from the free OSRM road router (OpenStreetMap). If it cannot be reached,
+      the straight-line distance × 1.3 is shown as an estimate. */
+function coordsFromUrl(url){
+  let text=String(url||'');
+  try{text=decodeURIComponent(text.replace(/\+/g,' '));}catch{}
+  const ok=(a,b)=>Math.abs(a)<=90&&Math.abs(b)<=180&&!(a===0&&b===0)?{lat:a,lng:b}:null;
+  const num='(-?\\d{1,3}\\.\\d+)';
+  for(const re of [new RegExp('!3d'+num+'!4d'+num),new RegExp('/search/'+num+',\\s*'+num),
+    new RegExp('[?&](?:q|query|ll|destination|center)='+num+',\\s*'+num),new RegExp('@'+num+','+num),new RegExp('^\\s*'+num+'\\s*,\\s*'+num+'\\s*$')]){
+    const m=text.match(re);
+    if(m){const p=ok(+m[1],+m[2]);if(p)return p;}
+  }
+  return null;
+}
+const GEO={memo:new Map(),
+  load(){try{return JSON.parse(localStorage.getItem('ambs-geo')||'{}');}catch{return {};}},
+  save(url,p){try{const all=this.load();all[url]=p;localStorage.setItem('ambs-geo',JSON.stringify(all));}catch{}}};
+const SHORT_MAP=/^https:\/\/(?:maps\.app\.goo\.gl\/[A-Za-z0-9_-]+|goo\.gl\/maps\/[A-Za-z0-9_-]+)\/?(?:\?[^#]*)?$/;
+async function placePoint(place){
+  if(!place)return null;
+  if(typeof place==='string')place={url:place};
+  const lat=place.lat==null||place.lat===''?NaN:+place.lat, lng=place.lng==null||place.lng===''?NaN:+place.lng;
+  if(Number.isFinite(lat)&&Number.isFinite(lng))return {lat,lng};
+  const url=String(place.url||'').trim();
+  if(!url)return null;
+  const direct=coordsFromUrl(url);
+  if(direct)return direct;
+  if(!SHORT_MAP.test(url)||CLOUD.demo)return null;
+  const saved=GEO.load()[url];
+  if(saved)return saved;
+  if(!GEO.memo.has(url))GEO.memo.set(url,CLOUD.api('GET',null,'/geo?url='+encodeURIComponent(url)).then(r=>{
+    const p=Number.isFinite(r?.lat)&&Number.isFinite(r?.lng)?{lat:r.lat,lng:r.lng}:null;
+    if(p)GEO.save(url,p); // a link without coordinates is not asked again this session
+    return p;
+  }).catch(()=>{GEO.memo.delete(url);return null;}));
+  return GEO.memo.get(url);
+}
+function straightKm(a,b){
+  const r=x=>x*Math.PI/180, dLat=r(b.lat-a.lat), dLng=r(b.lng-a.lng);
+  const h=Math.sin(dLat/2)**2+Math.cos(r(a.lat))*Math.cos(r(b.lat))*Math.sin(dLng/2)**2;
+  return 12742*Math.asin(Math.min(1,Math.sqrt(h)));
+}
+const ROUTES=new Map();
+/* {km, minutes, approx} between two places, or null when a place has no usable location */
+async function routeKm(from,to){
+  const [a,b]=await Promise.all([placePoint(from),placePoint(to)]);
+  if(!a||!b)return {missing:!a?'from':'to'};
+  if(straightKm(a,b)<0.05)return {km:0,minutes:0,approx:false};
+  const id=[a.lat,a.lng,b.lat,b.lng].map(x=>x.toFixed(5)).join(',');
+  if(!ROUTES.has(id))ROUTES.set(id,(async()=>{
+    try{
+      const ctl=new AbortController(), timer=setTimeout(()=>ctl.abort(),8000);
+      const res=await fetch(`https://router.project-osrm.org/route/v1/driving/${a.lng},${a.lat};${b.lng},${b.lat}?overview=false`,{signal:ctl.signal});
+      clearTimeout(timer);
+      const body=await res.json(), route=body?.routes?.[0];
+      if(body?.code==='Ok'&&Number.isFinite(route?.distance))return {km:Math.round(route.distance/100)/10,minutes:Math.round(route.duration/60),approx:false};
+    }catch{}
+    ROUTES.delete(id);
+    return {km:Math.round(straightKm(a,b)*13)/10,approx:true};
+  })());
+  return ROUTES.get(id);
+}
+const distanceText=r=>r.approx?'≈ '+nfmt(r.km,1)+' km (estimate — road route unavailable)':
+  nfmt(r.km,1)+' km by road'+(r.minutes?' · about '+(r.minutes>=60?Math.floor(r.minutes/60)+' h '+r.minutes%60+' min':r.minutes+' min'):'');
+const MISSING_PLACE='Distance not calculated — add a Google Maps link (or latitude / longitude) to both places.';
+/* Shows the distance between the two places in `box`, recalculated whenever one of the named fields changes. */
+function routeLine(box,form,fields,ends){
+  if(!box)return;
+  let seq=0;
+  const run=async()=>{
+    const [a,b]=ends(), n=++seq;
+    if(!a||!b){box.innerHTML='';return;}
+    box.innerHTML=`<div class="hint route-hint">${ic('route')} Calculating distance…</div>`;
+    const r=await routeKm(a,b);
+    if(n!==seq)return;
+    box.innerHTML=`<div class="hint route-hint">${ic('route')} ${esc(r.missing?MISSING_PLACE:'Distance: '+distanceText(r))}</div>`;
+  };
+  fields.forEach(name=>form.elements.namedItem(name)?.addEventListener('change',run));
+  run();
+  return run;
+}
+/* Fills the "Distance (km)" input automatically. A number the employee typed is kept. */
+function autoKm(form,ends,fields=[],hintBox=null){
+  const km=form.elements.km;
+  if(!km)return ()=>{};
+  const box=hintBox||document.createElement('div');
+  if(!hintBox)km.closest('.field').append(box);
+  if(km.value)km.dataset.typed='1';
+  km.addEventListener('input',()=>{km.dataset.typed=km.value?'1':'';});
+  let seq=0;
+  const run=async()=>{
+    const [a,b]=ends(), n=++seq;
+    if(!a||!b){box.innerHTML='';return;}
+    box.innerHTML='<div class="hint route-hint">Calculating distance…</div>';
+    const r=await routeKm(a,b);
+    if(n!==seq)return;
+    if(r.missing){box.innerHTML=`<div class="hint route-hint">${esc(MISSING_PLACE)}</div>`;return;}
+    if(!km.dataset.typed)km.value=r.km;
+    box.innerHTML=`<div class="hint route-hint">${esc((km.dataset.typed&&+km.value!==r.km?'Calculated: ':'Auto: ')+distanceText(r))}</div>`;
+  };
+  fields.forEach(name=>form.elements.namedItem(name)?.addEventListener('change',run));
+  run();
+  return run;
 }
 function mapAction(l){
   const url=mapsLink(l);
@@ -5039,9 +5146,11 @@ function productEditor(draw,onSave,{title,saveText,description,extra='',details,
   const form=formModal(title,`<div class="form-grid">${input('Reference / project','name',draft?.name||'',{required:true})}
     ${select(dispatch?'Source custody location':'Production location','location',locOptions(),draft?.location||'')}${extra}</div>
     <div data-products></div><div data-summary style="margin-top:14px"></div>`,async f=>onSave(f,readProducts),{text:saveText,intro:description});
-  const products=repeat(form,'[data-products]',(l,n)=>`<legend>${dispatch?'Complete product':'Product line'}</legend><div class="form-grid">
-    ${searchable('Product',n+'_product',pair(current(state,'products')),l.productId)}
-    ${number('Requested product quantity',n+'_count',l.qty??1,1,1)}</div><div data-config></div>`,initial.length?initial:[{}],'Add Product');
+  /* A dispatch job can ship a product, a part / variant or a raw material straight from stock. */
+  const products=repeat(form,'[data-products]',(l,n)=>`<legend>${dispatch?'Item to dispatch':'Product line'}</legend><div class="form-grid">
+    ${dispatch?searchable('Product, part or raw material',n+'_product',pair(skus()),l.productId):
+      searchable('Product',n+'_product',pair(current(state,'products')),l.productId)}
+    ${number(dispatch?'Requested quantity':'Requested product quantity',n+'_count',l.qty??1,1,1)}</div><div data-config></div>`,initial.length?initial:[{}],'Add Product');
   if(dispatch){
     form.querySelector('[data-products] > button').remove();
     form.querySelector('[data-products] .erp-remove').remove();
@@ -5049,6 +5158,7 @@ function productEditor(draw,onSave,{title,saveText,description,extra='',details,
   /* Finished stock ships the complete product (e.g. bought in ready-made), so it needs no Product BOM. */
   const finishedOnly=()=>dispatch&&valOf(form,'fulfilment')==='Finished stock';
   function standardParts(s,id,count){
+    if(dispatch&&id&&!get(s,'products',id)){stockItem(s,id);return [];}
     if(finishedOnly()){
       const recipe=get(s,'recipes',live(s,'products',id).id);
       if(!(recipe?.kind==='product'&&recipe.approved&&recipe.lines.length))return [];
@@ -5309,17 +5419,37 @@ function inventoryForm(mode){
   const parties=COMPANIES.flatMap(type=>current(state,type).map(row=>[
     JSON.stringify([type,row.id]),ENTITY[type]+' · '+row.name
   ]));
-  const form=formModal(titles[mode],`<div class="form-grid">
-    ${searchable('Item / SKU','sku',pair(skus()))}${select(move?'From location':'Custody location','location',locOptions())}
-    ${move?select('To location','to',locOptions())+`<div class="field full">${note('Processing companies appear here automatically (their site holds AMBS stock). To hold stock at a customer site, enable stock custody for that site in the Customer record.')}</div>`:''}
-    ${searchable('Related company (optional)','relatedParty',parties)}
-    ${select('Related company site (optional)','relatedSite',[],'',false,'No linked site')}
-    <div class="field full"><div class="hint">Stock locations owned by one company are linked automatically if no company is selected.</div></div>
-    ${input(count?'Physical count':move?'Quantity to transfer':'Adjustment (+ or −)','qty','',
-      {type:'number',required:true,extra:`step="any" ${count||move?'min="0"':''}`})}
-    ${move?area('Reference / notes','notes'):input(count?'Reason / count reference':'Reason for adjustment','notes','',{required:true,full:true})}
-    ${mode==='adjust'?tick('I am authorized to record this adjustment','authorized'):''}
+  const drivers=state.drivers.filter(d=>d.active!==false);
+  const qtyField=input(count?'Physical count':move?'Quantity to transfer':'Adjustment (+ or −)','qty','',
+    {type:'number',required:true,extra:`step="any" ${count||move?'min="0"':''}`});
+  /* Grouped in small titled sections so every row lines up: what moves, where, who drives it, who it is for. */
+  const form=formModal(titles[mode],`<div class="inv-form">
+    ${formSection('box',move?'Item & quantity':'Item','',
+      searchable('Item / SKU','sku',pair(skus()))+qtyField)}
+    ${formSection(move?'route':'pin',move?'Route':'Location',move?'Where the stock leaves from and where it goes':'',
+      select(move?'From location':'Custody location','location',locOptions())+
+      (move?select('To location','to',locOptions())+`<div class="field full" data-route></div>
+        <div class="field full"><div class="hint">Processing companies appear here automatically (their site holds AMBS stock). To hold stock at a customer site, enable stock custody for that site in the Customer record.</div></div>`:''))}
+    ${move?formSection('truck','Driver (optional)','Send the stock with a driver — a delivery trip is created with the distance filled in',
+      drivers.length?`<div class="field full fsec-switch"><label><input type="checkbox" name="withDriver"><span>Assign a driver to this transfer
+        <small>The stock moves now; the trip shows in Deliveries so the driver can start it and mark it delivered.</small></span></label></div>
+      <div class="field full" data-driver hidden><div class="trip-papers" data-papers></div><div class="form-grid">
+        ${select('Driver','driverId',drivers.map(d=>[d.id,d.name+(vehicleLabel(d)?' · '+vehicleLabel(d):'')+(papersOk(d)?'':'  ⚠ papers missing')]),'',false,'Choose a driver…')}
+        ${input('Vehicle','vehicle','',{extra:'placeholder="Filled from the driver"'})}
+        ${input('Distance (km)','km','',{type:'number',extra:'min="0" step="0.1" placeholder="Calculated automatically"'})}
+        ${input('Trip date','tripDate',todayISO(),{type:'date'})}
+        ${select('Priority','priority',same(['Normal','Urgent']),'Normal',false)}<div class="field full" data-km-hint></div></div></div>`:
+      `<div class="field full">${note('No drivers yet. Add one in Master Data → Drivers to send transfers with a driver.')}</div>`):''}
+    ${formSection('users','Related company (optional)','Stock locations owned by one company are linked automatically if no company is selected.',
+      searchable('Related company (optional)','relatedParty',parties)+
+      select('Related company site (optional)','relatedSite',[],'',false,'No linked site'))}
+    ${formSection('edit',move?'Reference / notes':'Reason','',
+      (move?area('Reference / notes','notes'):input(count?'Reason / count reference':'Reason for adjustment','notes','',{required:true,full:true}))+
+      (mode==='adjust'?tick('I am authorized to record this adjustment','authorized'):''))}
     </div><div data-balance></div>`,async f=>{
+      const withDriver=move&&checked(f,'withDriver'), driverId=valOf(f,'driverId'), kmRaw=valOf(f,'km');
+      if(withDriver)need(driverId,'Choose the driver for this transfer.');
+      const tripDate=valOf(f,'tripDate')||todayISO();
       await commit(s=>{
         const row=stockItem(s,valOf(f,'sku')), location=loc(s,valOf(f,'location')).id, notes=valOf(f,'notes');
         const raw=valOf(f,'qty'), before=availability(s,row.id,location);
@@ -5343,8 +5473,18 @@ function inventoryForm(mode){
         event(s,id,titles[mode],lines,notes);
         Object.assign(get(s,'events',id),stockEventContext(s,lines,valOf(f,'relatedParty'),valOf(f,'relatedSite')));
         if(count)Object.assign(get(s,'events',id),{physicalCount:requested,systemCount:before});
+        if(withDriver){
+          checkTripDriver(get(s,'drivers',driverId),'Next');
+          const to=loc(s,valOf(f,'to')), from=loc(s,location), no=nextTripNo(s,tripDate);
+          add(s.trips,{id:key(),no,date:tripDate,driverId,vehicle:valOf(f,'vehicle'),km:kmRaw===''?0:qty(kmRaw,'Distance',true),
+            priority:valOf(f,'priority')||'Normal',transferId:id,customerId:'',customerName:'',project:notes||'Stock transfer',
+            from:locName(s,from.id),fromLocation:from.id,location:locName(s,to.id),toLocation:to.id,mapUrl:mapsLink(to),
+            system:'',description:label(row)+' × '+qfmt(requested,row.unit),status:'Next',paperStatus:'Pending',
+            by:whoami(),at:now(),updated:now()});
+          get(s,'events',id).tripNo=no;
+        }
       });
-      return 'Stock event recorded.';
+      return withDriver?'Stock transferred — the driver trip is ready to start.':'Stock event recorded.';
     },{text:move?'Confirm Transfer':count?'Confirm Count':'Confirm Adjustment'});
   function update(){
     const sku=valOf(form,'sku'), l=valOf(form,'location'), row=item(state,sku);
@@ -5374,6 +5514,22 @@ function inventoryForm(mode){
       '','No linked site');
   });
   form.addEventListener('input',update);form.addEventListener('change',update);
+  if(!move)return;
+  const ends=()=>[get(state,'locations',valOf(form,'location')),get(state,'locations',valOf(form,'to'))];
+  routeLine(form.querySelector('[data-route]'),form,['location','to'],ends);
+  if(!drivers.length)return;
+  const box=form.querySelector('[data-driver]');
+  form.elements.withDriver.addEventListener('change',e=>{box.hidden=!e.target.checked;});
+  autoKm(form,ends,['location','to'],form.querySelector('[data-km-hint]'));
+  const showPapers=()=>{
+    const d=get(state,'drivers',form.elements.driverId.value), papers=$('[data-papers]',form);
+    if(!d){papers.innerHTML='';return;}
+    const issues=papersIssues(d);
+    papers.innerHTML=issues.length?note('⛔ '+d.name+' cannot deliver: '+issues.join(' · ')+'.','bad'):'';
+    const v=form.elements.vehicle;if(!v.value||v.dataset.auto){v.value=vehicleLabel(d);v.dataset.auto='1';}
+  };
+  form.elements.driverId.addEventListener('change',showPapers);
+  form.elements.vehicle.addEventListener('input',e=>delete e.target.dataset.auto);
 }
 function balanceData(s=state){
   return stockRows(s).sort((a,b)=>labelOf(s,a.sku).localeCompare(labelOf(s,b.sku))).map(r=>[
@@ -5534,9 +5690,9 @@ function dispatchEdit(id){
   const destinations=customer=>pair(companyLocations(state,'customers',customer),l=>l.name+(l.city?' · '+l.city:''));
   productEditor((rows,location,form)=>{
     const product=rows[0], destination=get(state,'locations',valOf(form,'destination'));
-    const finished=valOf(form,'fulfilment')==='Finished stock';
+    const finished=valOf(form,'fulfilment')==='Finished stock'||!get(state,'products',product.productId);
     return (destination?note('Destination · '+[destination.name,destination.address,destination.city].filter(uniqText).join(' · '))+mapAction(destination):'')+
-      (finished?panel('Finished stock',textTable(['Product','Required','Available'],[[labelOf(state,product.productId),product.qty,
+      (finished?panel('From stock',textTable(['Item','Required','Available'],[[labelOf(state,product.productId),product.qty,
         qfmt(availability(state,product.productId,location),item(state,product.productId)?.unit)]])):
       panel('Packing requirements',table(['Part / SKU','Standard','Adjusted','Available at source'],product.parts.map(p=>[
         esc(labelOf(state,p.sku)),esc(p.standard),esc(p.qty),esc(qfmt(availability(state,p.sku,location),item(state,p.sku).unit))
@@ -5550,7 +5706,8 @@ function dispatchEdit(id){
       need(destination.ownerType==='customers'&&destination.ownerId===customerId,'Select a delivery site belonging to this customer.');
       const location=loc(s,valOf(f,'location')).id, product=read(s)[0], name=valOf(f,'name');
       need(name,'Enter a dispatch reference.');
-      const finished=valOf(f,'fulfilment')==='Finished stock';
+      // parts and raw materials always ship as they are, straight from stock
+      const finished=valOf(f,'fulfilment')==='Finished stock'||!get(s,'products',product.productId);
       const trackAtDestination=checked(f,'trackAtDestination');
       if(trackAtDestination)need(destination.stock,'Enable stock custody on this customer site before tracking delivered stock there.');
       need(!trackAtDestination||destination.id!==location,'Choose different source and customer-site custody locations.');
@@ -5566,11 +5723,18 @@ function dispatchEdit(id){
     extra:searchable('Customer','customer',pair(current(state,'customers')),old?.customerId)+select('Customer delivery site','destination',[])+
       select('Fulfilment','fulfilment',same(['Pack from parts','Finished stock']),old?.finished?'Finished stock':'Pack from parts')+
       tick('Keep delivered stock tracked at customer site','trackAtDestination',old?.trackAtDestination)+
-      `<div class="field full"><div class="hint">Requires the customer site to be enabled as a stock custody location.</div></div>`,
+      `<div class="field full"><div class="hint">Requires the customer site to be enabled as a stock custody location.</div></div>
+      <div class="field full" data-route></div>`,
     after(form){
       const customer=form.elements.customer, destination=form.elements.destination;
       customer.addEventListener('change',()=>{destination.innerHTML=choiceOptions(destinations(customer.value));});
       destination.innerHTML=choiceOptions(destinations(customer.value),old?.destination);
+      // "Pack from parts" only applies to products; a part or raw material ships as it is.
+      const fulfilment=form.elements.fulfilment.closest('.field');
+      const syncKind=()=>{const id=form.querySelector('[name$="_product"]')?.value;fulfilment.hidden=!!id&&!get(state,'products',id);};
+      form.addEventListener('change',syncKind);syncKind();
+      routeLine(form.querySelector('[data-route]'),form,['location','destination','customer'],
+        ()=>[get(state,'locations',valOf(form,'location')),get(state,'locations',valOf(form,'destination'))]);
     }});
 }
 function dispatchRows(s,j,count){
@@ -5593,7 +5757,7 @@ function dispatchView(id){
       j.delivered===0&&open?small('Edit',`dispatchEdit(${args})`):'',
       button('Print packing list',`packingListPDF('job',${args})`,'btn-sm','pdf'),
       open?small('Cancel job',`cancelJob(${args})`):''],
-      ['Open','Partially delivered','Delivered'].filter(s=>s!=='Partially delivered'||j.status==='Partially delivered'),j.status)+kv([['Product',labelOf(state,j.productId)],['Customer',label(get(state,'customers',j.customerId))],
+      ['Open','Partially delivered','Delivered'].filter(s=>s!=='Partially delivered'||j.status==='Partially delivered'),j.status)+kv([['Item',labelOf(state,j.productId)],['Customer',label(get(state,'customers',j.customerId))],
     ['Delivery site',[destination.name,destination.address,destination.city].filter(uniqText).join(' · ')],
     ['Custody location',locName(state,j.location)],['Fulfilment',j.finished?'Finished stock':'Pack from parts'],
     ['Track at customer site',j.trackAtDestination?'Yes':'No'],
@@ -5650,7 +5814,7 @@ function cancelJob(id){
 }
 function dispatchPage(){
   return head('Operations',TITLES.dispatch,button('New','dispatchEdit()','btn-primary'))+
-    searchableTable(['Job','Customer / site','Product','Requested','Delivered','Outstanding','Status'],state.jobs.slice().sort(dateSort).map(j=>[
+    searchableTable(['Job','Customer / site','Item','Requested','Delivered','Outstanding','Status'],state.jobs.slice().sort(dateSort).map(j=>[
       cell(j.no,j.name),cell(get(state,'customers',j.customerId)?.name,j.destinationSnapshot.name),
       esc(labelOf(state,j.productId)),esc(j.qty),esc(j.delivered),esc(j.qty-j.delivered),chip(j.status)+openBtn(`dispatchView(${escapeArg(j.id)})`)
     ]),'No dispatch jobs yet. Click New to pack a product for a customer.');
@@ -5949,9 +6113,9 @@ async function packingListPDF(kind,id){
     if(productPic){const r=productPic.w/productPic.h,w=r>=1?50:50*r,h=r>=1?50/r:50;
       doc.setFillColor(255,255,255);doc.rect(48,y+4,50,50,'F');try{doc.addImage(productPic.data,'JPEG',48+(50-w)/2,y+4+(50-h)/2,w,h);}catch(e){}}
     doc.setFont('helvetica','bold');doc.setFontSize(11);doc.setTextColor(155,28,28);
-    doc.text('Product: '+(p?.name||labelOf(state,job.productId))+'   ×   '+(count||job.qty)+' '+(p?.unit||''),tx,y+bh/2+4);
+    doc.text((get(state,'products',job.productId)?'Product: ':'Item: ')+(p?.name||labelOf(state,job.productId))+'   ×   '+(count||job.qty)+' '+(p?.unit||''),tx,y+bh/2+4);
     doc.setFont('helvetica','normal');doc.setFontSize(8.5);doc.setTextColor(90);
-    doc.text(job.finished?'Complete products from finished stock':'Packed from parts — lines below',W-52,y+bh/2+4,{align:'right'});
+    doc.text(job.finished?(get(state,'products',job.productId)?'Complete products from finished stock':'Shipped as it is from stock'):'Packed from parts — lines below',W-52,y+bh/2+4,{align:'right'});
     y+=bh+12;
   }
   const rows=lines.length?lines.map((l,i)=>{const it=item(state,l.sku);
@@ -6329,7 +6493,7 @@ function validateState(s){
      p.lines.every(l=>Number.isFinite(l.received)&&l.received>=0&&l.received<=l.qty+EPS)&&
      ['Draft','Ordered','Received','Cancelled'].includes(p.status),'Invalid purchase request.');
   for(const j of s.jobs)need(site(j.location)&&site(j.destination)?.ownerId===j.customerId&&
-    site(j.destination)?.ownerType==='customers'&&get(s,'customers',j.customerId)&&get(s,'products',j.productId)&&
+    site(j.destination)?.ownerType==='customers'&&get(s,'customers',j.customerId)&&(get(s,'products',j.productId)||j.finished&&sku(j.productId))&&
     parts(j.parts)&&(j.finished||j.parts.length)&&integral(j.qty)&&Number.isSafeInteger(j.delivered)&&j.delivered>=0&&j.delivered<=j.qty&&
     typeof j.destinationSnapshot?.name==='string'&&(j.trackAtDestination==null||typeof j.trackAtDestination==='boolean')&&
     (!j.trackAtDestination||j.location!==j.destination)&&
@@ -6714,7 +6878,19 @@ function tripEdit(id,preset={}){
     if(!form.elements.location.value)form.elements.location.value=[j.destinationSnapshot?.name,j.destinationSnapshot?.address].filter(uniqText).join(', ');
     if(!form.elements.mapUrl.value)form.elements.mapUrl.value=mapsLink(get(state,'locations',j.destination)||{})||companyMap('customers',c);
     if(!form.elements.description.value)form.elements.description.value=labelOf(state,j.productId)+' × '+j.qty;
+    if(!form.elements.from.value||form.elements.from.value==='AMBS store')form.elements.from.value=locName(state,j.location);
+    recalcKm();
   });
+  // "From" is free text: it matches a saved location by name (e.g. Main Store); "to" is the Google Maps link.
+  const fromPlace=()=>{
+    const text=valOf(form,'from').toLowerCase();
+    if(!text)return null;
+    const all=current(state,'locations');
+    return all.find(l=>locName(state,l.id).toLowerCase()===text||l.name.toLowerCase()===text)||
+      (text==='ambs store'?custody().find(l=>!l.ownerId):null)||(coordsFromUrl(text)?{url:text}:null);
+  };
+  const recalcKm=autoKm(form,()=>[fromPlace(),valOf(form,'mapUrl')?{url:valOf(form,'mapUrl')}:null],['from','mapUrl','customer']);
+  form.elements.customer.addEventListener('change',()=>setTimeout(recalcKm));
 }
 function checkTripDriver(driver,status,previous){
   need(driver,'Choose a driver for this trip.');
@@ -6735,7 +6911,7 @@ function tripStatus(id,status){
   const posts=status==='Delivered'&&(t.jobId||t.salesId);
   approval((status==='On the way'?'Start trip ':'Mark delivered · ')+t.no,
     status==='On the way'?'The driver is leaving now with this delivery.':
-      'The delivery reached the customer.'+(posts?' The goods are taken out of '+(t.from||'the store')+' stock now.':'')+' The delivery date is set to today if empty.',s=>{
+      (t.transferId?'The stock reached '+(t.location||'the destination')+'. (The stock was already moved when the transfer was confirmed.)':'The delivery reached the customer.')+(posts?' The goods are taken out of '+(t.from||'the store')+' stock now.':'')+' The delivery date is set to today if empty.',s=>{
       const trip=get(s,'trips',id);
       checkTripDriver(get(s,'drivers',trip.driverId),status,trip.status);
       if(status==='Delivered'&&trip.jobId){const j=get(s,'jobs',trip.jobId);if(j)postJobDelivery(s,j,trip.no);}
@@ -6774,7 +6950,8 @@ function tripView(id){
       t.status==='Delivered'&&t.paperStatus!=='Missing'?small('Mark note missing',`tripPapers(${args},'Missing')`):'',
       t.status==='Delivered'&&t.paperStatus&&t.paperStatus!=='Pending'?small('Mark note pending',`tripPapers(${args},'Pending')`):'',
       t.salesId||t.jobId?button('Print packing list',`packingListPDF('trip',${args})`,'btn-sm','pdf'):'',
-      t.salesId?small('Sales order',`salesView(${escapeArg(t.salesId)})`):'',t.jobId?small('Dispatch job',`dispatchView(${escapeArg(t.jobId)})`):''],
+      t.salesId?small('Sales order',`salesView(${escapeArg(t.salesId)})`):'',t.jobId?small('Dispatch job',`dispatchView(${escapeArg(t.jobId)})`):'',
+      t.transferId&&get(state,'events',t.transferId)?small('Stock transfer',`eventView(${escapeArg(t.transferId)})`):''],
       ['Next','On the way','Delivered'],t.status)+`<div class="co-details">${[
     ['Status',chip(t.status==='Next'?'Open':t.status==='On the way'?'In progress':t.status)+' '+(t.priority==='Urgent'?statusChip('bad','Urgent'):'')],
     ['Driver',d?`${esc(d.name)} ${papersChip(d)}`:'—'],['Driver phone',esc(d?.phone||'—')],['Vehicle',esc(t.vehicle||'—')],
@@ -6782,7 +6959,8 @@ function tripView(id){
     ['Route',esc((t.from||'—')+' → '+(t.location||'—'))],['Delivery location on map',mapBtn(t.mapUrl,'Open in Google Maps')||'—'],['Distance',esc(t.km?nfmt(t.km,1)+' km':'—')],
     ['Trip date',esc(fmtDate(t.date))],['Delivery date',esc(t.deliveredAt?fmtDate(t.deliveredAt):'—')],
     ['System',esc(t.system||'—')],['Short description',esc(t.description||'—')],['Signed delivery note',t.paperStatus==='Signed & returned'?statusChip('ok','Signed & returned'):t.paperStatus==='Missing'?statusChip('bad','Missing'):statusChip('warn',t.paperStatus||'Pending')],
-    ['Dispatch job',esc(get(state,'jobs',t.jobId)?.no||'—')],['Recorded by',esc(t.by||'—')]
+    t.transferId?['Stock transfer',esc(tripLines(t).map(l=>labelOf(state,l.sku)+' × '+qfmt(l.qty,item(state,l.sku)?.unit)).join(', ')||'—')]:
+      ['Dispatch job',esc(get(state,'jobs',t.jobId)?.no||'—')],['Recorded by',esc(t.by||'—')]
   ].map(([k,v])=>`<div><span>${esc(k)}</span><div>${v}</div></div>`).join('')}</div>`+(t.notes?note(t.notes):''),
   actionGroup(d?small('Driver',`closeModal();driverView(${escapeArg(d.id)})`):'',
     dangerSmall('Delete trip',`closeModal();deleteTrip(${escapeArg(id)})`)));
@@ -6804,6 +6982,7 @@ function driverExportRows(drivers){
 /* what is (or was) on a trip, as stock lines */
 function tripLines(t){
   const job=t.jobId&&get(state,'jobs',t.jobId), sale=t.salesId&&get(state,'sales',t.salesId);
+  if(t.transferId){const e=get(state,'events',t.transferId);return e?e.lines.filter(l=>l.delta>0).map(l=>({sku:l.sku,qty:l.delta})):[];}
   return job||sale?packingContents(t,job||null,sale||null).lines:[];
 }
 const tripRoute=t=>(t.from||'AMBS store')+' -> '+(t.location||t.customerName||'—');
@@ -7010,6 +7189,7 @@ function assignDelivery(kind,docId,tripId=''){
   };
   form.elements.driverId.addEventListener('change',showPapers);showPapers();
   form.elements.vehicle.addEventListener('input',e=>delete e.target.dataset.auto);
+  autoKm(form,()=>[get(state,'locations',kind==='job'?doc.location:valOf(form,'fromLocation')),info.mapUrl?{url:info.mapUrl}:null],['fromLocation']);
 }
 /* The store holding the most of the ordered items is the default "ship from". */
 function bestSource(items){
