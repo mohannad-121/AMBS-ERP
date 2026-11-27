@@ -17,15 +17,287 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap">
-<link rel="stylesheet" href="/assets/app.css?v=2026.11.27-1619">
-<script src="/assets/config.js?v=2026.11.27-1619" defer></script>
-<script src="/assets/jspdf.js?v=2026.11.27-1619" defer></script>
-<script src="/assets/catalog.js?v=2026.11.27-1619" defer></script>
-<script src="/assets/app.js?v=2026.11.27-1619" defer></script>
-<script src="/assets/lightbox.js?v=2026.11.27-1619" defer></script>
-<script src="/assets/assistant.js?v=2026.11.27-1619" defer></script>
-<script src="/assets/page-theme.js?v=2026.11.27-1619" defer></script>
+<link rel="stylesheet" href="/assets/app.css?v=2026.11.27-1630">
+<script src="/assets/config.js?v=2026.11.27-1630" defer></script>
+<script src="/assets/jspdf.js?v=2026.11.27-1630" defer></script>
+<script src="/assets/catalog.js?v=2026.11.27-1630" defer></script>
+<script src="/assets/app.js?v=2026.11.27-1630" defer></script>
+<script src="/assets/lightbox.js?v=2026.11.27-1630" defer></script>
+<script src="/assets/assistant.js?v=2026.11.27-1630" defer></script>
+<script src="/assets/page-theme.js?v=2026.11.27-1630" defer></script>
+<!-- ================= AM ERP LOADER — CSS ================= -->
+<style>
+  html.am-lock, html.am-lock body { overflow: hidden !important; }
+
+  #am-loader {
+    --am-gold: #C8930A;
+    --am-gold-light: #E8B923;
+    --am-red: #B3121B;
+    --am-red-dark: #5E070C;
+    position: fixed;
+    inset: 0;
+    z-index: 2147483000;
+    overflow: hidden;
+    font-family: "Montserrat", "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif;
+    color: #fff;
+  }
+
+  /* الخلفية مقسومة نصين عشان حركة الخروج */
+  #am-loader .am-panel {
+    position: absolute;
+    left: 0;
+    width: 100%;
+    height: 50.5%;
+    background:
+      radial-gradient(ellipse at 50% 50%, #7A0A11 0%, #3B0408 45%, #140102 100%);
+    background-size: 100% 200%;
+    z-index: 0;
+    transition: transform .45s cubic-bezier(.7, 0, .3, 1) .2s;
+  }
+  #am-loader .am-panel--top    { top: 0;    background-position: top; }
+  #am-loader .am-panel--bottom { bottom: 0; background-position: bottom; }
+
+  /* خطوط شاشة خفيفة */
+  #am-loader::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    background: repeating-linear-gradient(0deg, rgba(255,255,255,.025) 0 1px, transparent 1px 3px);
+    transition: opacity .3s;
+  }
+
+  #am-loader .am-net {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+    transition: opacity .3s;
+  }
+
+  #am-loader .am-seam {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 2px;
+    z-index: 2;
+    transform: translate(-50%, -50%);
+    background: linear-gradient(90deg, transparent, var(--am-gold-light), #fff, var(--am-gold-light), transparent);
+    box-shadow: 0 0 18px var(--am-gold-light);
+    opacity: 0;
+  }
+
+  #am-loader .am-stage {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 18px;
+    transition: opacity .35s ease-in, transform .35s ease-in, filter .35s ease-in;
+  }
+
+  /* ---------- الشعار المركزي ---------- */
+  #am-loader .am-core { width: min(270px, 64vw); height: auto; overflow: visible; }
+
+  #am-loader .am-track { fill: none; stroke: rgba(255,255,255,.08); stroke-width: 4; }
+  #am-loader .am-prog  {
+    fill: none; stroke: url(#am-g-gold); stroke-width: 4; stroke-linecap: round;
+    transform: rotate(-90deg); filter: url(#am-glow);
+  }
+  #am-loader .am-scan {
+    fill: none; stroke: rgba(255,255,255,.55); stroke-width: 1.5;
+    stroke-dasharray: 70 735; stroke-linecap: round;
+    animation: am-spin 2.2s linear infinite;
+  }
+  #am-loader .am-ticks { animation: am-spin 30s linear infinite reverse; }
+  #am-loader .am-tick { stroke: rgba(255,255,255,.18); stroke-width: 1; }
+  #am-loader .am-tick--major { stroke: rgba(232,185,35,.65); stroke-width: 1.6; }
+
+  #am-loader .am-link {
+    stroke: rgba(255,255,255,.15); stroke-width: 1.6; stroke-dasharray: 3 4;
+    transition: stroke .3s;
+  }
+  #am-loader .am-link.is-on { stroke: var(--am-gold-light); animation: am-flow .45s linear infinite; }
+
+  #am-loader .am-node-inner {
+    transform-box: fill-box; transform-origin: center;
+    opacity: 0; animation: am-pop .45s cubic-bezier(.3, 1.6, .5, 1) forwards;
+  }
+  #am-loader .am-node-inner polygon {
+    fill: #2A0306; stroke: rgba(255,255,255,.4); stroke-width: 1.2; transition: fill .3s, stroke .3s;
+  }
+  #am-loader .am-node-inner circle { fill: rgba(255,255,255,.4); transition: fill .3s; }
+  #am-loader .am-node-inner.is-on { animation: am-pop2 .45s ease forwards; filter: url(#am-glow); }
+  #am-loader .am-node-inner.is-on polygon { fill: var(--am-gold-light); stroke: #fff; }
+  #am-loader .am-node-inner.is-on circle  { fill: var(--am-red-dark); }
+
+  #am-loader .am-hex-fill {
+    fill: url(#am-g-red); opacity: 0; animation: am-fade .6s .5s forwards;
+  }
+  #am-loader .am-hex-line {
+    fill: none; stroke: url(#am-g-gold); stroke-width: 2.6; stroke-linejoin: round;
+    stroke-dasharray: 300; stroke-dashoffset: 300; animation: am-draw 1s .1s ease forwards;
+  }
+  #am-loader .am-hex-inner {
+    fill: none; stroke: rgba(255,255,255,.25); stroke-width: 1; stroke-dasharray: 2 3;
+    animation: am-spin 12s linear infinite;
+  }
+  #am-loader .am-pct {
+    fill: #fff; font-size: 22px; font-weight: 800; text-anchor: middle;
+    font-variant-numeric: tabular-nums;
+  }
+  #am-loader .am-pct-label {
+    fill: var(--am-gold-light); font-size: 6.5px; font-weight: 700; letter-spacing: 2.5px;
+    text-anchor: middle; font-family: ui-monospace, "Consolas", monospace;
+  }
+
+  /* ---------- الكتابة حرف حرف ---------- */
+  #am-loader .am-type {
+    margin: 0;
+    display: flex;
+    align-items: center;
+    height: 1.1em;
+    font-size: clamp(38px, 7vw, 60px);
+    font-weight: 800;
+    letter-spacing: .16em;
+    line-height: 1;
+  }
+  #am-loader .am-ch {
+    display: inline-block;
+    color: #fff;
+    animation: am-letter .35s cubic-bezier(.2, .9, .3, 1.2) both;
+  }
+  #am-loader .am-ch--gold {
+    color: var(--am-gold-light);
+    text-shadow: 0 0 16px rgba(232,185,35,.55);
+  }
+  #am-loader .am-cursor {
+    display: inline-block;
+    width: .09em;
+    height: .9em;
+    margin-left: .04em;
+    background: var(--am-gold-light);
+    box-shadow: 0 0 12px var(--am-gold-light);
+    animation: am-blink .8s steps(1) infinite;
+  }
+
+  #am-loader .am-sub {
+    font-size: 11px;
+    letter-spacing: .45em;
+    color: rgba(255,255,255,.7);
+    opacity: 0;
+    animation: am-fade .8s 1.5s forwards;
+  }
+
+  #am-loader .am-status {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 14px;
+    border: 1px solid rgba(232,185,35,.35);
+    border-radius: 999px;
+    background: rgba(0,0,0,.25);
+    font-family: ui-monospace, "Consolas", "SFMono-Regular", monospace;
+    font-size: 11px;
+    letter-spacing: .22em;
+    color: rgba(255,255,255,.85);
+    min-width: 230px;
+    justify-content: center;
+  }
+  #am-loader .am-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--am-red); box-shadow: 0 0 0 0 rgba(255,60,60,.7);
+    animation: am-ping 1s ease-out infinite;
+  }
+
+  /* ---------- لحظة الاكتمال ---------- */
+  #am-loader.am-done .am-hex-fill { fill: url(#am-g-gold); }
+  #am-loader.am-done .am-pct,
+  #am-loader.am-done .am-pct-label { fill: var(--am-red-dark); }
+  #am-loader.am-done .am-core { animation: am-boom .45s ease; }
+  #am-loader.am-done .am-dot { background: var(--am-gold-light); }
+
+  /* ---------- الخروج ---------- */
+  #am-loader.am-exit .am-stage { opacity: 0; transform: scale(1.15); filter: blur(6px); }
+  #am-loader.am-exit .am-net,
+  #am-loader.am-exit::after { opacity: 0; }
+  #am-loader.am-exit .am-seam { animation: am-seam .6s forwards; }
+  #am-loader.am-exit .am-panel--top    { transform: translateY(-100%); }
+  #am-loader.am-exit .am-panel--bottom { transform: translateY(100%); }
+
+  @keyframes am-spin   { to { transform: rotate(360deg); } }
+  @keyframes am-flow   { to { stroke-dashoffset: -14; } }
+  @keyframes am-draw   { to { stroke-dashoffset: 0; } }
+  @keyframes am-fade   { to { opacity: 1; } }
+  @keyframes am-blink  { 50% { opacity: 0; } }
+  @keyframes am-pop    { from { opacity: 0; transform: scale(0); } to { opacity: 1; transform: scale(1); } }
+  @keyframes am-pop2   { 0% { opacity: 1; transform: scale(1); } 50% { transform: scale(1.5); } 100% { opacity: 1; transform: scale(1); } }
+  @keyframes am-letter {
+    0%   { opacity: 0; transform: translateY(.25em) scale(1.6); filter: blur(6px); }
+    100% { opacity: 1; transform: none; filter: blur(0); }
+  }
+  @keyframes am-ping   { to { box-shadow: 0 0 0 9px rgba(255,60,60,0); } }
+  @keyframes am-boom   { 50% { transform: scale(1.07); } }
+  @keyframes am-seam   {
+    0%   { width: 0;    opacity: 1; }
+    45%  { width: 100%; opacity: 1; }
+    100% { width: 100%; opacity: 0; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    #am-loader *, #am-loader *::before, #am-loader *::after { animation-duration: .01s !important; }
+  }
+</style>
 </head><body>
+<!-- ================= AM ERP LOADER — HTML ================= -->
+<div id="am-loader" role="status" aria-live="polite" aria-label="Loading AM ERP">
+  <div class="am-panel am-panel--top"></div>
+  <div class="am-panel am-panel--bottom"></div>
+  <canvas class="am-net"></canvas>
+  <div class="am-seam"></div>
+
+  <div class="am-stage">
+    <svg class="am-core" viewBox="-135 -135 270 270" aria-hidden="true">
+      <defs>
+        <linearGradient id="am-g-gold" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#F5D061"/>
+          <stop offset="1" stop-color="#B8860B"/>
+        </linearGradient>
+        <radialGradient id="am-g-red" cx="35%" cy="30%">
+          <stop offset="0" stop-color="#D01A24"/>
+          <stop offset="1" stop-color="#5A060B"/>
+        </radialGradient>
+        <filter id="am-glow" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="3" result="b"/>
+          <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+      </defs>
+
+      <circle class="am-scan"  r="128"/>
+      <circle class="am-track" r="118"/>
+      <circle class="am-prog"  r="118"/>
+      <g class="am-ticks"></g>
+      <g class="am-links"></g>
+      <g class="am-nodes"></g>
+      <polygon class="am-hex-fill"/>
+      <polygon class="am-hex-inner"/>
+      <polygon class="am-hex-line"/>
+      <text class="am-pct" y="6">0%</text>
+      <text class="am-pct-label" y="22">LOADING</text>
+    </svg>
+
+    <h1 class="am-type" aria-label="AM ERP"><span class="am-cursor"></span></h1>
+    <div class="am-sub">ENTERPRISE RESOURCE PLANNING</div>
+    <div class="am-status"><span class="am-dot"></span><span class="am-status-text">&nbsp;</span></div>
+  </div>
+</div>
+
 <div id="app">
   <aside id="sidebar"></aside>
   <div id="main">
@@ -40,4 +312,182 @@
   </div>
 </div>
 <div id="toasts"></div>
+<!-- ================= AM ERP LOADER — JS ================= -->
+<script>
+(function () {
+  var TOTAL        = 4000;  // المدة الكاملة: 4 ثواني
+  var PROGRESS_END = 3200;  // وقت وصول النسبة لـ 100%
+  var EXIT_AT      = 3350;  // بداية حركة الخروج
+  var TITLE        = 'AM ERP';
+  var GOLD_FROM    = 3;     // من أي حرف يبدأ اللون الأصفر (ERP)
+  var MODULES      = ['FINANCE', 'INVENTORY', 'SALES', 'HR', 'PURCHASING', 'ACCOUNTING'];
+
+  var root = document.getElementById('am-loader');
+  if (!root) return;
+  document.documentElement.classList.add('am-lock');
+
+  var NS = 'http://www.w3.org/2000/svg';
+  function hex(r) {
+    var p = [];
+    for (var i = 0; i < 6; i++) {
+      var a = (60 * i - 90) * Math.PI / 180;
+      p.push((r * Math.cos(a)).toFixed(2) + ',' + (r * Math.sin(a)).toFixed(2));
+    }
+    return p.join(' ');
+  }
+  function svg(tag, attrs, parent) {
+    var e = document.createElementNS(NS, tag);
+    for (var k in attrs) e.setAttribute(k, attrs[k]);
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+
+  /* ----- بناء الشعار ----- */
+  root.querySelector('.am-hex-fill').setAttribute('points', hex(50));
+  root.querySelector('.am-hex-line').setAttribute('points', hex(50));
+  root.querySelector('.am-hex-inner').setAttribute('points', hex(41));
+
+  var ticks = root.querySelector('.am-ticks');
+  for (var i = 0; i < 72; i++) {
+    var a = i * 5 * Math.PI / 180, major = i % 6 === 0, r1 = major ? 97 : 101, r2 = 106;
+    svg('line', {
+      x1: r1 * Math.cos(a), y1: r1 * Math.sin(a), x2: r2 * Math.cos(a), y2: r2 * Math.sin(a),
+      'class': major ? 'am-tick am-tick--major' : 'am-tick'
+    }, ticks);
+  }
+
+  var linksG = root.querySelector('.am-links'), nodesG = root.querySelector('.am-nodes');
+  var nodes = [], links = [];
+  MODULES.forEach(function (m, i) {
+    var a = (60 * i - 90) * Math.PI / 180, c = Math.cos(a), s = Math.sin(a);
+    links.push(svg('line', { x1: 54 * c, y1: 54 * s, x2: 74 * c, y2: 74 * s, 'class': 'am-link' }, linksG));
+    var outer = svg('g', { transform: 'translate(' + (84 * c).toFixed(2) + ',' + (84 * s).toFixed(2) + ')' }, nodesG);
+    var inner = svg('g', { 'class': 'am-node-inner' }, outer);
+    inner.style.animationDelay = (0.25 + i * 0.08) + 's';
+    svg('polygon', { points: hex(10) }, inner);
+    svg('circle', { r: 2.6 }, inner);
+    nodes.push(inner);
+  });
+
+  /* ----- الكتابة حرف ورا حرف ----- */
+  var typeEl = root.querySelector('.am-type'), cursor = typeEl.querySelector('.am-cursor');
+  TITLE.split('').forEach(function (ch, i) {
+    setTimeout(function () {
+      var s = document.createElement('span');
+      s.className = 'am-ch' + (i >= GOLD_FROM ? ' am-ch--gold' : '');
+      s.textContent = ch === ' ' ? ' ' : ch;
+      typeEl.insertBefore(s, cursor);
+    }, 350 + i * 180);
+  });
+
+  /* ----- نص الحالة (decode effect) ----- */
+  var statusEl = root.querySelector('.am-status-text');
+  var GLYPHS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789#$%&@<>/';
+  var scrTimer;
+  function scramble(text) {
+    clearInterval(scrTimer);
+    var f = 0, frames = 10;
+    scrTimer = setInterval(function () {
+      f++;
+      var out = '';
+      for (var i = 0; i < text.length; i++) {
+        out += (text[i] === ' ' || i < text.length * f / frames) ? text[i] : GLYPHS[Math.random() * GLYPHS.length | 0];
+      }
+      statusEl.textContent = out;
+      if (f >= frames) clearInterval(scrTimer);
+    }, 28);
+  }
+  scramble('BOOTING CORE');
+
+  /* ----- الشبكة بالخلفية ----- */
+  var cv = root.querySelector('.am-net'), ctx = cv.getContext('2d');
+  var W, H, DPR = Math.min(window.devicePixelRatio || 1, 2), pts = [], netRaf;
+  function size() {
+    W = cv.clientWidth; H = cv.clientHeight;
+    cv.width = W * DPR; cv.height = H * DPR;
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  }
+  size();
+  window.addEventListener('resize', size);
+  var COLORS = ['232,185,35', '232,185,35', '255,255,255', '255,90,90'];
+  var N = Math.max(25, Math.min(75, Math.round(W * H / 20000)));
+  for (var p = 0; p < N; p++) {
+    pts.push({
+      x: Math.random() * W, y: Math.random() * H,
+      vx: (Math.random() - .5) * .4, vy: (Math.random() - .5) * .4,
+      r: Math.random() * 1.6 + .6, c: COLORS[p % COLORS.length]
+    });
+  }
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    var i, j, a, b, dx, dy, d;
+    for (i = 0; i < pts.length; i++) {
+      a = pts[i]; a.x += a.vx; a.y += a.vy;
+      if (a.x < 0) a.x = W; if (a.x > W) a.x = 0;
+      if (a.y < 0) a.y = H; if (a.y > H) a.y = 0;
+    }
+    ctx.lineWidth = 1;
+    for (i = 0; i < pts.length; i++) {
+      for (j = i + 1; j < pts.length; j++) {
+        a = pts[i]; b = pts[j]; dx = a.x - b.x; dy = a.y - b.y; d = Math.sqrt(dx * dx + dy * dy);
+        if (d < 140) {
+          ctx.strokeStyle = 'rgba(232,185,35,' + ((1 - d / 140) * .22).toFixed(3) + ')';
+          ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+        }
+      }
+    }
+    for (i = 0; i < pts.length; i++) {
+      a = pts[i];
+      ctx.fillStyle = 'rgba(' + a.c + ',.85)';
+      ctx.beginPath(); ctx.arc(a.x, a.y, a.r, 0, Math.PI * 2); ctx.fill();
+    }
+    netRaf = requestAnimationFrame(draw);
+  }
+  draw();
+
+  /* ----- التقدّم ----- */
+  var prog = root.querySelector('.am-prog'), pct = root.querySelector('.am-pct'), pctLabel = root.querySelector('.am-pct-label');
+  var C = 2 * Math.PI * 118, active = -1, t0 = null, raf;
+  prog.style.strokeDasharray = C;
+  prog.style.strokeDashoffset = C;
+
+  function ease(t) { return t < .5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2; }
+
+  function tick(ts) {
+    if (t0 === null) t0 = ts;
+    var t = Math.min((ts - t0) / PROGRESS_END, 1), k = ease(t);
+    prog.style.strokeDashoffset = C * (1 - k);
+    pct.textContent = Math.round(k * 100) + '%';
+
+    var idx = Math.min(MODULES.length - 1, Math.floor(k * MODULES.length));
+    if (k > .04 && idx !== active && t < 1) {
+      for (var j = active + 1; j <= idx; j++) { nodes[j].classList.add('is-on'); links[j].classList.add('is-on'); }
+      active = idx;
+      scramble('SYNCING ' + MODULES[idx]);
+    }
+    if (t < 1) raf = requestAnimationFrame(tick);
+  }
+  raf = requestAnimationFrame(tick);
+
+  setTimeout(function () {
+    nodes.forEach(function (n) { n.classList.add('is-on'); });
+    links.forEach(function (l) { l.classList.add('is-on'); });
+    pct.textContent = '100%';
+    pctLabel.textContent = 'READY';
+    scramble('SYSTEM READY');
+    root.classList.add('am-done');
+  }, PROGRESS_END);
+
+  setTimeout(function () { root.classList.add('am-exit'); }, EXIT_AT);
+
+  setTimeout(function () {
+    cancelAnimationFrame(raf);
+    cancelAnimationFrame(netRaf);
+    clearInterval(scrTimer);
+    window.removeEventListener('resize', size);
+    document.documentElement.classList.remove('am-lock');
+    if (root.parentNode) root.parentNode.removeChild(root);
+  }, TOTAL + 50);
+})();
+</script>
 </body></html>
