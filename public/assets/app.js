@@ -3246,7 +3246,7 @@ const TITLES={owner:'Owner overview',team:'Team activity',items:'Items & stock',
   'plan-new':'Production','purchase-new':'Purchasing'};
 /* Owner (super admin) gets his own menu: the team's work, items and tracking. Admins see the same pages under "Owner view". */
 /* Build version: stamped by scripts/bump-version.py together with the ?v= links in index.html. */
-const AMBS_VERSION='2026.11.27-1337';
+const AMBS_VERSION='2026.11.27-1339';
 const isOwner=()=>typeof CLOUD!=='undefined'&&CLOUD.role==='owner';
 const canSeeOwner=()=>typeof CLOUD!=='undefined'&&['owner','admin'].includes(CLOUD.role);
 const OWNER_GROUPS=[
@@ -6738,24 +6738,80 @@ function driverExportRows(drivers){
     trips.length,trips.filter(t=>t.status==='Delivered').length,Number(tripKm(trips).toFixed(1)),driverWhere(d).text];});
 }
 /* every item on a trip (what was delivered, or what is packed for it) with its picture and quantity */
-function tripItems(t){
+/* what is (or was) on a trip, as stock lines */
+function tripLines(t){
   const job=t.jobId&&get(state,'jobs',t.jobId), sale=t.salesId&&get(state,'sales',t.salesId);
-  if(!job&&!sale)return [];
-  const {lines}=packingContents(t,job||null,sale||null);
-  return lines.map(l=>{const it=item(state,l.sku);
-    return {src:itemPicture(state,l.sku),caption:'×'+qfmt(l.qty).replace(/\s+\S+$/,''),label:it?.code||it?.name||''};});
+  return job||sale?packingContents(t,job||null,sale||null).lines:[];
 }
+const tripRoute=t=>(t.from||'AMBS store')+' -> '+(t.location||t.customerName||'—');
+/* trips grouped by month: count, delivered, km, items carried and from -> to routes */
+function tripMonths(trips){
+  const g=new Map();
+  for(const t of trips.filter(t=>t.status!=='Cancelled')){
+    const [k,name]=periodKey(t.date||t.at||new Date().toISOString(),'month');
+    const x=g.get(k)||{k,name,trips:0,delivered:0,km:0,items:new Map(),routes:new Map()};
+    x.trips++;if(t.status==='Delivered')x.delivered++;x.km+=Number(t.km)||0;
+    for(const l of tripLines(t))x.items.set(l.sku,(x.items.get(l.sku)||0)+l.qty);
+    const r=x.routes.get(tripRoute(t))||{n:0,km:0};r.n++;r.km+=Number(t.km)||0;x.routes.set(tripRoute(t),r);
+    g.set(k,x);
+  }
+  return [...g.values()].sort((a,b)=>b.k.localeCompare(a.k));
+}
+const tripRouteText=routes=>[...routes].map(([route,r])=>route+'  ('+r.n+(r.n===1?' trip':' trips')+(r.km?', '+nfmt(r.km,1)+' km':'')+')').join(String.fromCharCode(10));
 function exportDeliveries(kind,driverId=''){
   const trips=driverId?driverTrips(driverId).sort((a,b)=>(b.date||'').localeCompare(a.date||'')):Drv.filtered();
   const drivers=driverId?[get(state,'drivers',driverId)]:state.drivers;
   const name=driverId?'Driver_'+drivers[0].name:'Deliveries_'+todayISO();
   if(kind==='xlsx')return XLSX.save('AMBS_'+name,[{name:'Deliveries',columns:TRIP_EXPORT_COLUMNS,rows:tripExportRows(trips)},
+    {name:'By month',columns:['Month','Trips','Delivered','Km','Items carried','From -> To'],rows:tripMonths(trips).map(m=>[m.name,m.trips,m.delivered,
+      Number(m.km.toFixed(1)),[...m.items].map(([k,q])=>labelOf(state,k)+' x'+qfmt(q,item(state,k)?.unit)).join(String.fromCharCode(10)),tripRouteText(m.routes)])},
     {name:'Drivers',columns:DRIVER_EXPORT_COLUMNS,rows:driverExportRows(drivers)}]);
-  const cols=['Packing No.','Date','Customer','Project','System','Status','Driver','Vehicle','Delivery location','Km','Delivered','Signed note'];
-  pdf((driverId?'Driver trips · '+drivers[0].name+' · '+(papersOk(drivers[0])?'Papers OK':'PAPERS MISSING'):'Delivery tracking')+' · '+fmtDate(todayISO()),cols,
-    trips.map(t=>[t.no,fmtDate(t.date),t.customerName||'',t.project||'',t.system||'',t.status+(t.priority==='Urgent'?' · URGENT':''),
-      get(state,'drivers',t.driverId)?.name||'',t.vehicle||'',t.location||'',t.km?nfmt(t.km,1):'',t.deliveredAt?fmtDate(t.deliveredAt):'',t.paperStatus||'']),
-    {landscape:true,galleryOf:i=>tripItems(trips[i]),pictureTitle:'Items on this trip'});
+  return deliveriesPDF(trips,driverId?drivers[0]:null);
+}
+/* Deliveries as a PDF: what is on the road now, a monthly summary with from -> to, then every trip with item photos. */
+async function deliveriesPDF(trips,driver){
+  if(!trips.length)return toast('No trips match these filters.','warn');
+  if(!PDFR._ok())return;
+  await PDFR._prepare();
+  const lines=new Map(trips.map(t=>[t.id,tripLines(t)]));
+  const skus=[...new Set([...lines.values()].flat().map(l=>l.sku))];
+  const pics=new Map(await Promise.all(skus.map(async k=>[k,await pdfPicture(itemPicture(state,k),120)])));
+  const gallery=list=>({content:list.length?'':'—',gallery:list.map(l=>({pic:pics.get(l.sku),caption:'x'+qfmt(l.qty),
+    label:item(state,l.sku)?.code||''})),gallerySize:26});
+  const title=driver?'Driver trips · '+driver.name:'Delivery tracking';
+  const doc=PDFR._doc('landscape'), drawBrand=PDFR._hf(doc,driver?'Driver trips':'Deliveries');
+  drawBrand();
+  const live=trips.filter(t=>t.status!=='Cancelled'), count=st=>trips.filter(t=>t.status===st).length;
+  doc.setTextColor(30,35,43);doc.setFont('helvetica','bold');doc.setFontSize(15);doc.text(title,40,90);
+  doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(90);
+  doc.text(trips.length+(trips.length===1?' trip':' trips')+'   ·   '+count('Delivered')+' delivered   ·   '+count('On the way')+' on the way   ·   '+
+    count('Next')+' waiting   ·   '+nfmt(tripKm(live),1)+' km   ·   printed '+stamp(new Date().toISOString()),40,106);
+  const f=Drv.f, filters=driver?[driver.code,driver.phone,papersOk(driver)?'Papers OK':'PAPERS MISSING'].filter(Boolean).join(' · '):
+    [f.q&&'"'+f.q+'"',f.driver&&get(state,'drivers',f.driver)?.name,f.status,f.month,f.priority].filter(Boolean).join(' · ');
+  doc.text(driver?filters:'Filters: '+(filters||'none (everything)'),40,120);
+  const heading=(text,y)=>{doc.setTextColor(30,35,43);doc.setFont('helvetica','bold');doc.setFontSize(11);doc.text(text,40,y);};
+  const opts={margin:{top:74,bottom:45,left:40,right:40},styles:{fontSize:7.5,overflow:'linebreak'},headStyles:{fillColor:[30,35,43]},didDrawPage:drawBrand};
+  const room=y=>{if(y>doc.internal.pageSize.getHeight()-120){doc.addPage();drawBrand();return 96;}return y;};
+  const open=trips.filter(t=>['Next','On the way'].includes(t.status));
+  heading('Where deliveries are now · on the road and waiting',150);
+  doc.autoTable({...opts,startY:158,widths:[.22,.1,.1,.13,.1,.35],head:[['Items','Packing No.','Status','Driver / vehicle','Date','From -> To']],
+    body:open.length?open.map(t=>[gallery(lines.get(t.id)),t.no,t.status+(t.priority==='Urgent'?' · URGENT':''),
+      [get(state,'drivers',t.driverId)?.name,t.vehicle].filter(Boolean).join(String.fromCharCode(10))||'—',fmtDate(t.date),
+      tripRoute(t)+(t.customerName?String.fromCharCode(10)+t.customerName+(t.project?' · '+t.project:''):'')]):
+      [['','—','Nothing on the road or waiting','','','']]});
+  let y=room(doc.lastAutoTable.finalY+26);
+  heading('Summary by month · from where to where',y);
+  doc.autoTable({...opts,startY:y+8,widths:[.11,.06,.08,.07,.3,.38],head:[['Month','Trips','Delivered','Km','Items carried','From -> To (trips, km)']],
+    body:tripMonths(trips).map(m=>[m.name,String(m.trips),String(m.delivered),nfmt(m.km,1),gallery([...m.items].map(([sku,qty])=>({sku,qty}))),tripRouteText(m.routes)])});
+  y=room(doc.lastAutoTable.finalY+26);
+  heading('Every trip · '+trips.length,y);
+  doc.autoTable({...opts,startY:y+8,widths:[.2,.08,.07,.12,.08,.1,.18,.05,.06,.06],
+    head:[['Items on this trip','Packing No.','Date','Customer / project','Status','Driver / vehicle','From -> To','Km','Delivered','Signed note']],
+    body:trips.map(t=>[gallery(lines.get(t.id)),t.no,fmtDate(t.date),[t.customerName,t.project,t.system].filter(Boolean).join(String.fromCharCode(10)),
+      {content:t.status+(t.priority==='Urgent'?' · URGENT':''),styles:{fontStyle:'bold',textColor:t.status==='Delivered'?[20,120,60]:t.status==='Cancelled'?[180,30,30]:[30,35,43]}},
+      [get(state,'drivers',t.driverId)?.name,t.vehicle].filter(Boolean).join(String.fromCharCode(10))||'—',tripRoute(t),t.km?nfmt(t.km,1):'—',
+      t.deliveredAt?fmtDate(t.deliveredAt):'—',t.paperStatus||'—'])});
+  doc.save('AMBS_'+(driver?'Driver_'+driver.name:'Deliveries')+'_'+todayISO()+'.pdf');
 }
 function driverView(id){
   const d=get(state,'drivers',id), trips=driverTrips(id).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
