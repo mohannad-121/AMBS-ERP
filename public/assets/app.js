@@ -3244,7 +3244,7 @@ const TITLES={owner:'Owner overview',team:'Team activity',items:'Items & stock',
   'plan-new':'Production','purchase-new':'Purchasing'};
 /* Owner (super admin) gets his own menu: the team's work, items and tracking. Admins see the same pages under "Owner view". */
 /* Build version: stamped by scripts/bump-version.py together with the ?v= links in index.html. */
-const AMBS_VERSION='2026.11.27-1325';
+const AMBS_VERSION='2026.11.27-1331';
 const isOwner=()=>typeof CLOUD!=='undefined'&&CLOUD.role==='owner';
 const canSeeOwner=()=>typeof CLOUD!=='undefined'&&['owner','admin'].includes(CLOUD.role);
 const OWNER_GROUPS=[
@@ -7364,7 +7364,43 @@ function trackItem(id){
       esc(stamp(r.e.at)),esc(evType(r.e.type)),routeCell(r),
       `<strong class="num ${r.l.delta<0?'trk-out':'trk-in'}">${r.l.delta<0?'':'+'}${esc(qfmt(r.l.delta,it.unit))}</strong>`,esc(qfmt(r.bal)),
       tripCell(r.trip),esc(r.e.note||'—')]),'No movements yet.')),
-    small('Open item',`closeModal();masterView(${escapeArg(get(state,'variants',id)?'variants':get(state,'materials',id)?'materials':get(state,'parts',id)?'parts':'products')},${escapeArg(id)})`));
+    actionGroup(button('PDF · every movement',`itemMovementsPDF(${escapeArg(id)})`,'btn-sm btn-primary','pdf'),small('Open item',`closeModal();masterView(${escapeArg(get(state,'variants',id)?'variants':get(state,'materials',id)?'materials':get(state,'parts',id)?'parts':'products')},${escapeArg(id)})`)));
+}
+/* One item's full history as a PDF: photo and balances, a monthly summary, then every movement. */
+async function itemMovementsPDF(id){
+  if(!PDFR._ok())return;
+  await PDFR._prepare();
+  const it=item(state,id), u=it?.unit||'', rows=ledger().filter(r=>r.l.sku===id);
+  if(!rows.length)return toast('This item has no movements yet.','warn');
+  const pic=await pdfPicture(itemPicture(state,id),240);
+  const doc=PDFR._doc('landscape'), drawBrand=PDFR._hf(doc,'Item movements'), W=doc.internal.pageSize.getWidth();
+  drawBrand();
+  // item header: photo, name, code, balances
+  let x=40;
+  if(pic){const r=pic.w/pic.h,w=r>=1?72:72*r,h=r>=1?72/r:72;
+    try{doc.addImage(pic.data,'JPEG',40+(72-w)/2,74+(72-h)/2,w,h);x=124;}catch(e){}}
+  const onHand=rows.reduce((n,r)=>n+r.l.delta,0), here=stockRows(state).filter(b=>b.sku===id);
+  const totIn=rows.filter(r=>r.l.delta>0).reduce((n,r)=>n+r.l.delta,0), totOut=rows.filter(r=>r.l.delta<0).reduce((n,r)=>n-r.l.delta,0);
+  doc.setTextColor(30,35,43);doc.setFont('helvetica','bold');doc.setFontSize(15);doc.text(it?.name||id,x,90);
+  doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(90);
+  doc.text([it?.code,skuKind(id),'Unit: '+(u||'—')].filter(Boolean).join('   ·   '),x,106);
+  doc.text('On hand now: '+qfmt(onHand,u)+(here.length?'   ('+here.map(b=>locName(state,b.location)+' '+qfmt(b.qty)).join(', ')+')':''),x,120);
+  doc.text(new Set(rows.map(r=>r.e.id)).size+' movements   ·   total in '+qfmt(totIn,u)+'   ·   total out '+qfmt(totOut,u)+
+    '   ·   '+fmtDate(rows[0].e.at.slice(0,10))+' to '+fmtDate(rows[rows.length-1].e.at.slice(0,10))+'   ·   printed '+stamp(new Date().toISOString()),x,134);
+  const heading=(text,y)=>{doc.setTextColor(30,35,43);doc.setFont('helvetica','bold');doc.setFontSize(11);doc.text(text,40,y);};
+  const opts={margin:{top:74,bottom:45,left:40,right:40},styles:{fontSize:8,overflow:'linebreak'},headStyles:{fillColor:[30,35,43]},didDrawPage:drawBrand};
+  heading('Summary by month',166);
+  doc.autoTable({...opts,startY:174,head:[['Month','Movements','In','Out','Net change']],
+    body:periodGroups(rows,'month',false,r=>r.l.delta>0).map(x=>[x.name,String(x.moves.size),x.a?qfmt(x.a,u):'—',x.b?qfmt(x.b,u):'—',(x.a-x.b>0?'+':'')+qfmt(x.a-x.b,u)])});
+  let y=doc.lastAutoTable.finalY+26;
+  if(y>doc.internal.pageSize.getHeight()-120){doc.addPage();drawBrand();y=96;}
+  heading('Every movement · '+rows.length+' lines',y);
+  doc.autoTable({...opts,startY:y+8,widths:[.11,.11,.14,.14,.08,.08,.12,.13,.09],
+    head:[['When','Movement','From','To','Change','Balance there','Trip / driver','Reference','By']],
+    body:rows.slice().reverse().map(r=>[stamp(r.e.at),evType(r.e.type),r.from,r.to,
+      {content:(r.l.delta>0?'+':'')+qfmt(r.l.delta,u),styles:{textColor:r.l.delta<0?[180,30,30]:[20,120,60],fontStyle:'bold'}},qfmt(r.bal,u),
+      [r.trip?.no,get(state,'drivers',r.trip?.driverId)?.name].filter(Boolean).join(' · ')||'—',r.e.note||eventLinks(state,r.e).document||'—',r.e.by||'—'])});
+  doc.save('AMBS_Movements_'+String(it?.code||id).replace(/[^a-z0-9_-]+/gi,'_')+'_'+todayISO()+'.pdf');
 }
 
 /* ---------------- Live refresh: dashboard, tracking and drivers pull fresh data every 30 s ---------------- */
