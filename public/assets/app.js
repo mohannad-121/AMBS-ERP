@@ -3249,7 +3249,7 @@ const TITLES={owner:'Owner overview',team:'Team activity',items:'Items & stock',
   'plan-new':'Production','purchase-new':'Purchasing'};
 /* Owner (super admin) gets his own menu: the team's work, items and tracking. Admins see the same pages under "Owner view". */
 /* Build version: stamped by scripts/bump-version.py together with the ?v= links in index.html. */
-const AMBS_VERSION='2026.11.27-1603';
+const AMBS_VERSION='2026.11.27-1611';
 const isOwner=()=>typeof CLOUD!=='undefined'&&CLOUD.role==='owner';
 const canSeeOwner=()=>typeof CLOUD!=='undefined'&&['owner','admin'].includes(CLOUD.role);
 const OWNER_GROUPS=[
@@ -7536,6 +7536,75 @@ function pendingTable(rows,withItem=true){
     routeCell(p),p.trip?tripCell(p.trip):p.jobId?small('Assign driver',`assignDelivery('job',${escapeArg(p.jobId)})`):p.salesId?small('Assign driver',`assignDelivery('sale',${escapeArg(p.salesId)})`):'<span class="sub">No trip yet</span>'];}),
     'Nothing is waiting to be delivered.');
 }
+/* ---------------- Movement feed as a timeline ----------------
+   One entry per movement (a transfer is ONE entry, not an "out" line and an "in" line), grouped by day,
+   written as a short sentence: what happened, which item, how much, from where to where, and the balance after. */
+const FEED_KIND={
+  'Transfer Stock':['move','swap','Moved'],
+  'Production completion':['make','factory','Made in production'],
+  'Supplier receipt':['in','box','Received from vendor'],
+  'Opening stock':['in','layers','Opening stock'],
+  'Verified legacy opening':['in','layers','Opening stock'],
+  'Customer delivery':['out','truck','Delivered to customer'],
+  'Sales delivery':['out','truck','Delivered to customer'],
+  'Record Stock Adjustment':['fix','wrench','Stock correction'],
+  'Physical Stock Check':['fix','check','Stock count']};
+function feedDay(d){
+  const t=todayISO(), y=new Date(Date.now()-864e5), yISO=y.getFullYear()+'-'+String(y.getMonth()+1).padStart(2,'0')+'-'+String(y.getDate()).padStart(2,'0');
+  const long=new Date(d+'T12:00:00').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  return d===t?'Today · '+long:d===yISO?'Yesterday · '+long:long;
+}
+function feedTimeline(feed,limit=150){
+  const groups=[];
+  for(const r of feed){
+    const g=groups[groups.length-1];
+    if(g&&g.e.id===r.e.id)g.rows.push(r);else groups.push({e:r.e,rows:[r]});
+  }
+  let day='',html='';
+  for(const g of groups.slice(0,limit)){
+    const d=String(g.e.at||'').slice(0,10);
+    if(d!==day){if(day)html+='</div>';day=d;html+=`<div class="tl-day"><div class="tl-date">${esc(feedDay(d))}</div>`;}
+    html+=feedEntry(g);
+  }
+  if(day)html+='</div>';
+  return {html:html||'<p class="tl-empty">No movements match these filters.</p>',total:groups.length,shown:Math.min(limit,groups.length)};
+}
+function feedEntry(g){
+  const e=g.e, [kind,icon,title]=FEED_KIND[e.type]||['fix','pulse',evType(e.type)];
+  const transfer=e.type==='Transfer Stock', made=e.type==='Production completion';
+  const linked=eventLinks(state,e);
+  // a transfer is shown once, from its arriving line (or its leaving line when a location filter hides the other)
+  let rows=transfer?g.rows.filter(r=>r.l.delta>0):g.rows.slice();
+  if(!rows.length)rows=g.rows;
+  if(made)rows.sort((a,b)=>b.l.delta-a.l.delta); // what was made first, then what was used
+  const routes=[...new Set(rows.map(r=>r.from+'\u0000'+r.to))];
+  const route=r=>`<span class="tl-route"><span>${esc(r.from)}</span><b>→</b><span>${esc(r.to)}</span>${mapBtn(r.map)}</span>`;
+  // production, corrections, counts and opening stock happen at one place: "at Main Store"
+  const atOne=made||kind==='fix'||['Opening stock','Verified legacy opening'].includes(e.type);
+  const places=[...new Set(rows.map(r=>r.l.location))];
+  const one=atOne?places.length===1:routes.length===1;
+  const where=atOne?(one?`<span class="tl-route"><span>at</span> <span>${esc(locName(state,places[0]))}</span></span>`:''):one?route(rows[0]):'';
+  const lines=rows.map(r=>{
+    const it=item(state,r.l.sku), out=r.l.delta<0;
+    const qty=(transfer?'':out?'−':'+')+qfmt(Math.abs(r.l.delta),it?.unit);
+    const cls=transfer?'tl-q-move':out?'tl-q-out':'tl-q-in';
+    return `<div class="tl-line">
+      <button type="button" class="tl-item-name" onclick="trackItem(${escapeArg(r.l.sku)})" title="Track this item">${recordPicture(it||{})}
+        <span><b>${esc(it?.name||'—')}</b><small>${esc(it?.code||'')}${made?' · '+(out?'used':'made'):''}</small></span></button>
+      <span class="tl-qty ${cls}">${esc(qty)}</span>
+      <span class="tl-bal">${esc(qfmt(r.bal))} now at ${esc(locName(state,r.l.location))}</span>
+      ${one?'':`<div class="tl-line-route">${atOne?`<span class="tl-route"><span>at</span> <span>${esc(locName(state,r.l.location))}</span></span>`:route(r)}</div>`}</div>`;
+  }).join('');
+  const trip=rows.find(r=>r.trip)?.trip, driver=trip&&get(state,'drivers',trip.driverId)?.name;
+  const ref=e.note||linked.document||'';
+  const meta=[ref&&`<span class="tl-tag">${ic('invoice')}${esc(ref)}</span>`,
+    trip&&`<button type="button" class="tl-tag tl-tag-link" onclick="tripView(${escapeArg(trip.id)})">${ic('truck')}${esc(trip.no)}${driver?' · '+esc(driver):''} · ${esc(trip.status)}</button>`].filter(Boolean).join('');
+  return `<div class="tl-entry tl-${kind}">
+    <div class="tl-time">${esc(new Date(e.at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}))}</div>
+    <div class="tl-dot">${ic(icon)}</div>
+    <div class="tl-body"><div class="tl-head"><b>${esc(title)}</b>${where}${e.by?`<span class="tl-by">by ${esc(e.by)}</span>`:''}</div>
+      <div class="tl-lines">${lines}</div>${meta?`<div class="tl-meta">${meta}</div>`:''}</div></div>`;
+}
 const Trk={
   f:{q:'',kind:'',location:'',type:'',from:'',to:''},
   set(name,value){this.f[name]=value;const box=$('#track-results');if(box)box.innerHTML=this.results();},
@@ -7569,19 +7638,15 @@ const Trk={
         last?cell(evType(last.e.type),stamp(last.e.at)):'<span class="sub">No movements</span>',`<span class="co-count">${moves}</span>`,
         button('Track',`trackItem(${escapeArg(id)})`,'btn-sm btn-view','route')];
     });
-    const feedRows=feed.slice(0,250).map(r=>{
-      const it=item(state,r.l.sku), linked=eventLinks(state,r.e), out=r.l.delta<0;
-      return [`<span class="num">${esc(stamp(r.e.at))}</span>`,cell(it?.name||'—',it?.code||''),esc(evType(r.e.type)),
-        routeCell(r),
-        `<strong class="num ${out?'trk-out':'trk-in'}">${out?'':'+'}${esc(qfmt(r.l.delta,it?.unit))}</strong>`,`<span class="num">${esc(qfmt(r.bal))}</span>`,
-        tripCell(r.trip),esc(r.e.note||linked.document||'—'),esc(r.e.by||'—')];
-    });
-    return `<div class="trk-summary">${[['Items shown',items.length],['Movements',feed.length],['In',feed.filter(r=>r.l.delta>0).length],['Out',feed.filter(r=>r.l.delta<0).length]]
-      .map(([k,v])=>`<span>${esc(k)} <b>${v}</b></span>`).join('')}</div>`+
-      panel('Where every item is now',table(['Item','Type','On hand','Locations','Last movement','Moves','Track'],itemRows,
+    const tl=feedTimeline(feed);
+    return `<div class="trk-summary">${[['Items',items.length],['Movements',tl.total],['Stock in',feed.filter(r=>r.l.delta>0&&r.e.type!=='Transfer Stock').length,'trk-in'],
+      ['Stock out',feed.filter(r=>r.l.delta<0&&r.e.type!=='Transfer Stock').length,'trk-out'],['Moved between locations',new Set(feed.filter(r=>r.e.type==='Transfer Stock').map(r=>r.e.id)).size]]
+      .map(([k,v,c])=>`<span>${esc(k)} <b class="${c||''}">${v}</b></span>`).join('')}</div>`+
+      panel('Where every item is now · click a row to track it',table(['Item','Type','On hand','Locations','Last movement','Moves',''],itemRows,
         q?'No items match these filters.':'No stock movements yet. Search an item name to look up items that never moved.'))+
-      panel('Movement feed'+(feed.length>250?' · newest 250 of '+feed.length:''),table(['When','Item','Movement','From → To','Change','Balance there','Trip / driver','Reference','By'],feedRows,
-        'No movements match these filters.'));
+      `<section class="card erp-table tl-card"><div class="card-head"><div class="card-title">Movement feed${tl.total>tl.shown?' · newest '+tl.shown+' of '+tl.total:''}</div>
+        <div class="tl-legend">${[['in','Stock in'],['out','Stock out'],['move','Moved'],['make','Production'],['fix','Correction']].map(([k,t])=>`<span class="tl-${k}"><i></i>${t}</span>`).join('')}</div></div>
+        <div class="tl-feed">${tl.html}</div></section>`;
   }
 };
 function trackingPage(){
@@ -7592,7 +7657,7 @@ function trackingPage(){
   const moving=state.trips.filter(t=>t.status==='On the way'), today=todayISO();
   const todayMoves=state.events.filter(e=>(e.at||'').slice(0,10)===today);
   return head('Overview',TITLES.tracking,liveChip(),button('Movements PDF','trackPDF()','','pdf'),button('Movements Excel','trackExport()','','xls'),button('Clear filters','Trk.reset()','','refresh'))+
-    kpiRow([['layers','Items in stock',new Set(stockRows(state).filter(b=>b.qty>EPS).map(b=>b.sku)).size,'Across '+new Set(stockRows(state).map(b=>b.location)).size+' locations','k-ink'],
+    '<div class="trk-scope">'+kpiRow([['layers','Items in stock',new Set(stockRows(state).filter(b=>b.qty>EPS).map(b=>b.sku)).size,'Across '+new Set(stockRows(state).map(b=>b.location)).size+' locations','k-ink'],
       ['swap','Movements today',todayMoves.length,todayMoves.reduce((n,e)=>n+e.lines.length,0)+' item lines','k-ok'],
       ['truck','Deliveries on the road',moving.length,moving.length?moving.map(t=>t.no).slice(0,2).join(', '):'Nothing moving','k-yellow','deliveries'],
       ['pulse','All-time movements',state.events.length,'Full history kept','k-ink']])+
@@ -7607,7 +7672,7 @@ function trackingPage(){
       <select class="sel" aria-label="Movement type" onchange="Trk.set('type',this.value)">${opt(same(types),f.type,'All movements')}</select>
       <label class="trk-date">From <input class="inp" type="date" value="${esc(f.from)}" onchange="Trk.set('from',this.value)"></label>
       <label class="trk-date">To <input class="inp" type="date" value="${esc(f.to)}" onchange="Trk.set('to',this.value)"></label></div></div>
-    <div id="track-results">${Trk.results()}</div>`;
+    <div id="track-results">${Trk.results()}</div></div>`;
 }
 function trackRows(){return ledger().filter(r=>Trk.match(r)).reverse();}
 /* Live Tracking as a PDF: where each item is now, a monthly summary with from -> to, then every movement — all with item photos.
