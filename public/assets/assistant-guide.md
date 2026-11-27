@@ -179,9 +179,19 @@ Keywords: assign driver, give to driver, create trip, send with driver, choose d
 1. **Deliveries → To deliver** → **Assign driver** on the order (also on the sales order or dispatch job page).
 2. Pick the **Driver** — drivers with missing or expired papers are refused.
 3. For a sales order choose **Ship from** (the store); AMBS suggests the store that has the stock.
-4. Check the **Vehicle**, enter **Distance (km)**, **Trip date**, **Priority** and **Signed delivery note** status → **Assign driver**.
+4. Check the **Vehicle**, **Distance (km)** (filled automatically — see "How is the distance calculated?"), **Trip date**, **Priority** and **Signed delivery note** status → **Assign driver**.
 
 A trip is created with status **Next** and a packing number **PL<year>-<month>-<nnn>**. The order leaves *To deliver* and shows under *Ready to leave*.
+
+## How is the distance calculated?
+Keywords: distance, km, kilometres, automatic distance, route, road distance, google maps api, المسافة
+
+Whenever a form has two places — Assign driver, New trip, Transfer Stock and a new dispatch job — AMBS calculates the road distance by itself and fills **Distance (km)**.
+- It reads each place's **Google Maps URL** (short maps.app.goo.gl links work) or its **Latitude / Longitude**. Add one of them to every store, customer site and vendor site.
+- The road distance comes from OpenStreetMap routing. **No Google Maps API key is needed** and nothing is billed.
+- If the road route cannot be reached, an estimate (straight line × 1.3) is shown with "≈".
+- A number you type yourself is kept. "Distance not calculated" means one of the two places has no map link or coordinates.
+- On a **New trip**, **From** must match a saved location name (e.g. *Main Store*) to be measured.
 
 ## Start a trip and mark it delivered
 Keywords: start trip, on the way, delivered, mark delivered, finish delivery, close trip, delivery done, بدء الرحلة, تم التسليم
@@ -855,7 +865,11 @@ Keywords: transfer, move stock, relocate, send to site, نقل مخزون, تح�
 3. Choose the **From location** and **To location**. Both must be custody locations and must differ.
 4. Optionally choose **Related company (optional)** and **Related company site (optional)**. A site owned by one company is linked automatically.
 5. Enter **Quantity to transfer** (whole numbers for parts, variants and products) and optional **Reference / notes**.
-6. Click **Confirm Transfer**.
+6. Optional — **Driver**: tick **Assign a driver to this transfer**, pick the **Driver** (drivers with missing papers are refused), check **Vehicle**, **Distance (km)** (filled automatically), **Trip date** and **Priority**.
+7. Click **Confirm Transfer**.
+
+The form is split into sections: **Item & quantity**, **Route** (shows the road distance between the two locations), **Driver (optional)**, **Related company (optional)** and **Reference / notes**.
+With a driver, the stock moves at once and a trip (packing no. **PL…**) is created in **Deliveries**; the driver then **Starts** it and marks it **Delivered**. The trip page shows what was carried and a **Stock transfer** button.
 
 To send stock to a customer's site, that site must be a custody location. See "Make a customer site hold AMBS stock".
 
@@ -981,12 +995,12 @@ Keywords: dispatch, delivery, packing, ship, send to customer, DSP, job, شحن,
 3. Choose the **Customer** and the **Customer delivery site**. The customer must have at least one active location in its record.
 4. Choose the **Fulfilment**: **Pack from parts** or **Finished stock** (see the next section).
 5. Optionally tick **Keep delivered stock tracked at customer site**.
-6. In **Complete product**, choose the **Product**. **Requested product quantity** fills with the product's Quantity. Adjust the per-part quantities and variants if needed.
-7. Review the panel: destination with its 📍 map link, plus **Packing requirements** or **Finished stock** availability.
+6. In **Item to dispatch**, choose a **product, part (or variant) or raw material**. For a product, **Requested quantity** fills with the product's Quantity; adjust the per-part quantities and variants if needed. A part or raw material ships as it is, straight from stock — the **Fulfilment** field is hidden for it.
+7. Review the panel: road distance from the source location, destination with its 📍 map link, plus **Packing requirements** or **From stock** availability.
 8. Click **Save Job**. The job is **Open**, with a number starting **DSP-**, and appears in **Deliveries → To deliver**.
 9. Open it → **Print packing list** for the store team, then **Assign driver**.
 
-Each job holds one product. Errors include "Enter a dispatch reference.", "Select a delivery site belonging to this customer." and "Save the Product BOM for … first."
+Each job holds one item. Errors include "Enter a dispatch reference.", "Select a delivery site belonging to this customer." and "Save the Product BOM for … first."
 
 ## Fulfilment: Pack from parts vs Finished stock
 Keywords: fulfilment, pack from parts, finished stock, kit, deduct parts, تجهيز

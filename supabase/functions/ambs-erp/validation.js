@@ -139,7 +139,7 @@ function validateState(s){
      p.lines.every(l=>Number.isFinite(l.received)&&l.received>=0&&l.received<=l.qty+EPS)&&
      ['Draft','Ordered','Received','Cancelled'].includes(p.status),'Invalid purchase request.');
   for(const j of s.jobs)need(site(j.location)&&site(j.destination)?.ownerId===j.customerId&&
-    site(j.destination)?.ownerType==='customers'&&get(s,'customers',j.customerId)&&get(s,'products',j.productId)&&
+    site(j.destination)?.ownerType==='customers'&&get(s,'customers',j.customerId)&&(get(s,'products',j.productId)||j.finished&&sku(j.productId))&&
     parts(j.parts)&&(j.finished||j.parts.length)&&integral(j.qty)&&Number.isSafeInteger(j.delivered)&&j.delivered>=0&&j.delivered<=j.qty&&
     typeof j.destinationSnapshot?.name==='string'&&(j.trackAtDestination==null||typeof j.trackAtDestination==='boolean')&&
     (!j.trackAtDestination||j.location!==j.destination)&&
