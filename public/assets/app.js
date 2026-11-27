@@ -3249,7 +3249,7 @@ const TITLES={owner:'Owner overview',team:'Team activity',items:'Items & stock',
   'plan-new':'Production','purchase-new':'Purchasing'};
 /* Owner (super admin) gets his own menu: the team's work, items and tracking. Admins see the same pages under "Owner view". */
 /* Build version: stamped by scripts/bump-version.py together with the ?v= links in index.html. */
-const AMBS_VERSION='2026.11.27-1611';
+const AMBS_VERSION='2026.11.27-1616';
 const isOwner=()=>typeof CLOUD!=='undefined'&&CLOUD.role==='owner';
 const canSeeOwner=()=>typeof CLOUD!=='undefined'&&['owner','admin'].includes(CLOUD.role);
 const OWNER_GROUPS=[
@@ -7160,17 +7160,58 @@ const Drv={
   set(name,value){this.f[name]=value;const box=$('#trip-results');if(box)box.innerHTML=this.results();},
   results(){
     const rows=this.filtered();
-    return `<div class="pill-legend" style="margin:0 0 8px">${rows.length} trips · ${esc(nfmt(tripKm(rows),1))} km</div>`+
-      table(['Packing no.','Customer / project','System','Driver / vehicle','Delivery location','Km','Status','Signed delivery note'],rows.map(t=>{
-        const d=get(state,'drivers',t.driverId), args=escapeArg(t.id);
-        return [cell(t.no,fmtDate(t.date)),cell(t.customerName||'—',t.project),cell(t.system||'—',t.description),
-          d?`<button type="button" class="link-btn" onclick="driverView(${escapeArg(d.id)})">${esc(d.name)}</button>${papersOk(d)?'':' '+statusChip('bad','Papers')}<div class="sub">${esc(t.vehicle||'')}</div>`:'—',
-          `<div class="addr-cell"><span>${esc(t.location||'—')}</span>${mapBtn(t.mapUrl)}</div>`,`<span class="num">${esc(t.km?nfmt(t.km,1):'—')}</span>`,
-          tripChip(t)+(t.deliveredAt?`<div class="sub">${esc(fmtDate(t.deliveredAt))}</div>`:''),
-          (t.paperStatus==='Signed & returned'?statusChip('ok','Signed'):t.paperStatus==='Missing'?statusChip('bad','Missing'):statusChip('warn','Pending'))+openBtn(`tripView(${args})`)];
-      }),'No trips match. Create a delivery trip to start tracking.');
+    const count=st=>rows.filter(t=>t.status===st).length;
+    return `<div class="trk-summary tl-sum">${[['Trips',rows.length],['Ready to leave',count('Next'),'tl-c-next'],['On the road',count('On the way'),'tl-c-road'],
+        ['Delivered',count('Delivered'),'tl-c-done'],['Distance',nfmt(tripKm(rows),1)+' km']]
+      .map(([k,v,c])=>`<span>${esc(k)} <b class="${c||''}">${esc(v)}</b></span>`).join('')}
+      <div class="tl-legend">${[['next','Ready to leave'],['road','On the road'],['done','Delivered'],['cancel','Cancelled']].map(([k,t])=>`<span class="tl-${k}"><i></i>${t}</span>`).join('')}</div></div>`+
+      `<div class="tl-feed">${tripTimeline(rows)}</div>`;
   }
 };
+/* Delivery trips as a timeline: grouped by trip date, one card per trip, coloured by status. */
+const TRIP_KIND={'Next':['next','truck','Ready to leave'],'On the way':['road','route','On the road'],'Delivered':['done','ok','Delivered'],'Cancelled':['cancel','x','Cancelled']};
+function tripTimeline(trips){
+  if(!trips.length)return '<p class="tl-empty">No trips match. Create a delivery trip to start tracking.</p>';
+  let day='',html='';
+  for(const t of trips){
+    const d=String(t.date||t.at||'').slice(0,10);
+    if(d!==day){if(day)html+='</div>';day=d;html+=`<div class="tl-day"><div class="tl-date">${esc(d?feedDay(d):'No date')}</div>`;}
+    html+=tripEntry(t);
+  }
+  return html+'</div>';
+}
+function tripEntry(t){
+  const [kind,icon,title]=TRIP_KIND[t.status]||['next','truck',t.status];
+  const d=get(state,'drivers',t.driverId), args=escapeArg(t.id);
+  const hhmm=x=>x&&/T/.test(x)?new Date(x).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}):'';
+  const time=t.status==='Delivered'?hhmm(t.deliveredTime):t.status==='On the way'?hhmm(t.departedAt):'';
+  let items=[];try{items=tripLines(t);}catch{}
+  const lines=items.slice(0,3).map(l=>{const it=item(state,l.sku);return `<div class="tl-line">
+      <span class="tl-item-name">${recordPicture(it||{})}<span><b>${esc(it?.name||'—')}</b><small>${esc(it?.code||'')}</small></span></span>
+      <span class="tl-qty tl-q-move">${esc(qfmt(l.qty,it?.unit))}</span><span class="tl-bal"></span></div>`;}).join('')+
+    (items.length>3?`<div class="tl-more">+${items.length-3} more item${items.length-3>1?'s':''}</div>`:'')+
+    (!items.length&&t.description?`<div class="tl-desc">${esc(t.description)}</div>`:'');
+  const note=t.paperStatus==='Signed & returned'?['ok','Signed note returned']:t.paperStatus==='Missing'?['bad','Signed note missing']:['warn','Signed note pending'];
+  const acts=[t.status==='Next'?button('Start trip',`tripStatus(${args},'On the way')`,'btn-sm btn-primary'):'',
+    t.status==='On the way'?button('Delivered',`tripStatus(${args},'Delivered')`,'btn-sm btn-primary'):'',
+    t.status==='Delivered'&&t.paperStatus!=='Signed & returned'?small('Mark note signed',`tripPapers(${args},'Signed & returned')`):'',
+    small('Open',`tripView(${args})`)].filter(Boolean).join('');
+  return `<div class="tl-entry tl-${kind}">
+    <div class="tl-time">${esc(time)}</div>
+    <div class="tl-dot">${ic(icon)}</div>
+    <div class="tl-body"><div class="tl-head"><b>${esc(title)}</b>
+        <button type="button" class="tl-no" onclick="tripView(${args})">${esc(t.no)}</button>
+        ${t.priority==='Urgent'?statusChip('bad','Urgent'):''}
+        <span class="tl-route"><span>${esc(t.from||'AMBS store')}</span><b>→</b><span>${esc(t.location||t.customerName||'—')}</span>${mapBtn(t.mapUrl)}</span>
+        ${t.km?`<span class="tl-km">${esc(nfmt(t.km,1))} km</span>`:''}</div>
+      <div class="tl-who">${t.customerName?`<span>${ic('users')}<b>${esc(t.customerName)}</b>${t.project?' · '+esc(t.project):''}</span>`:''}
+        ${d?`<button type="button" class="tl-who-btn" onclick="driverView(${escapeArg(d.id)})">${ic('driver')}<b>${esc(d.name)}</b>${t.vehicle?' · '+esc(t.vehicle):''}</button>${papersOk(d)?'':statusChip('bad','Papers')}`:''}</div>
+      ${lines?`<div class="tl-lines">${lines}</div>`:''}
+      <div class="tl-meta">${t.status==='Delivered'?statusChip(note[0],note[1]):''}
+        ${t.deliveredAt&&t.status==='Delivered'?`<span class="tl-tag">${ic('cal')}Delivered ${esc(fmtDate(t.deliveredAt))}</span>`:''}
+        ${t.system?`<span class="tl-tag">${esc(t.system)}</span>`:''}
+        <span class="tl-acts">${acts}</span></div></div></div>`;
+}
 function driversPage(){
   const drivers=state.drivers.slice().sort((a,b)=>a.name.localeCompare(b.name));
   const blocked=drivers.filter(d=>d.active!==false&&!papersOk(d));
@@ -7303,7 +7344,7 @@ function deliveriesPage(){
   const f=Drv.f, opt=(rows,sel,all)=>`<option value="">${esc(all)}</option>`+rows.map(([v,l])=>`<option value="${esc(v)}" ${v===sel?'selected':''}>${esc(l)}</option>`).join('');
   return head('Operations',TITLES.deliveries,button('PDF',"exportDeliveries('pdf')",'','pdf'),button('Excel',"exportDeliveries('xlsx')",'','xls'),
       button('Other trip','tripEdit()'))+
-    kpiRow([['alert','To deliver',queue.length,queue.length?'Waiting for a driver':'Nothing waiting',queue.length?'k-red':'k-ok'],
+    '<div class="trk-scope">'+kpiRow([['alert','To deliver',queue.length,queue.length?'Waiting for a driver':'Nothing waiting',queue.length?'k-red':'k-ok'],
       ['truck','Ready to leave',ready.length,'Driver assigned','k-ink'],
       ['route','On the road',moving.length,moving.length?moving.map(t=>get(state,'drivers',t.driverId)?.name).filter(Boolean).slice(0,2).join(', '):'Nothing moving','k-yellow'],
       ['pulse','This month',month.length+' trips',nfmt(tripKm(month),1)+' km driven','k-ok']])+
@@ -7320,7 +7361,7 @@ function deliveriesPage(){
         <select class="sel" aria-label="Status" onchange="Drv.set('status',this.value)">${opt(same(TRIP_STATUS),f.status,'All statuses')}</select>
         <select class="sel" aria-label="Priority" onchange="Drv.set('priority',this.value)">${opt(same(['Normal','Urgent']),f.priority,'Any priority')}</select>
         <input class="inp" type="month" aria-label="Month" value="${esc(f.month)}" onchange="Drv.set('month',this.value)"></div>
-      <div id="trip-results" class="card-body-flush">${Drv.results()}</div></section>`;
+      <div id="trip-results" class="card-body-flush">${Drv.results()}</div></section></div>`;
 }
 
 
