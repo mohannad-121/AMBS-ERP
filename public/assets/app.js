@@ -3247,7 +3247,7 @@ const TITLES={owner:'Owner overview',team:'Team activity',items:'Items & stock',
   'plan-new':'Production','purchase-new':'Purchasing'};
 /* Owner (super admin) gets his own menu: the team's work, items and tracking. Admins see the same pages under "Owner view". */
 /* Build version: stamped by scripts/bump-version.py together with the ?v= links in index.html. */
-const AMBS_VERSION='2026.11.27-1439';
+const AMBS_VERSION='2026.11.27-1459';
 const isOwner=()=>typeof CLOUD!=='undefined'&&CLOUD.role==='owner';
 const canSeeOwner=()=>typeof CLOUD!=='undefined'&&['owner','admin'].includes(CLOUD.role);
 const OWNER_GROUPS=[
@@ -3809,11 +3809,14 @@ async function placePoint(place){
   if(!SHORT_MAP.test(url)||CLOUD.demo)return null;
   const saved=GEO.load()[url];
   if(saved)return saved;
-  if(!GEO.memo.has(url))GEO.memo.set(url,CLOUD.api('GET',null,'/geo?url='+encodeURIComponent(url)).then(r=>{
-    const p=Number.isFinite(r?.lat)&&Number.isFinite(r?.lng)?{lat:r.lat,lng:r.lng}:null;
+  const point=r=>Number.isFinite(r?.lat)&&Number.isFinite(r?.lng)?{lat:r.lat,lng:r.lng}:null;
+  // the website's own /api/geo first; the AMBS cloud function is the backup
+  const website=()=>fetch('/api/geo?url='+encodeURIComponent(url)).then(r=>r.ok?r.json():null).then(point).catch(()=>null);
+  const cloud=()=>CLOUD.api('GET',null,'/geo?url='+encodeURIComponent(url)).then(point).catch(()=>null);
+  if(!GEO.memo.has(url))GEO.memo.set(url,website().then(p=>p||cloud()).then(p=>{
     if(p)GEO.save(url,p); // a link without coordinates is not asked again this session
     return p;
-  }).catch(()=>{GEO.memo.delete(url);return null;}));
+  }));
   return GEO.memo.get(url);
 }
 function straightKm(a,b){
@@ -3882,6 +3885,45 @@ function autoKm(form,ends,fields=[],hintBox=null){
   fields.forEach(name=>form.elements.namedItem(name)?.addEventListener('change',run));
   run();
   return run;
+}
+/* The company a stock location belongs to: its owner, or the customer / vendor / processing company with the same name
+   (e.g. the "METAL SOLUTION INDUSTRIES" store and the vendor METAL SOLUTION INDUSTRIES). */
+function locationCompany(s,l){
+  if(!l)return null;
+  if(l.ownerId){const row=get(s,l.ownerType,l.ownerId);return row?{type:l.ownerType,row}:null;}
+  const name=String(l.name||'').trim().toLowerCase();
+  if(!name)return null;
+  for(const type of COMPANIES){
+    const row=current(s,type).find(c=>String(c.name||'').trim().toLowerCase()===name);
+    if(row)return {type,row};
+  }
+  return null;
+}
+/* Every Google Maps address a stock location can mean: all addresses of its company (factory / delivery sites and the
+   company address) and the location's own link. Same link = one entry. Each: {key, text, place}. */
+function locationAddresses(s,id){
+  const l=get(s,'locations',id);
+  if(!l)return [];
+  const out=[], seen=new Set();
+  const push=(key,text,place)=>{
+    const url=mapsLink(place||{});
+    if(!url||seen.has(url))return;
+    seen.add(url);out.push({key,text,place});
+  };
+  const c=locationCompany(s,l);
+  if(c){
+    const kind={suppliers:'Factory',customers:'Site',processors:'Site'}[c.type]||'Site';
+    for(const site of companyLocations(s,c.type,c.row.id))
+      push(site.id,kind+' · '+[site.name,site.city].filter(uniqText).join(' · '),site);
+    if(c.row.mapUrl)push('company','Company address'+(c.row.address?' · '+c.row.address:''),{url:c.row.mapUrl});
+  }
+  push('self',l.name+(l.city?' · '+l.city:''),l);
+  return out;
+}
+/* the chosen address of a stock location; with no choice, the one matching its own link, else the first */
+function pickedAddress(s,id,key){
+  const all=locationAddresses(s,id), own=mapsLink(get(s,'locations',id)||{});
+  return all.find(a=>a.key===key)||all.find(a=>mapsLink(a.place)===own)||all[0]||null;
 }
 function mapAction(l){
   const url=mapsLink(l);
@@ -5428,7 +5470,9 @@ function inventoryForm(mode){
       searchable('Item / SKU','sku',pair(skus()))+qtyField)}
     ${formSection(move?'route':'pin',move?'Route':'Location',move?'Where the stock leaves from and where it goes':'',
       select(move?'From location':'Custody location','location',locOptions())+
-      (move?select('To location','to',locOptions())+`<div class="field full" data-route></div>
+      (move?select('To location','to',locOptions())+
+        select('Exact address (from)','fromAddress',[],'',false,'—')+select('Exact address (to)','toAddress',[],'',false,'—')+
+        `<div class="field full" data-route></div>
         <div class="field full"><div class="hint">Processing companies appear here automatically (their site holds AMBS stock). To hold stock at a customer site, enable stock custody for that site in the Customer record.</div></div>`:''))}
     ${move?formSection('truck','Driver (optional)','Send the stock with a driver — a delivery trip is created with the distance filled in',
       drivers.length?`<div class="field full fsec-switch"><label><input type="checkbox" name="withDriver"><span>Assign a driver to this transfer
@@ -5476,9 +5520,12 @@ function inventoryForm(mode){
         if(withDriver){
           checkTripDriver(get(s,'drivers',driverId),'Next');
           const to=loc(s,valOf(f,'to')), from=loc(s,location), no=nextTripNo(s,tripDate);
+          // the exact Google Maps address picked for each side (e.g. which factory of the company)
+          const fromAt=pickedAddress(s,from.id,valOf(f,'fromAddress')), toAt=pickedAddress(s,to.id,valOf(f,'toAddress'));
+          const where=(l,a)=>locName(s,l.id)+(a&&a.key!=='self'?' · '+a.text:'');
           add(s.trips,{id:key(),no,date:tripDate,driverId,vehicle:valOf(f,'vehicle'),km:kmRaw===''?0:qty(kmRaw,'Distance',true),
             priority:valOf(f,'priority')||'Normal',transferId:id,customerId:'',customerName:'',project:notes||'Stock transfer',
-            from:locName(s,from.id),fromLocation:from.id,location:locName(s,to.id),toLocation:to.id,mapUrl:mapsLink(to),
+            from:where(from,fromAt),fromLocation:from.id,location:where(to,toAt),toLocation:to.id,mapUrl:toAt?mapsLink(toAt.place):mapsLink(to),
             system:'',description:label(row)+' × '+qfmt(requested,row.unit),status:'Next',paperStatus:'Pending',
             by:whoami(),at:now(),updated:now()});
           get(s,'events',id).tripNo=no;
@@ -5515,12 +5562,34 @@ function inventoryForm(mode){
   });
   form.addEventListener('input',update);form.addEventListener('change',update);
   if(!move)return;
-  const ends=()=>[get(state,'locations',valOf(form,'location')),get(state,'locations',valOf(form,'to'))];
-  routeLine(form.querySelector('[data-route]'),form,['location','to'],ends);
+  /* "Exact address": when a location's company has several Google Maps addresses (company address, factories…),
+     the employee picks the one the stock really goes from / to. The distance uses that address. */
+  const addressPick=(locField,addrField)=>{
+    const el=form.elements[addrField], field=el.closest('.field');
+    const refresh=()=>{
+      const all=locationAddresses(state,valOf(form,locField)), chosen=pickedAddress(state,valOf(form,locField),'');
+      el.innerHTML=all.map(a=>`<option value="${esc(a.key)}" ${a===chosen?'selected':''}>${esc(a.text)}</option>`).join('');
+      field.dataset.many=all.length>1?'1':'';
+      const many=!!(form.elements.fromAddress.closest('.field').dataset.many||form.elements.toAddress.closest('.field').dataset.many);
+      for(const f of [form.elements.fromAddress.closest('.field'),form.elements.toAddress.closest('.field')]){
+        f.hidden=!many;f.style.visibility=f.dataset.many?'':'hidden';
+      }
+    };
+    form.elements[locField].addEventListener('change',refresh);
+    return refresh;
+  };
+  const fromRefresh=addressPick('location','fromAddress'), toRefresh=addressPick('to','toAddress');
+  fromRefresh();toRefresh();
+  const ends=()=>{
+    const a=valOf(form,'location'), b=valOf(form,'to');
+    return [a&&(pickedAddress(state,a,valOf(form,'fromAddress'))?.place||get(state,'locations',a)),
+      b&&(pickedAddress(state,b,valOf(form,'toAddress'))?.place||get(state,'locations',b))];
+  };
+  routeLine(form.querySelector('[data-route]'),form,['location','to','fromAddress','toAddress'],ends);
   if(!drivers.length)return;
   const box=form.querySelector('[data-driver]');
   form.elements.withDriver.addEventListener('change',e=>{box.hidden=!e.target.checked;});
-  autoKm(form,ends,['location','to'],form.querySelector('[data-km-hint]'));
+  autoKm(form,ends,['location','to','fromAddress','toAddress'],form.querySelector('[data-km-hint]'));
   const showPapers=()=>{
     const d=get(state,'drivers',form.elements.driverId.value), papers=$('[data-papers]',form);
     if(!d){papers.innerHTML='';return;}
