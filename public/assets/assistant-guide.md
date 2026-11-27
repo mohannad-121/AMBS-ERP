@@ -170,7 +170,7 @@ Keywords: deliveries page, to deliver, waiting for driver, ready to leave, on th
 **Operations → Deliveries** (`#/deliveries`):
 - Cards: **To deliver** (waiting for a driver), **Ready to leave** (driver assigned), **On the road**, **This month** (trips and km).
 - **To deliver**: every **confirmed sales order** and **open dispatch job** without a trip, with customer, address (📍 pin), items and requested date, and the **Assign driver** button. Nothing is typed in — it appears automatically.
-- **Delivery trips**: all trips with packing no., customer / project, system, driver / vehicle, delivery location (📍), km, status and signed delivery note. Filter by search, driver, status, priority and month. Click a row to open the trip.
+- **Delivery trips**: a timeline grouped by trip date — one card per trip, coloured by status (blue *ready to leave*, orange *on the road*, green *delivered*, grey *cancelled*). Each card shows the packing no., Urgent, from → to (📍), km, customer / project, driver / vehicle, the items carried and, once delivered, the signed-note status. Buttons on the card: **Start trip**, **Delivered**, **Mark note signed** and **Open**. Click the packing no. or the driver's name to open them. Filter by search, driver, status, priority and month.
 - Top right: **PDF** and **Excel** export the filtered trips; **Other trip** creates a trip not linked to an order.
 
 ## Assign a driver to an order (create the trip)
