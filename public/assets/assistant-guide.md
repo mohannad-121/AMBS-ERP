@@ -1387,3 +1387,15 @@ The current version does **not** support:
 - Date-range filters on reports. Export the CSV and filter it in Excel.
 - Pictures on locations. (Companies can have a logo.)
 - Syncing a browser workspace between computers. Use **Export Backup (JSON)** and **Import Backup**.
+
+## Notifications, reminders and voice 🔔
+Keywords: notification, bell, reminder, alert, voice, sound, unsaved draft, continue draft, mute, تنبيه, اشعار
+
+- The **bell** at the top right shows a number: your **unsaved drafts** plus the things that **need attention** (orders waiting for a driver, trips ready to leave, purchases to receive, production orders, driver papers, low stock).
+- Click the bell to see the list. Click a **draft** to go straight back into that form, with everything you typed. Click any other line to open that page.
+- **Every 10 minutes**, while anything is still open, ONE reminder card appears at the bottom right with a chime and a spoken sentence. It is replaced each time, so reminders never pile up. **Later** closes it until the next reminder; **See all** opens the bell list.
+- When a colleague adds something important (for example a new order waiting for a driver), a **New in AMBS** card and voice come up right away. AMBS checks for new work every few minutes.
+- Only one open tab reminds you, even with several AMBS tabs open.
+- Browsers only allow sound after you click somewhere on the page once. A reminder that arrived before that is spoken on your first click.
+- No sound? Check the computer volume, and that the browser tab is not muted (right-click the tab → Unmute site).
+- **Remind me now** in the bell list plays the reminder straight away (useful to test the sound).
